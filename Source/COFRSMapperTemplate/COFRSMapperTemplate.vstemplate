@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<VSTemplate Version="3.0.0" Type="Item" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005" xmlns:sdk="http://schemas.microsoft.com/developer/vstemplate-sdkextension/2010">
+  <TemplateData>
+    <Name>COFRS AutoMapper Profile</Name>
+    <Description>Creates an AutoMapper Profile to translate between Domain and Entity models in a COFRS REST Service.</Description>
+    <Icon>COFRS.ico</Icon>
+    <TemplateID>93bc8d50-2a5e-4b81-a58e-d1de9aa4b6c2</TemplateID>
+    <ProjectType>CSharp</ProjectType>
+    <RequiredFrameworkVersion>2.0</RequiredFrameworkVersion>
+    <NumberOfParentCategoriesToRollUp>1</NumberOfParentCategoriesToRollUp>
+    <DefaultName>ClassProfile.cs</DefaultName>
+  </TemplateData>
+  <TemplateContent>
+    <References>
+      <Reference>
+        <Assembly>System</Assembly>
+      </Reference>
+    </References>
+    <ProjectItem ReplaceParameters="true" OpenInEditor="true" TargetFileName="$safeitemname$.cs">Profile.cs</ProjectItem>
+  </TemplateContent>
+  <WizardExtension>
+    <Assembly>COFRSFrameworkInstaller, Version=1.0.0.0, Culture=neutral, PublicKeyToken=5946b1f14e385125</Assembly>
+    <FullClassName>COFRSFrameworkInstaller.MapperWizard</FullClassName>
+  </WizardExtension>
+</VSTemplate>

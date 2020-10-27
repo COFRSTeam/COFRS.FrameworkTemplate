@@ -1,0 +1,230 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>InventoryService</name>
+    </assembly>
+    <members>
+        <member name="T:InventoryService.FilterConfig">
+            <summary>
+            Filter Config
+            </summary>
+        </member>
+        <member name="M:InventoryService.FilterConfig.RegisterGlobalFilters(System.Web.Mvc.GlobalFilterCollection)">
+            <summary>
+            Register global filters for the service
+            </summary>
+            <param name="filters"></param>
+        </member>
+        <member name="T:InventoryService.App_Start.LoggingConfig">
+            <summary>
+            Logging Config
+            </summary>
+        </member>
+        <member name="M:InventoryService.App_Start.LoggingConfig.UseLogging(Microsoft.Extensions.DependencyInjection.IServiceCollection,Microsoft.Extensions.Configuration.IConfiguration)">
+            <summary>
+            Use Logging
+            </summary>
+            <param name="services">Specifies the list of service descriptors</param>
+            <param name="config">A set of key/value application configuration properties</param>
+            <returns></returns>
+        </member>
+        <member name="T:InventoryService.RouteConfig">
+            <summary>
+            Route Config
+            </summary>
+        </member>
+        <member name="M:InventoryService.RouteConfig.RegisterRoutes(System.Web.Routing.RouteCollection)">
+            <summary>
+            Configure Routes for the service
+            </summary>
+            <param name="routes"></param>
+        </member>
+        <member name="T:InventoryService.SwaggerConfig">
+            <summary>
+            Swagger Config
+            </summary>
+        </member>
+        <member name="M:InventoryService.SwaggerConfig.RegisterSwagger(Owin.IAppBuilder,Microsoft.Extensions.Configuration.IConfiguration,System.Web.Http.HttpConfiguration,Microsoft.Web.Http.Description.VersionedApiExplorer)">
+            <summary>
+            Configures Swagger for the service
+            </summary>
+        </member>
+        <member name="M:InventoryService.SwaggerConfig.GetXmlPath(System.String)">
+            <summary>
+            Converts a file name to a fullly qualified file name
+            </summary>
+            <param name="filename"></param>
+            <returns></returns>
+        </member>
+        <member name="T:InventoryService.Controllers.HeartbeatController">
+            <summary>
+            Heartbeat controller
+            </summary>
+        </member>
+        <member name="M:InventoryService.Controllers.HeartbeatController.#ctor(Microsoft.Extensions.Logging.ILogger{InventoryService.Controllers.HeartbeatController})">
+            <summary>
+            Constructor
+            </summary>
+        </member>
+        <member name="M:InventoryService.Controllers.HeartbeatController.Get">
+            <summary>
+            Returns a heartbeat message
+            </summary>
+            <remarks>This method is used to supply "I am alive" messages to monitoring systems.</remarks>
+        </member>
+        <member name="T:InventoryService.Orchestration.DomainModels.Heartbeat">
+            <summary>
+            A message used to verify that the service is running.
+            </summary>
+        </member>
+        <member name="P:InventoryService.Orchestration.DomainModels.Heartbeat.Message">
+            <summary>
+            The "I am alive" message.
+            </summary>
+        </member>
+        <member name="T:InventoryService.Startup">
+            <summary>
+            Startup
+            </summary>
+        </member>
+        <member name="P:InventoryService.Startup.Config">
+            <summary>
+            Represents a set of key/value application configuration properties.
+            </summary>
+        </member>
+        <member name="P:InventoryService.Startup.Provider">
+            <summary>
+            Defines a mechanism for retrieving a service object; that is, an object that provides support to other objects.
+            </summary>
+        </member>
+        <member name="P:InventoryService.Startup.HttpConfiguration">
+            <summary>
+            Represents a configuration of HttpServer instances
+            </summary>
+        </member>
+        <member name="M:InventoryService.Startup.ConfigureServices(Microsoft.Extensions.DependencyInjection.IServiceCollection)">
+            <summary>
+            Configure services with Microsoft's dependency injection services
+            </summary>
+            <param name="services"></param>
+        </member>
+        <member name="M:InventoryService.Startup.Configuration(Owin.IAppBuilder)">
+            <summary>
+            Configuration
+            </summary>
+            <param name="app">The Microsoft Owin AppBuilder</param>
+        </member>
+        <member name="T:COFRS.ApiDependencyResolver">
+            <summary>
+            Api Dependency Resolver
+            </summary>
+        </member>
+        <member name="M:COFRS.ApiDependencyResolver.#ctor(System.IServiceProvider)">
+            <summary>
+            Api Dependency Resolver
+            </summary>
+            <param name="serviceProvider">The Service Provider</param>
+        </member>
+        <member name="M:COFRS.ApiDependencyResolver.BeginScope">
+            <summary>
+            Begin Scope
+            </summary>
+            <returns></returns>
+        </member>
+        <member name="M:COFRS.ApiDependencyResolver.Dispose">
+            <summary>
+            Dispose
+            </summary>
+        </member>
+        <member name="M:COFRS.ApiDependencyResolver.GetService(System.Type)">
+            <summary>
+            Get Service
+            </summary>
+            <param name="serviceType"></param>
+            <returns></returns>
+        </member>
+        <member name="M:COFRS.ApiDependencyResolver.GetServices(System.Type)">
+            <summary>
+            Get Services
+            </summary>
+            <param name="serviceType"></param>
+            <returns></returns>
+        </member>
+        <member name="T:COFRS.ApiVersionReader">
+            <summary>
+            ServiceVersionReader
+            </summary>
+        </member>
+        <member name="P:COFRS.ApiVersionReader.SupportedMediaTypes">
+            <summary>
+            SupportedMediaTypes
+            </summary>
+        </member>
+        <member name="M:COFRS.ApiVersionReader.AddParameters(Microsoft.Web.Http.Versioning.IApiVersionParameterDescriptionContext)">
+            <summary>
+            Add Parameters
+            </summary>
+            <param name="context"></param>
+        </member>
+        <member name="M:COFRS.ApiVersionReader.Read(System.Net.Http.HttpRequestMessage)">
+            <summary>
+            Reads the version from the Accept Header
+            </summary>
+            <param name="request">The incoming request message</param>
+            <returns></returns>
+        </member>
+        <member name="T:COFRS.MvcDependencyResolver">
+            <summary>
+            Mvc Dependency Resolver
+            </summary>
+        </member>
+        <member name="M:COFRS.MvcDependencyResolver.#ctor(System.IServiceProvider)">
+            <summary>
+            Instantiates an Mvc Dependency Resolver
+            </summary>
+            <param name="serviceProvider"></param>
+        </member>
+        <member name="M:COFRS.MvcDependencyResolver.GetService(System.Type)">
+            <summary>
+            Gets a service
+            </summary>
+            <param name="serviceType"></param>
+            <returns></returns>
+        </member>
+        <member name="M:COFRS.MvcDependencyResolver.GetServices(System.Type)">
+            <summary>
+            Gets a list of services
+            </summary>
+            <param name="serviceType"></param>
+            <returns></returns>
+        </member>
+        <member name="T:COFRS.ServiceProviderExtensions">
+            <summary>
+            Service Provider Extensions
+            </summary>
+        </member>
+        <member name="M:COFRS.ServiceProviderExtensions.AddControllersAsServices(Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Collections.Generic.IEnumerable{System.Type})">
+            <summary>
+            Add Controllers as Services
+            </summary>
+            <param name="services"></param>
+            <param name="controllerTypes"></param>
+            <returns></returns>
+        </member>
+        <member name="T:COFRS.SwaggerDefaultValues">
+            <summary>
+            Represents the Swagger/Swashbuckle operation filter used to provide default values.
+            </summary>
+            <remarks>This <see cref="T:Swashbuckle.Swagger.IOperationFilter"/> is only required due to bugs in the <see cref="T:Swashbuckle.Swagger.SwaggerGenerator"/>.
+            Once they are fixed and published, this class can be removed.</remarks>
+        </member>
+        <member name="M:COFRS.SwaggerDefaultValues.Apply(Swashbuckle.Swagger.Operation,Swashbuckle.Swagger.SchemaRegistry,System.Web.Http.Description.ApiDescription)">
+            <summary>
+            Applies the filter to the specified operation using the given context.
+            </summary>
+            <param name="operation">The operation to apply the filter to.</param>
+            <param name="schemaRegistry">The API schema registry.</param>
+            <param name="apiDescription">The API description being filtered.</param>
+        </member>
+    </members>
+</doc>

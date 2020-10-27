@@ -1,0 +1,237 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MinimumVisualStudioVersion>16.0</MinimumVisualStudioVersion>
+    <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignAssembly>true</SignAssembly>
+  </PropertyGroup>
+  <PropertyGroup>
+    <AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>
+  </PropertyGroup>
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectTypeGuids>{82b43b9b-a64c-4715-b499-d71e9ca2bd60};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <ProjectGuid>{B860589A-D7C4-400E-8B58-D15CD578EC8E}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>COFRSFrameworkInstaller</RootNamespace>
+    <AssemblyName>COFRSFrameworkInstaller</AssemblyName>
+    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <UseCodebase>true</UseCodebase>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>true</IncludeDebugSymbolsInVSIXContainer>
+    <IncludeDebugSymbolsInLocalVSIXDeployment>true</IncludeDebugSymbolsInLocalVSIXDeployment>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
+    <StartAction>Program</StartAction>
+    <StartProgram Condition="'$(DevEnvDir)' != ''">$(DevEnvDir)devenv.exe</StartProgram>
+    <StartArguments>/rootsuffix Exp</StartArguments>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="AddConnection.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="AddConnection.Designer.cs">
+      <DependentUpon>AddConnection.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ClassMember.cs" />
+    <Compile Include="ControllerWizard.cs" />
+    <Compile Include="DBAuthentication.cs" />
+    <Compile Include="DBColumn.cs" />
+    <Compile Include="DBHelper.cs" />
+    <Compile Include="DBServer.cs" />
+    <Compile Include="DBServerType.cs" />
+    <Compile Include="DBTable.cs" />
+    <Compile Include="EntityMember.cs" />
+    <Compile Include="ResourceClassFile.cs" />
+    <Compile Include="UserInputResource.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UserInputResource.Designer.cs">
+      <DependentUpon>UserInputResource.cs</DependentUpon>
+    </Compile>
+    <Compile Include="ResourceWizard.cs" />
+    <Compile Include="EntityClassFile.cs" />
+    <Compile Include="UserInputEntity.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UserInputEntity.Designer.cs">
+      <DependentUpon>UserInputEntity.cs</DependentUpon>
+    </Compile>
+    <Compile Include="EntityWizard.cs" />
+    <Compile Include="ExampleWizard.cs" />
+    <Compile Include="UserInputGeneral.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UserInputGeneral.Designer.cs">
+      <DependentUpon>UserInputGeneral.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MapperWizard.cs" />
+    <Compile Include="NameNormalizer.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="COFRSFrameworkInstallerPackage.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="UserInputProject.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UserInputProject.Designer.cs">
+      <DependentUpon>UserInputProject.cs</DependentUpon>
+    </Compile>
+    <Compile Include="RestServiceWizard.cs" />
+    <Compile Include="ServerConfig.cs" />
+    <Compile Include="Utilities.cs" />
+    <Compile Include="ValidationWizard.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="key.snk" />
+    <None Include="source.extension.vsixmanifest">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.VisualStudio.TemplateWizardInterface, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
+    <Reference Include="System" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="16.0.202" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="16.5.2044">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql">
+      <Version>4.1.2</Version>
+    </PackageReference>
+    <PackageReference Include="MySql.Data">
+      <Version>8.0.21</Version>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="AddConnection.resx">
+      <DependentUpon>AddConnection.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UserInputResource.resx">
+      <DependentUpon>UserInputResource.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UserInputEntity.resx">
+      <DependentUpon>UserInputEntity.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UserInputGeneral.resx">
+      <DependentUpon>UserInputGeneral.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Include="UserInputProject.resx">
+      <DependentUpon>UserInputProject.cs</DependentUpon>
+    </EmbeddedResource>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\ico128.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="COFRS.ico">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="LICENSE.txt">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+    <Content Include="preview.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <IncludeInVSIX>true</IncludeInVSIX>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\COFRSControllerTemplate\COFRSControllerTemplate.csproj">
+      <Project>{1A85E553-5083-4D8C-BD48-03DA56B40D62}</Project>
+      <Name>COFRSControllerTemplate</Name>
+      <VSIXSubPath>ItemTemplates</VSIXSubPath>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+    <ProjectReference Include="..\COFRSDomainTemplate\COFRSResourceTemplate.csproj">
+      <Project>{94D647D8-061E-4CB9-972B-0CA12A774334}</Project>
+      <Name>COFRSResourceTemplate</Name>
+      <VSIXSubPath>ItemTemplates</VSIXSubPath>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+    <ProjectReference Include="..\COFRSEntityTemplate\COFRSEntityTemplate.csproj">
+      <Project>{91783E80-81EE-4384-A725-DB9D4D00E9F1}</Project>
+      <Name>COFRSEntityTemplate</Name>
+      <VSIXSubPath>ItemTemplates</VSIXSubPath>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+    <ProjectReference Include="..\COFRSExamplesTemplate\COFRSExamplesTemplate.csproj">
+      <Project>{53077316-2074-4619-B521-9E9A6E22E1E0}</Project>
+      <Name>COFRSExamplesTemplate</Name>
+      <VSIXSubPath>ItemTemplates</VSIXSubPath>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+    <ProjectReference Include="..\COFRSMapperTemplate\COFRSMapperTemplate.csproj">
+      <Project>{62503E7E-6E92-4A96-8CFA-49249DC68FF9}</Project>
+      <Name>COFRSMapperTemplate</Name>
+      <VSIXSubPath>ItemTemplates</VSIXSubPath>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+    <ProjectReference Include="..\COFRSRESTServiceTemplate\COFRSRESTServiceTemplate.csproj">
+      <Project>{3D44CC47-9799-4489-81E5-29FEEF100B3B}</Project>
+      <Name>COFRSRESTServiceTemplate</Name>
+      <VSIXSubPath>ProjectTemplates</VSIXSubPath>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+    <ProjectReference Include="..\COFRSValidationTemplate\COFRSValidationTemplate.csproj">
+      <Project>{0F16CE92-D75C-4959-AB3A-5FE3A327ED07}</Project>
+      <Name>COFRSValidationTemplate</Name>
+      <VSIXSubPath>ItemTemplates</VSIXSubPath>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Import Project="$(VSToolsPath)\VSSDK\Microsoft.VsSDK.targets" Condition="'$(VSToolsPath)' != ''" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

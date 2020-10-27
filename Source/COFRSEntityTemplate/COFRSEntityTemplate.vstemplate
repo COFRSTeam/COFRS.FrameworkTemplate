@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<VSTemplate Version="3.0.0" Type="Item" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005" xmlns:sdk="http://schemas.microsoft.com/developer/vstemplate-sdkextension/2010">
+  <TemplateData>
+    <Name>COFRS Entity Model</Name>
+    <Description>Adds an entity model to a COFRS REST Service</Description>
+    <Icon>COFRSTemplate.ico</Icon>
+    <TemplateID>3f4293f1-cc85-462a-b195-4b0d342bdf1c</TemplateID>
+    <ProjectType>CSharp</ProjectType>
+    <NumberOfParentCategoriesToRollUp>1</NumberOfParentCategoriesToRollUp>
+    <DefaultName>ClassEntity.cs</DefaultName>
+  </TemplateData>
+  <TemplateContent>
+    <References>
+      <Reference>
+        <Assembly>System</Assembly>
+      </Reference>
+    </References>
+    <ProjectItem ReplaceParameters="true" OpenInEditor="true" TargetFileName="$safeitemname$.cs">Entity.cs</ProjectItem>
+  </TemplateContent>
+  <WizardExtension>
+    <Assembly>COFRSFrameworkInstaller, Version=1.0.0.0, Culture=neutral, PublicKeyToken=5946b1f14e385125</Assembly>
+    <FullClassName>COFRSFrameworkInstaller.EntityWizard</FullClassName>
+  </WizardExtension>
+</VSTemplate>

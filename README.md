@@ -1,1 +1,2 @@
-# COFRS.FrameworkTemplate
+# COFRSNetTemplate
+C# Template for COFRS using .NET Framework
