@@ -21,7 +21,6 @@ namespace COFRSFrameworkInstaller
 		private ResourceClassFile Orchestrator { get; set; }
 		private ResourceClassFile ExampleClass { get; set; }
 		private ResourceClassFile ValidatorClass { get; set; }
-		private ResourceClassFile CollectionExampleClass { get; set; }
 
 		// This method is called before opening any item that
 		// has the OpenInEditor attribute.
@@ -61,13 +60,13 @@ namespace COFRSFrameworkInstaller
 
 				if (form.ShowDialog() == DialogResult.OK)
 				{
+					bool hasValidator;
 					var entityClassFile = (EntityClassFile)form._entityModelList.SelectedItem;
 					var resourceClassFile = (ResourceClassFile)form._resourceModelList.SelectedItem;
 					var moniker = LoadMoniker(SolutionFolder);
 
 					Orchestrator = null;
 					ExampleClass = null;
-					CollectionExampleClass = null;
 					ValidatorClass = null;
 
 					LoadClassList(resourceClassFile.ClassName);
@@ -79,7 +78,17 @@ namespace COFRSFrameworkInstaller
 					replacementsDictionary.Add("$entitynamespace$", entityClassFile.ClassNameSpace);
 					replacementsDictionary.Add("$domainnamespace$", resourceClassFile.ClassNamespace);
 					replacementsDictionary.Add("$orchestrationnamespace$", Orchestrator.ClassNamespace);
-					replacementsDictionary.Add("$validationnamespace$", ValidatorClass != null ? ValidatorClass.ClassNamespace : "");
+
+					if (ValidatorClass != null)
+					{
+						hasValidator = true;
+						replacementsDictionary.Add("$validationnamespace$", ValidatorClass.ClassNamespace);
+					}
+					else
+					{
+						hasValidator = false;
+						replacementsDictionary.Add("$validationnamespace$", "none");
+					}
 
 					if (ExampleClass != null)
 						replacementsDictionary.Add("$singleexamplenamespace$", ExampleClass.ClassNamespace);
@@ -87,6 +96,7 @@ namespace COFRSFrameworkInstaller
 						replacementsDictionary.Add("$singleexamplenamespace$", "none");
 
 					var model = Emit(replacementsDictionary,
+									 hasValidator,
 									 resourceClassFile,
 									 entityClassFile,
 									 policy,
@@ -105,14 +115,15 @@ namespace COFRSFrameworkInstaller
 			}
 		}
 
-		// This method is only called for item templates,
-		// not for project templates.
-		public bool ShouldAddProjectItem(string filePath)
+
+        // This method is only called for item templates,
+        // not for project templates.
+        public bool ShouldAddProjectItem(string filePath)
 		{
 			return Proceed;
 		}
 
-		public string Emit(Dictionary<string, string> replacementsDictionary, ResourceClassFile domain, EntityClassFile entity, string policy, List<DBColumn> Columns)
+		public string Emit(Dictionary<string, string> replacementsDictionary, bool hasValidator, ResourceClassFile domain, EntityClassFile entity, string policy, List<DBColumn> Columns)
 		{
 			var results = new StringBuilder();
 			var nn = new NameNormalizer(domain.ClassName);
@@ -145,10 +156,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\tpublic class {replacementsDictionary["$safeitemname$"]} : COFRSController");
 			results.AppendLine("\t{");
 			results.AppendLine($"\t\tprivate readonly ILogger<{replacementsDictionary["$safeitemname$"]}> Logger;");
-
-			if ( ValidatorClass != null )
-				results.AppendLine($"\t\tprivate readonly I{domain.ClassName}Validator Validator;");
-
 			results.AppendLine();
 
 			// --------------------------------------------------------------------------------
@@ -161,8 +168,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t\tpublic {replacementsDictionary["$safeitemname$"]}(ILogger<{replacementsDictionary["$safeitemname$"]}> logger)");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tLogger = logger;");
-			if (ValidatorClass != null)
-				results.AppendLine($"\t\tValidator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
 			results.AppendLine("\t\t}");
 			results.AppendLine();
 
@@ -192,17 +197,19 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t\tpublic async Task<IHttpActionResult> Get{nn.PluralForm}Async()");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
+			results.AppendLine("\t\t\tvar node = RqlNode.Parse(Request.RequestUri.Query);");
 			results.AppendLine();
 
-			if (ValidatorClass != null)
+			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tawait Validator.ValidateForGetAsync(Request.RequestUri.Query);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+				results.AppendLine("\t\t\tawait validator.ValidateForGetAsync(node).ConfigureAwait(false);");
 				results.AppendLine();
 			}
 
 			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 			results.AppendLine("\t\t\t{");
-			results.AppendLine($"\t\t\t\tvar collection = await service.GetCollectionAsync<{domain.ClassName}>(Request.RequestUri.Query).ConfigureAwait(false);");
+			results.AppendLine($"\t\t\t\tvar collection = await service.GetCollectionAsync<{domain.ClassName}>(HttpContext.Current.Request, node).ConfigureAwait(false);");
 			results.AppendLine($"\t\t\t\treturn Ok(collection);");
 			results.AppendLine("\t\t\t}");
 			results.AppendLine("\t\t}");
@@ -237,21 +244,29 @@ namespace COFRSFrameworkInstaller
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
-				results.AppendLine("\t\t\tvar options = ServiceContainer.RequestServices.GetService<ITranslationOptions>();");
-				EmitUrl(results, nn.PluralCamelCase, pkcolumns);
+				results.AppendLine("\t\t\tvar translationOptions = ServiceContainer.RequestServices.GetService<ITranslationOptions>();");
+				results.AppendLine($"\t\t\tvar url = new Uri(translationOptions.RootUrl, $\"{BuildRoute(nn.PluralCamelCase, pkcolumns)}\");");
 				results.AppendLine();
+				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"href={{url.AbsoluteUri}}\")");
+				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 
-				if (ValidatorClass != null)
+				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tawait Validator.ValidateForGetAsync(url, Request.RequestUri.Query);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+					results.AppendLine("\t\t\tawait validator.ValidateForGetAsync(node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
 
 				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 				results.AppendLine("\t\t\t{");
-				results.AppendLine($"\t\t\t\tvar item = await service.GetSingleAsync<{domain.ClassName}>(url, Request.RequestUri.Query).ConfigureAwait(false);");
+				results.AppendLine($"\t\t\t\tvar item = await service.GetSingleAsync<{domain.ClassName}>(node).ConfigureAwait(false);");
+				results.AppendLine();
+				results.AppendLine("\t\t\t\tif (item == null)");
+				results.AppendLine("\t\t\t\t\treturn NotFound();");
+				results.AppendLine();
 				results.AppendLine("\t\t\t\treturn Ok(item);");
 				results.AppendLine("\t\t\t}");
+
 				results.AppendLine("\t\t}");
 				results.AppendLine();
 			}
@@ -284,11 +299,13 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t\tpublic async Task<IHttpActionResult> Add{domain.ClassName}Async([FromBody] {domain.ClassName} item)");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
+			results.AppendLine("\t\t\tvar node = RqlNode.Parse(Request.RequestUri.Query);");
 			results.AppendLine();
 
-			if (ValidatorClass != null)
+			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tawait Validator.ValidateForAddAsync(item);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+				results.AppendLine("\t\t\tawait validator.ValidateForAddAsync(item).ConfigureAwait(false);");
 				results.AppendLine();
 			}
 
@@ -322,17 +339,20 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t\tpublic async Task<IHttpActionResult> Update{domain.ClassName}Async([FromBody] {domain.ClassName} item)");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
+			results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"href={{item.href.AbsoluteUri}}\")");
+			results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 			results.AppendLine();
 
-			if (ValidatorClass != null)
+			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tawait Validator.ValidateForUpdateAsync(item);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+				results.AppendLine("\t\t\tawait validator.ValidateForUpdateAsync(item, node).ConfigureAwait(false);");
 				results.AppendLine();
 			}
 
 			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 			results.AppendLine("\t\t\t{");
-			results.AppendLine($"\t\t\t\tawait service.UpdateAsync(item).ConfigureAwait(false);");
+			results.AppendLine($"\t\t\t\tawait service.UpdateAsync(item, node).ConfigureAwait(false);");
 			results.AppendLine($"\t\t\t\treturn NoContent();");
 			results.AppendLine("\t\t\t}");
 			results.AppendLine("\t\t}");
@@ -363,19 +383,24 @@ namespace COFRSFrameworkInstaller
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
-				results.AppendLine("\t\t\tvar options = ServiceContainer.RequestServices.GetService<ITranslationOptions>();");
-				EmitUrl(results, nn.PluralCamelCase, pkcolumns);
+				results.AppendLine();
+				results.AppendLine("\t\t\tvar translationOptions = ServiceContainer.RequestServices.GetService<ITranslationOptions>();");
+				results.AppendLine($"\t\t\tvar url = new Uri(translationOptions.RootUrl, $\"{BuildRoute(nn.PluralCamelCase, pkcolumns)}\");");
+				results.AppendLine();
+				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"href={{url.AbsoluteUri}}\")");
+				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 				results.AppendLine();
 
-				if (ValidatorClass != null)
+				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tawait Validator.ValidateForPatchAsync(url, commands);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+					results.AppendLine("\t\t\tawait validator.ValidateForPatchAsync(commands, node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
 
 				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 				results.AppendLine("\t\t\t{");
-				results.AppendLine($"\t\t\t\tawait service.PatchAsync<{domain.ClassName}>(url, commands).ConfigureAwait(false);");
+				results.AppendLine($"\t\t\t\tawait service.PatchAsync<{domain.ClassName}>(commands, node).ConfigureAwait(false);");
 				results.AppendLine($"\t\t\t\treturn NoContent();");
 				results.AppendLine("\t\t\t}");
 				results.AppendLine("\t\t}");
@@ -402,20 +427,24 @@ namespace COFRSFrameworkInstaller
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
-				results.AppendLine("\t\t\tvar options = ServiceContainer.RequestServices.GetService<ITranslationOptions>();");
-				EmitUrl(results, nn.PluralCamelCase, pkcolumns);
+				results.AppendLine("\t\t\tvar translationOptions = ServiceContainer.RequestServices.GetService<ITranslationOptions>();");
+				results.AppendLine($"\t\t\tvar url = new Uri(translationOptions.RootUrl, $\"{BuildRoute(nn.PluralCamelCase, pkcolumns)}\");");
+				results.AppendLine();
+				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"href={{url.AbsoluteUri}}\")");
+				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 				results.AppendLine();
 
-				if (ValidatorClass != null)
+				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tawait Validator.ValidateForDeleteAsync(url);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+					results.AppendLine("\t\t\tawait validator.ValidateForDeleteAsync(node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
 
 				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 				results.AppendLine("\t\t\t{");
 
-				results.AppendLine($"\t\t\t\tawait service.DeleteAsync<{domain.ClassName}>(url).ConfigureAwait(false);");
+				results.AppendLine($"\t\t\t\tawait service.DeleteAsync<{domain.ClassName}>(node).ConfigureAwait(false);");
 
 				results.AppendLine($"\t\t\t\treturn NoContent();");
 				results.AppendLine("\t\t\t}");
@@ -462,6 +491,24 @@ namespace COFRSFrameworkInstaller
 			}
 
 			results.Append("\");");
+		}
+
+		private static string BuildRoute(string routeName, IEnumerable<ClassMember> pkcolumns)
+		{
+			var route = new StringBuilder();
+
+			route.Append(routeName);
+			route.Append("/id");
+
+			foreach (var domainColumn in pkcolumns)
+			{
+				foreach (var column in domainColumn.EntityNames)
+				{
+					route.Append($"/{{{column.EntityName}}}");
+				}
+			}
+
+			return route.ToString();
 		}
 
 		private static void EmitRoute(StringBuilder results, string routeName, IEnumerable<ClassMember> pkcolumns)
@@ -801,9 +848,6 @@ namespace COFRSFrameworkInstaller
 
 						if (string.Equals(classfile.ClassName, $"{domainClassName}Example", StringComparison.OrdinalIgnoreCase))
 							ExampleClass = classfile;
-
-						if (string.Equals(classfile.ClassName, $"{domainClassName}CollectionExample", StringComparison.OrdinalIgnoreCase))
-							CollectionExampleClass = classfile;
 
 						if (string.Equals(classfile.ClassName, $"{domainClassName}Validator", StringComparison.OrdinalIgnoreCase))
 							ValidatorClass = classfile;

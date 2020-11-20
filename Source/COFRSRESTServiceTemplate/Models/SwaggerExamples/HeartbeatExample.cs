@@ -1,7 +1,7 @@
-﻿using $safeprojectname$.Orchestration.DomainModels;
+﻿using $safeprojectname$.Models.ResourceModels;
 using Swashbuckle.Examples;
 
-namespace $safeprojectname$.SwaggerExamples
+namespace $safeprojectname$.Models.SwaggerExamples
 {
 	/// <summary>
 	/// Example of Heartbeat object

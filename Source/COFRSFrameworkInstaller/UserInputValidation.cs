@@ -1,5 +1,6 @@
 ﻿using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Npgsql;
 using System;
 using System.Collections.Generic;
@@ -7,43 +8,68 @@ using System.Data.SqlClient;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace COFRSFrameworkInstaller
 {
-	public partial class UserInputEntity : Form
-	{
-		#region Variables
+    public partial class UserInputValidation : Form
+    {
+		#region variables
 		private ServerConfig _serverConfig;
+		public int InstallType { get; set; }
+		public string SolutionFolder { get; set; }
 		private bool Populating = false;
 		public DBTable DatabaseTable { get; set; }
 		public List<DBColumn> DatabaseColumns { get; set; }
-		public string ConnectionString { get; set; }
+		public JObject Examples { get; set; }
+		public string DefaultConnectionString { get; set; }
 		#endregion
 
-		#region Utility functions
-		/// <summary>
-		/// Instantiates a User Input Entity form
-		/// </summary>
-		public UserInputEntity()
+		#region Utility Functions
+		public UserInputValidation()
 		{
 			InitializeComponent();
 		}
 
-		/// <summary>
-		/// Called when the form loads
-		/// </summary>
-		/// <param name="sender"></param>
-		/// <param name="e"></param>
 		private void OnLoad(object sender, EventArgs e)
 		{
-			_portNumber.Location = new Point(93, 60);
 			DatabaseColumns = new List<DBColumn>();
+			_portNumber.Location = new Point(103, 60);
+
+			_InstructionsLabel.Text = "Select the database, table and profile that contains the resource/entity/mapping profile combination you wish to validate. This will select the Entity, Resource and Profile models in the dropdowns provided if they exist. Entity, resource and profile models must exist to generate the resource validator. Then press OK to generate the resource validator class.";
+			_titleLabel.Text = "COFRS Validator Class Generator";
+
+			LoadAppSettings();
 			ReadServerList();
+			LoadClassList();
+
+			if (_entityModelList.Items.Count == 0)
+			{
+				MessageBox.Show("No entity models were found in the project. Please create a corresponding entity model before attempting to create the class.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				DialogResult = DialogResult.Cancel;
+				Close();
+			}
+
+			if (_resourceModelList.Items.Count == 0)
+			{
+				MessageBox.Show("No resource models were found in the project. Please create a corresponding resource model before attempting to create the class.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				DialogResult = DialogResult.Cancel;
+				Close();
+			}
+
+			if (_profileModelList.Items.Count == 0)
+			{
+				MessageBox.Show("No profile models were found in the project. Please create a corresponding profile model before attempting to create the class.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				DialogResult = DialogResult.Cancel;
+				Close();
+			}
+
+			OnServerChanged(this, new EventArgs());
 		}
 		#endregion
 
-		#region User interactions
+		#region User Interactions
 		private void OnServerTypeChanged(object sender, EventArgs e)
 		{
 			try
@@ -183,6 +209,388 @@ namespace COFRSFrameworkInstaller
 			}
 		}
 
+		private void OnAuthenticationChanged(object sender, EventArgs e)
+		{
+			if (!Populating)
+			{
+				_dbList.Items.Clear();
+				_tableList.Items.Clear();
+				var server = (DBServer)_serverList.SelectedItem;
+
+				if (server != null)
+				{
+					server.DBAuth = _authenticationList.SelectedIndex == 0 ? DBAuthentication.SQLSERVERAUTH : DBAuthentication.WINDOWSAUTH;
+
+					if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
+					{
+						_userName.Text = string.Empty;
+						_userName.Enabled = false;
+						_userNameLabel.Enabled = false;
+
+						_password.Text = string.Empty;
+						_password.Enabled = false;
+						_passwordLabel.Enabled = false;
+
+						_rememberPassword.Checked = false;
+						_rememberPassword.Enabled = false;
+					}
+					else
+					{
+						_userName.Enabled = true;
+						_userNameLabel.Enabled = true;
+
+						_password.Enabled = true;
+						_passwordLabel.Enabled = true;
+
+						_rememberPassword.Checked = server.RememberPassword;
+						_rememberPassword.Enabled = true;
+					}
+
+					Save();
+
+					if (TestConnection(server))
+						PopulateDatabases();
+				}
+			}
+		}
+
+		private void OnUserNameChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				if (!Populating)
+				{
+					_dbList.Items.Clear();
+					_tableList.Items.Clear();
+					var server = (DBServer)_serverList.SelectedItem;
+
+					if (server != null)
+					{
+						server.Username = _userName.Text;
+
+						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
+
+						Save();
+
+						if (TestConnection(server))
+							PopulateDatabases();
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void OnPasswordChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				if (!Populating)
+				{
+					_dbList.Items.Clear();
+					_tableList.Items.Clear();
+					var server = (DBServer)_serverList.SelectedItem;
+
+					if (server != null)
+					{
+						if (server.RememberPassword)
+							server.Password = _password.Text;
+						else
+							server.Password = string.Empty;
+
+						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
+
+						Save();
+
+						if (TestConnection(server))
+							PopulateDatabases();
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void OnSavePasswordChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				if (!Populating)
+				{
+					_dbList.Items.Clear();
+					_tableList.Items.Clear();
+					var server = (DBServer)_serverList.SelectedItem;
+
+					if (server != null)
+					{
+						server.RememberPassword = _rememberPassword.Checked;
+
+						if (!server.RememberPassword)
+							server.Password = string.Empty;
+						else
+							server.Password = _password.Text;
+
+						var savedServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
+
+						Save();
+
+						if (TestConnection(server))
+							PopulateDatabases();
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void OnAddServer(object sender, EventArgs e)
+		{
+			try
+			{
+				var dialog = new AddConnection
+				{
+					LastServerUsed = (DBServer)_serverList.SelectedItem
+				};
+
+				if (dialog.ShowDialog() == DialogResult.OK)
+				{
+					_dbList.Items.Clear();
+					_tableList.Items.Clear();
+					_serverConfig.Servers.Add(dialog.Server);
+					Save();
+
+					switch (dialog.Server.DBType)
+					{
+						case DBServerType.MYSQL: _serverTypeList.SelectedIndex = 0; break;
+						case DBServerType.POSTGRESQL: _serverTypeList.SelectedIndex = 1; break;
+						case DBServerType.SQLSERVER: _serverTypeList.SelectedIndex = 2; break;
+					}
+
+					OnServerTypeChanged(this, new EventArgs());
+
+					for (int index = 0; index < _serverList.Items.Count; index++)
+					{
+						if (string.Equals((_serverList.Items[index] as DBServer).ServerName, dialog.Server.ServerName, StringComparison.OrdinalIgnoreCase))
+						{
+							_serverList.SelectedIndex = index;
+							break;
+						}
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void OnRemoveServer(object sender, EventArgs e)
+		{
+			try
+			{
+				var deprecatedServer = (DBServer)_serverList.SelectedItem;
+				var newList = new List<DBServer>();
+
+				foreach (var server in _serverConfig.Servers)
+				{
+					if (!string.Equals(server.ServerName, deprecatedServer.ServerName, StringComparison.OrdinalIgnoreCase))
+					{
+						newList.Add(server);
+					}
+				}
+
+				_serverConfig.Servers = newList;
+
+				if (_serverConfig.LastServerUsed >= _serverConfig.Servers.Count())
+				{
+					_serverConfig.LastServerUsed = 0;
+				}
+
+				Save();
+
+				OnServerTypeChanged(this, new EventArgs());
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void OnEntityModelChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				if (_entityModelList.SelectedIndex != -1 && !Populating)
+				{
+					var classFile = (EntityClassFile)_entityModelList.SelectedItem;
+					var foundIt = false;
+
+					for (int index = 0; index < _tableList.Items.Count; index++)
+					{
+						var table = (DBTable)_tableList.Items[index];
+
+						if (string.Equals(table.Table, classFile.TableName, StringComparison.OrdinalIgnoreCase))
+						{
+							foundIt = true;
+							_tableList.SelectedIndex = index;
+							break;
+						}
+					}
+
+					if (!foundIt)
+					{
+						MessageBox.Show("No corresponding table for this entity was found in the selected database. Please select the server and database that contains this table.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+						_tableList.SelectedIndex = -1;
+						_entityModelList.SelectedIndex = -1;
+						_resourceModelList.SelectedIndex = -1;
+						return;
+					}
+
+					foundIt = false;
+
+					for (int index = 0; index < _resourceModelList.Items.Count; index++)
+					{
+						var resourceClassFile = (ResourceClassFile)_resourceModelList.Items[index];
+
+						if (string.Equals(resourceClassFile.EntityClass, classFile.ClassName, StringComparison.OrdinalIgnoreCase))
+						{
+							foundIt = true;
+							_resourceModelList.SelectedIndex = index;
+							break;
+						}
+					}
+
+					if (!foundIt)
+					{
+						MessageBox.Show("No corresponding resource class for this entity was found. Please select another entity, or create the resource model for this entity.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+						_tableList.SelectedIndex = -1;
+						_entityModelList.SelectedIndex = -1;
+						_resourceModelList.SelectedIndex = -1;
+						return;
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void OnResourceModelChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				if (_resourceModelList.SelectedIndex != -1 && !Populating)
+				{
+					var resourceClassFile = (ResourceClassFile)_resourceModelList.SelectedItem;
+					var foundIt = false;
+
+					for (int index = 0; index < _entityModelList.Items.Count; index++)
+					{
+						var entityClassFile = (EntityClassFile)_entityModelList.Items[index];
+
+						if (string.Equals(resourceClassFile.EntityClass, entityClassFile.ClassName, StringComparison.OrdinalIgnoreCase))
+						{
+							foundIt = true;
+							_entityModelList.SelectedIndex = index;
+							break;
+						}
+					}
+
+					if (!foundIt)
+					{
+						MessageBox.Show("No corresponding entity class for this model was found. Please select another model, or create the entity model for this model.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+						_tableList.SelectedIndex = -1;
+						_entityModelList.SelectedIndex = -1;
+						_resourceModelList.SelectedIndex = -1;
+						return;
+					}
+
+					var entity = _entityModelList.SelectedItem as EntityClassFile;
+					foundIt = false;
+
+					for (int index = 0; index < _tableList.Items.Count; index++)
+					{
+						var table = (DBTable)_tableList.Items[index];
+
+						if (string.Equals(table.Table, entity.TableName, StringComparison.OrdinalIgnoreCase))
+						{
+							foundIt = true;
+							_tableList.SelectedIndex = index;
+							break;
+						}
+					}
+
+					if (!foundIt)
+					{
+						MessageBox.Show("No corresponding table for this entity was found in the selected database. Please select the server and database that contains this table.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+						_tableList.SelectedIndex = -1;
+						_entityModelList.SelectedIndex = -1;
+						_resourceModelList.SelectedIndex = -1;
+						return;
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void OnProfileChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				if (_profileModelList.SelectedIndex != -1 && !Populating)
+				{
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void OnPortNumberChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				if (!Populating)
+				{
+					_dbList.Items.Clear();
+					_tableList.Items.Clear();
+					var server = (DBServer)_serverList.SelectedItem;
+
+					if (server != null)
+					{
+						if (server.RememberPassword)
+							server.Password = _password.Text;
+						else
+							server.Password = string.Empty;
+
+						server.PortNumber = Convert.ToInt32(_portNumber.Value);
+
+						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
+
+						Save();
+
+						if (TestConnection(server))
+							PopulateDatabases();
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
 		private void OnSelectedDatabaseChanged(object sender, EventArgs e)
 		{
 			try
@@ -193,7 +601,6 @@ namespace COFRSFrameworkInstaller
 				if (server.DBType == DBServerType.POSTGRESQL)
 				{
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
-					ConnectionString = connectionString;
 					_tableList.Items.Clear();
 
 					using (var connection = new NpgsqlConnection(connectionString))
@@ -227,7 +634,6 @@ SELECT schemaname, tablename
 				else if (server.DBType == DBServerType.MYSQL)
 				{
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};UID={server.Username};PWD={_password.Text};";
-					ConnectionString = connectionString;
 					_tableList.Items.Clear();
 
 					using (var connection = new MySqlConnection(connectionString))
@@ -266,11 +672,10 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables
 					string connectionString;
 
 					if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
-						connectionString = $"Server={server.ServerName};Database={db};Trusted_Connection=True;";
+						connectionString = $"Server ={server.ServerName};Database={db};Trusted_Connection=True;";
 					else
 						connectionString = $"Server={server.ServerName};Database={db};uid={server.Username};pwd={_password.Text};";
 
-					ConnectionString = connectionString;
 					_tableList.Items.Clear();
 
 					using (var connection = new SqlConnection(connectionString))
@@ -396,6 +801,7 @@ select a.attname as columnname,
 									};
 
 									DatabaseColumns.Add(dbColumn);
+
 								}
 							}
 						}
@@ -429,7 +835,6 @@ left outer join information_schema.KEY_COLUMN_USAGE as cu on cu.CONSTRAINT_SCHEM
   AND c.TABLE_NAME=@tablename
 ORDER BY c.ORDINAL_POSITION;
 ";
-
 						using (var command = new MySqlCommand(query, connection))
 						{
 							command.Parameters.AddWithValue("@schema", db);
@@ -548,243 +953,300 @@ select c.name as column_name,
 						}
 					}
 				}
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
 
-		private void OnUserNameChanged(object sender, EventArgs e)
-		{
-			try
-			{
-				if (!Populating)
+				Populating = true;
+
+				for (int i = 0; i < _entityModelList.Items.Count; i++)
 				{
-					_dbList.Items.Clear();
-					_tableList.Items.Clear();
-					var server = (DBServer)_serverList.SelectedItem;
+					var entity = (EntityClassFile)_entityModelList.Items[i];
 
-					if (server != null)
+					if (entity.TableName == table.Table)
 					{
-						server.Username = _userName.Text;
+						_entityModelList.SelectedIndex = i;
 
-						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
-
-						Save();
-
-						if (TestConnection(server))
-							PopulateDatabases();
-					}
-				}
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void OnPasswordChanged(object sender, EventArgs e)
-		{
-			try
-			{
-				if (!Populating)
-				{
-					_dbList.Items.Clear();
-					_tableList.Items.Clear();
-					var server = (DBServer)_serverList.SelectedItem;
-
-					if (server != null)
-					{
-						if (server.RememberPassword)
-							server.Password = _password.Text;
-						else
-							server.Password = string.Empty;
-
-						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
-
-						Save();
-
-						if (TestConnection(server))
-							PopulateDatabases();
-					}
-				}
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void OnSavePasswordChanged(object sender, EventArgs e)
-		{
-			try
-			{
-				if (!Populating)
-				{
-					_dbList.Items.Clear();
-					_tableList.Items.Clear();
-					var server = (DBServer)_serverList.SelectedItem;
-
-					if (server != null)
-					{
-						server.RememberPassword = _rememberPassword.Checked;
-
-						if (!server.RememberPassword)
-							server.Password = string.Empty;
-						else
-							server.Password = _password.Text;
-
-						var savedServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
-
-						Save();
-
-						if (TestConnection(server))
-							PopulateDatabases();
-					}
-				}
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void OnAuthenticationChanged(object sender, EventArgs e)
-		{
-			if (!Populating)
-			{
-				_dbList.Items.Clear();
-				_tableList.Items.Clear();
-				var server = (DBServer)_serverList.SelectedItem;
-
-				if (server != null)
-				{
-					server.DBAuth = _authenticationList.SelectedIndex == 0 ? DBAuthentication.SQLSERVERAUTH : DBAuthentication.WINDOWSAUTH;
-
-					if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
-					{
-						_userName.Text = string.Empty;
-						_userName.Enabled = false;
-						_userNameLabel.Enabled = false;
-
-						_password.Text = string.Empty;
-						_password.Enabled = false;
-						_passwordLabel.Enabled = false;
-
-						_rememberPassword.Checked = false;
-						_rememberPassword.Enabled = false;
-					}
-					else
-					{
-						_userName.Enabled = true;
-						_userNameLabel.Enabled = true;
-
-						_password.Enabled = true;
-						_passwordLabel.Enabled = true;
-
-						_rememberPassword.Checked = server.RememberPassword;
-						_rememberPassword.Enabled = true;
-					}
-
-					Save();
-
-					if (TestConnection(server))
-						PopulateDatabases();
-				}
-			}
-		}
-
-		private void OnAddServer(object sender, EventArgs e)
-		{
-			try
-			{
-				var dialog = new AddConnection
-				{
-					LastServerUsed = (DBServer)_serverList.SelectedItem
-				};
-
-				if (dialog.ShowDialog() == DialogResult.OK)
-				{
-					_dbList.Items.Clear();
-					_tableList.Items.Clear();
-					_serverConfig.Servers.Add(dialog.Server);
-					Save();
-
-					switch (dialog.Server.DBType)
-					{
-						case DBServerType.MYSQL: _serverTypeList.SelectedIndex = 0; break;
-						case DBServerType.POSTGRESQL: _serverTypeList.SelectedIndex = 1; break;
-						case DBServerType.SQLSERVER: _serverTypeList.SelectedIndex = 2; break;
-					}
-
-					OnServerTypeChanged(this, new EventArgs());
-
-					for (int index = 0; index < _serverList.Items.Count; index++)
-					{
-						if (string.Equals((_serverList.Items[index] as DBServer).ServerName, dialog.Server.ServerName, StringComparison.OrdinalIgnoreCase))
+						for (int j = 0; j < _resourceModelList.Items.Count; j++)
 						{
-							_serverList.SelectedIndex = index;
-							break;
+							var resource = (ResourceClassFile)_resourceModelList.Items[j];
+
+							if (string.Equals(resource.EntityClass, entity.ClassName, StringComparison.OrdinalIgnoreCase))
+							{
+								_resourceModelList.SelectedIndex = j;
+
+								for (int r = 0; r < _profileModelList.Items.Count; r++)
+								{
+									var profile = (ProfileClassFile)_profileModelList.Items[r];
+
+									if (string.Equals(profile.SourceClass, resource.ClassName, StringComparison.OrdinalIgnoreCase) &&
+										string.Equals(profile.DestinationClass, entity.ClassName, StringComparison.OrdinalIgnoreCase))
+									{
+										_profileModelList.SelectedIndex = r;
+										Populating = false;
+										return;
+									}
+								}
+							}
 						}
 					}
 				}
+
+				_entityModelList.SelectedIndex = -1;
+				_resourceModelList.SelectedIndex = -1;
+				_profileModelList.SelectedIndex = -1;
+				Populating = false;
 			}
 			catch (Exception error)
 			{
 				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
-		}
-
-		private void OnRemoveServer(object sender, EventArgs e)
-		{
-			try
-			{
-				var deprecatedServer = (DBServer)_serverList.SelectedItem;
-				var newList = new List<DBServer>();
-
-				foreach (var server in _serverConfig.Servers)
-				{
-					if (!string.Equals(server.ServerName, deprecatedServer.ServerName, StringComparison.OrdinalIgnoreCase))
-					{
-						newList.Add(server);
-					}
-				}
-
-				_serverConfig.Servers = newList;
-
-				if (_serverConfig.LastServerUsed >= _serverConfig.Servers.Count())
-				{
-					_serverConfig.LastServerUsed = 0;
-				}
-
-				Save();
-
-				OnServerTypeChanged(this, new EventArgs());
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void OnOK(object sender, EventArgs e)
-		{
-			if (_tableList.SelectedIndex == -1)
-			{
-				MessageBox.Show("You must select a database table in order to create an entity model", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-				return;
-			}
-
-			Save();
-			DatabaseTable = (DBTable)_tableList.SelectedItem;
-
-			DialogResult = DialogResult.OK;
-			Close();
 		}
 		#endregion
 
-		#region Helper functions
+		#region Helper Functions
+		private void LoadClassList()
+		{
+			try
+			{
+				_entityModelList.Items.Clear();
+				_resourceModelList.Items.Clear();
+				_profileModelList.Items.Clear();
+
+				foreach (var file in Directory.GetFiles(SolutionFolder, "*.cs"))
+				{
+					LoadEntityClass(file);
+					LoadResourceClass(file);
+					LoadProfileClass(file);
+				}
+
+				foreach (var folder in Directory.GetDirectories(SolutionFolder))
+				{
+					LoadEntityList(folder);
+					LoadResourceList(folder);
+					LoadProfileList(folder);
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void LoadEntityClass(string file)
+		{
+			var data = File.ReadAllText(file).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+			var className = string.Empty;
+			var namespaceName = string.Empty;
+			var schemaName = string.Empty;
+			var tableName = string.Empty;
+
+			foreach (var line in data)
+			{
+				var match = Regex.Match(line, "class[ \t]+(?<className>[A-Za-z][A-Za-z0-9_]*)");
+
+				if (match.Success)
+					className = match.Groups["className"].Value;
+
+				match = Regex.Match(line, "namespace[ \t]+(?<namespaceName>[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*)");
+
+				if (match.Success)
+					namespaceName = match.Groups["namespaceName"].Value;
+
+				// 	[Table("Products", Schema = "dbo")]
+				match = Regex.Match(line, "\\[[ \t]*Table[ \t]*\\([ \t]*\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}\\)\\]");
+
+				if (match.Success)
+				{
+					tableName = match.Groups["tableName"].Value;
+					schemaName = match.Groups["schemaName"].Value;
+				}
+			}
+
+			if (!string.IsNullOrWhiteSpace(tableName) &&
+				 !string.IsNullOrWhiteSpace(className) &&
+				 !string.IsNullOrWhiteSpace(namespaceName))
+			{
+				var classfile = new EntityClassFile
+				{
+					ClassName = $"{className}",
+					FileName = file,
+					TableName = tableName,
+					SchemaName = schemaName,
+					ClassNameSpace = namespaceName
+				};
+
+				_entityModelList.Items.Add(classfile);
+			}
+		}
+
+		private void LoadProfileClass(string file)
+		{
+			try
+			{
+				var data = File.ReadAllText(file).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+				var className = string.Empty;
+				var namespaceName = string.Empty;
+				var sourceClass = string.Empty;
+				var destinationClass = string.Empty;
+				bool mapped = false;
+
+				foreach (var line in data)
+				{
+					var match = Regex.Match(line, "class[ \t]+(?<className>[A-Za-z][A-Za-z0-9_]*)[\t ]+\\:[\t ]+Profile");
+
+					if (match.Success)
+						className = match.Groups["className"].Value;
+
+					match = Regex.Match(line, "namespace[ \t]+(?<namespaceName>[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*)");
+
+					if (match.Success)
+						namespaceName = match.Groups["namespaceName"].Value;
+
+					if (!mapped)
+					{
+						match = Regex.Match(line, "CreateMap[\t ]*\\<[\t ]*(?<sourceClass>[A-Za-z][A-Za-z0-9_]*)[\t ]*\\,[\t ]*(?<destinationClass>[A-Za-z][A-Za-z0-9_]*)[\t ]*\\>[\t ]*\\([\t ]*\\)");
+
+						if (match.Success)
+						{
+							sourceClass = match.Groups["sourceClass"].Value;
+							destinationClass = match.Groups["destinationClass"].Value;
+							mapped = true;
+						}
+					}
+				}
+
+				if (!string.IsNullOrWhiteSpace(className) &&
+					 !string.IsNullOrWhiteSpace(namespaceName) &&
+					 !string.IsNullOrWhiteSpace(sourceClass) &&
+					 !string.IsNullOrWhiteSpace(destinationClass))
+				{
+					var classfile = new ProfileClassFile
+					{
+						ClassName = $"{className}",
+						FileName = file,
+						ClassNamespace = namespaceName,
+						SourceClass = sourceClass,
+						DestinationClass = destinationClass
+					};
+
+					_profileModelList.Items.Add(classfile);
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void LoadResourceClass(string file)
+		{
+			try
+			{
+				var data = File.ReadAllText(file).Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries); ;
+				var className = string.Empty;
+				var namespaceName = string.Empty;
+				var entityName = string.Empty;
+
+				foreach (var line in data)
+				{
+					var match = Regex.Match(line, "class[ \t]+(?<className>[A-Za-z][A-Za-z0-9_]*)");
+
+					if (match.Success)
+						className = match.Groups["className"].Value;
+
+					match = Regex.Match(line, "namespace[ \t]+(?<namespaceName>[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*)");
+
+					if (match.Success)
+						namespaceName = match.Groups["namespaceName"].Value;
+
+					match = Regex.Match(line, "\\[[ \t]*Entity[ \t]*\\([ \t]*typeof\\([ \t]*(?<entityClass>[A-Za-z][A-Za-z0-9_]*)[ \t]*\\)");
+
+					if (match.Success)
+						entityName = match.Groups["entityClass"].Value;
+				}
+
+				if (!string.IsNullOrWhiteSpace(entityName) &&
+					 !string.IsNullOrWhiteSpace(className) &&
+					 !string.IsNullOrWhiteSpace(namespaceName))
+				{
+					var classfile = new ResourceClassFile
+					{
+						ClassName = $"{className}",
+						FileName = file,
+						EntityClass = entityName,
+						ClassNamespace = namespaceName
+					};
+
+					_resourceModelList.Items.Add(classfile);
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void LoadProfileList(string folder)
+		{
+			try
+			{
+				foreach (var file in Directory.GetFiles(folder, "*.cs"))
+				{
+					LoadProfileClass(file);
+				}
+
+				foreach (var subfolder in Directory.GetDirectories(folder))
+				{
+					LoadProfileList(subfolder);
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void LoadEntityList(string folder)
+		{
+			try
+			{
+				foreach (var file in Directory.GetFiles(folder, "*.cs"))
+				{
+					LoadEntityClass(file);
+				}
+
+				foreach (var subfolder in Directory.GetDirectories(folder))
+				{
+					LoadEntityList(subfolder);
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		private void LoadResourceList(string folder)
+		{
+			try
+			{
+				foreach (var file in Directory.GetFiles(folder, "*.cs"))
+				{
+					LoadResourceClass(file);
+				}
+
+				foreach (var subfolder in Directory.GetDirectories(folder))
+				{
+					LoadResourceList(subfolder);
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
+		/// <summary>
+		/// Reads the list of SQL Servers from the server configuration list
+		/// </summary>
 		private void PopulateServers()
 		{
 			DBServerType serverType;
@@ -821,7 +1283,7 @@ select c.name as column_name,
 				else if (serverType == DBServerType.POSTGRESQL)
 				{
 					_portNumber.Enabled = false;
-					_portNumber.Value = 1024;
+					_portNumber.Value = 5432;
 					_portNumber.Show();
 
 					_authenticationList.Enabled = false;
@@ -931,156 +1393,190 @@ select c.name as column_name,
 		{
 			var server = (DBServer)_serverList.SelectedItem;
 
-			switch (server.DBType)
+			if (server.DBType == DBServerType.POSTGRESQL)
 			{
-				case DBServerType.MYSQL:
-					PopulateMySql(server);
-					break;
+				if (string.IsNullOrWhiteSpace(_password.Text))
+					return;
 
-				case DBServerType.POSTGRESQL:
-					PopulatePostgresql(server);
-					break;
+				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database=postgres;User ID={server.Username};Password={_password.Text};";
 
-				case DBServerType.SQLSERVER:
-					PopulateSqlServer(server);
-					break;
+				_dbList.Items.Clear();
+				_tableList.Items.Clear();
+				int selectedItem = -1;
 
-				default:
-					MessageBox.Show("Unrecognized Database Type\r\nPlease select a database that is either MySQL, Postgresql, or SQL Server.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-					break;
-			}
-		}
-
-		private void PopulateSqlServer(DBServer server)
-		{
-			string connectionString;
-
-			if (server.DBAuth == DBAuthentication.SQLSERVERAUTH && string.IsNullOrWhiteSpace(_password.Text))
-				return;
-
-			if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
-				connectionString = $"Server={server.ServerName};Database=master;Trusted_Connection=True;";
-			else
-				connectionString = $"Server={server.ServerName};Database=master;uid={server.Username};pwd={_password.Text};";
-
-			_dbList.Items.Clear();
-			_tableList.Items.Clear();
-
-			try
-			{
-				using (var connection = new SqlConnection(connectionString))
+				try
 				{
-					connection.Open();
-
-					var query = @"
-select name
-  from sys.databases with(nolock)
- where name not in ( 'master', 'model', 'msdb', 'tempdb' )
- order by name";
-
-					using (var command = new SqlCommand(query, connection))
+					using (var connection = new NpgsqlConnection(connectionString))
 					{
-						using (var reader = command.ExecuteReader())
-						{
-							while (reader.Read())
-							{
-								_dbList.Items.Add(reader.GetString(0));
-							}
-						}
-					}
-				}
+						connection.Open();
 
-				if (_dbList.Items.Count > 0)
-					_dbList.SelectedIndex = 0;
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void PopulateMySql(DBServer server)
-		{
-			if (string.IsNullOrWhiteSpace(_password.Text))
-				return;
-
-			string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database=mysql;UID={server.Username};PWD={_password.Text};";
-
-			_dbList.Items.Clear();
-			_tableList.Items.Clear();
-
-			try
-			{
-				using (var connection = new MySqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = @"
-select SCHEMA_NAME from information_schema.SCHEMATA
- where SCHEMA_NAME not in ( 'information_schema', 'performance_schema', 'sys', 'mysql');";
-
-					using (var command = new MySqlCommand(query, connection))
-					{
-						using (var reader = command.ExecuteReader())
-						{
-							while (reader.Read())
-							{
-								_dbList.Items.Add(reader.GetString(0));
-							}
-						}
-					}
-				}
-
-				if (_dbList.Items.Count > 0)
-					_dbList.SelectedIndex = 0;
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void PopulatePostgresql(DBServer server)
-		{
-			if (string.IsNullOrWhiteSpace(_password.Text))
-				return;
-
-			string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database=postgres;User ID={server.Username};Password={_password.Text};";
-
-			_dbList.Items.Clear();
-			_tableList.Items.Clear();
-
-			try
-			{
-				using (var connection = new NpgsqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = @"
+						var query = @"
 SELECT datname 
   FROM pg_database
  WHERE datistemplate = false
    AND datname != 'postgres'
  ORDER BY datname";
 
-					using (var command = new NpgsqlCommand(query, connection))
-					{
-						using (var reader = command.ExecuteReader())
+						using (var command = new NpgsqlCommand(query, connection))
 						{
-							while (reader.Read())
+							using (var reader = command.ExecuteReader())
 							{
-								_dbList.Items.Add(reader.GetString(0));
+								int itemindex = 0;
+
+								while (reader.Read())
+								{
+									var databaseName = reader.GetString(0);
+
+									_dbList.Items.Add(databaseName);
+
+									string cs = $"Server={server.ServerName};Port={server.PortNumber};Database={databaseName};User ID={server.Username};Password={_password.Text};";
+
+									if (string.Equals(cs, DefaultConnectionString, StringComparison.OrdinalIgnoreCase))
+										selectedItem = itemindex;
+
+									itemindex++;
+								}
 							}
 						}
 					}
-				}
 
-				if (_dbList.Items.Count > 0)
-					_dbList.SelectedIndex = 0;
+					if (_dbList.Items.Count > 0)
+					{
+						if (selectedItem == -1)
+							selectedItem = 0;
+
+						_dbList.SelectedIndex = selectedItem;
+					}
+				}
+				catch (Exception error)
+				{
+					MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
 			}
-			catch (Exception error)
+			else if (server.DBType == DBServerType.MYSQL)
 			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				if (string.IsNullOrWhiteSpace(_password.Text))
+					return;
+
+				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database=mysql;UID={server.Username};PWD={_password.Text};";
+
+				_dbList.Items.Clear();
+				_tableList.Items.Clear();
+				int selectedItem = -1;
+
+				try
+				{
+					using (var connection = new MySqlConnection(connectionString))
+					{
+						connection.Open();
+
+						var query = @"
+select SCHEMA_NAME from information_schema.SCHEMATA
+ where SCHEMA_NAME not in ( 'information_schema', 'performance_schema', 'sys', 'mysql');";
+
+						using (var command = new MySqlCommand(query, connection))
+						{
+							using (var reader = command.ExecuteReader())
+							{
+								int itemindex = 0;
+
+								while (reader.Read())
+								{
+									var databaseName = reader.GetString(0);
+
+									_dbList.Items.Add(databaseName);
+
+									string cs = $"Server={server.ServerName};Port={server.PortNumber};Database={databaseName};UID={server.Username};PWD={_password.Text};";
+
+									if (string.Equals(cs, DefaultConnectionString, StringComparison.OrdinalIgnoreCase))
+										selectedItem = itemindex;
+
+									itemindex++;
+								}
+							}
+						}
+					}
+
+					if (_dbList.Items.Count > 0)
+					{
+						if (selectedItem == -1)
+							selectedItem = 0;
+
+						_dbList.SelectedIndex = selectedItem;
+					}
+				}
+				catch (Exception error)
+				{
+					MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
+			}
+			else
+			{
+				string connectionString;
+
+				if (server.DBAuth == DBAuthentication.SQLSERVERAUTH && string.IsNullOrWhiteSpace(_password.Text))
+					return;
+
+				if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
+					connectionString = $"Server={server.ServerName};Database=master;Trusted_Connection=True;";
+				else
+					connectionString = $"Server={server.ServerName};Database=master;uid={server.Username};pwd={_password.Text};";
+
+				_dbList.Items.Clear();
+				_tableList.Items.Clear();
+				int selectedItem = -1;
+
+				try
+				{
+					using (var connection = new SqlConnection(connectionString))
+					{
+						connection.Open();
+
+						var query = @"
+select name
+  from sys.databases with(nolock)
+ where name not in ( 'master', 'model', 'msdb', 'tempdb' )
+ order by name";
+
+						using (var command = new SqlCommand(query, connection))
+						{
+							using (var reader = command.ExecuteReader())
+							{
+								int itemindex = 0;
+
+								while (reader.Read())
+								{
+									var databaseName = reader.GetString(0);
+
+									_dbList.Items.Add(databaseName);
+									string cs;
+
+									if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
+										cs = $"Server={server.ServerName};Database={databaseName};Trusted_Connection=True;";
+									else
+										cs = $"Server={server.ServerName};Database={databaseName};uid={server.Username};pwd={_password.Text};";
+
+									if (string.Equals(cs, DefaultConnectionString, StringComparison.OrdinalIgnoreCase))
+										selectedItem = itemindex;
+
+									itemindex++;
+								}
+							}
+						}
+					}
+
+					if (_dbList.Items.Count > 0)
+					{
+						if (selectedItem == -1)
+							selectedItem = 0;
+
+						_dbList.SelectedIndex = selectedItem;
+					}
+				}
+				catch (Exception error)
+				{
+					MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
 			}
 		}
 
@@ -1209,10 +1705,38 @@ SELECT datname
 			//	the windows controls.
 			if (_serverConfig.Servers.Count() > 0)
 			{
+				int LastServerUsed = _serverConfig.LastServerUsed;
 				//	When we populate the windows controls, ensure that the last server that
 				//	the user used is in the visible list, and make sure it is the one
 				//	selected.
-				var dbServer = _serverConfig.Servers.ToList()[_serverConfig.LastServerUsed];
+				for (int candidate = 0; candidate < _serverConfig.Servers.ToList().Count(); candidate++)
+				{
+					var candidateServer = _serverConfig.Servers.ToList()[candidate];
+					var candidateConnectionString = string.Empty;
+
+					switch (candidateServer.DBType)
+					{
+						case DBServerType.MYSQL:
+							candidateConnectionString = $"Server={candidateServer.ServerName};Port={candidateServer.PortNumber}";
+							break;
+
+						case DBServerType.POSTGRESQL:
+							candidateConnectionString = $"Server={candidateServer.ServerName};Port={candidateServer.PortNumber}";
+							break;
+
+						case DBServerType.SQLSERVER:
+							candidateConnectionString = $"Server={candidateServer.ServerName}";
+							break;
+					}
+
+					if (DefaultConnectionString.StartsWith(candidateConnectionString))
+					{
+						LastServerUsed = candidate;
+						break;
+					}
+				}
+
+				var dbServer = _serverConfig.Servers.ToList()[LastServerUsed];
 				DBServerType selectedType = dbServer.DBType;
 
 				switch (dbServer.DBType)
@@ -1341,6 +1865,68 @@ SELECT datname
 			//	We're done. Turn off the populating flag.
 			Populating = false;
 		}
+
+		private void LoadAppSettings()
+		{
+			LoadAppSettings(SolutionFolder);
+		}
+
+		private bool LoadAppSettings(string folder)
+		{
+			var files = Directory.GetFiles(folder, "appSettings.Local.json");
+
+			foreach (var file in files)
+			{
+				using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+				{
+					using (var reader = new StreamReader(stream))
+					{
+						string content = reader.ReadToEnd();
+						var settings = JObject.Parse(content);
+						var connectionStrings = settings["ConnectionStrings"].Value<JObject>();
+						DefaultConnectionString = connectionStrings["DefaultConnection"].Value<string>().Replace(" ", "").Replace("\t","");
+						return true;
+					}
+				}
+			}
+
+			var childFolders = Directory.GetDirectories(folder);
+
+			foreach (var childFolder in childFolders)
+			{
+				if (LoadAppSettings(childFolder))
+					return true;
+			}
+
+			return false;
+		}
 		#endregion
+
+		private void OnOK(object sender, EventArgs e)
+		{
+			Save();
+			DatabaseTable = (DBTable)_tableList.SelectedItem;
+
+			if (_entityModelList.SelectedIndex == -1)
+			{
+				MessageBox.Show("You must select an entity model in order to create this item.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return;
+			}
+
+			if (_resourceModelList.SelectedIndex == -1)
+			{
+				MessageBox.Show("You must select a resource model in order to create this item.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return;
+			}
+
+			if (_profileModelList.SelectedIndex == -1)
+			{
+				MessageBox.Show("You must select a mapping profile model in order to create this item.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				return;
+			}
+
+			DialogResult = DialogResult.OK;
+			Close();
+		}
 	}
 }

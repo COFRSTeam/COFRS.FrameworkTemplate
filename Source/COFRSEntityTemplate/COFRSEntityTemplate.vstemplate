@@ -7,7 +7,7 @@
     <TemplateID>3f4293f1-cc85-462a-b195-4b0d342bdf1c</TemplateID>
     <ProjectType>CSharp</ProjectType>
     <NumberOfParentCategoriesToRollUp>1</NumberOfParentCategoriesToRollUp>
-    <DefaultName>ClassEntity.cs</DefaultName>
+    <DefaultName>EClass.cs</DefaultName>
   </TemplateData>
   <TemplateContent>
     <References>

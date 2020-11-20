@@ -33,8 +33,7 @@ namespace COFRSFrameworkInstaller
 
 		// This method is only called for item templates,
 		// not for project templates.
-		public void ProjectItemFinishedGenerating(ProjectItem
-			projectItem)
+		public void ProjectItemFinishedGenerating(ProjectItem projectItem)
 		{
 		}
 
@@ -51,7 +50,7 @@ namespace COFRSFrameworkInstaller
 			{
 				SolutionFolder = replacementsDictionary["$solutiondirectory$"];
 
-				var form = new UserInputGeneral()
+				var form = new UserInputValidation()
 				{
 					SolutionFolder = replacementsDictionary["$solutiondirectory$"],
 					InstallType = 3
@@ -67,10 +66,12 @@ namespace COFRSFrameworkInstaller
 
 					var entityClassFile = (EntityClassFile)form._entityModelList.SelectedItem;
 					var resourceClassFile = (ResourceClassFile)form._resourceModelList.SelectedItem;
+					var profileClassFile = (ProfileClassFile)form._profileModelList.SelectedItem;
 
 					LoadClassList(resourceClassFile.ClassName);
 
-					var model = EmitModel(entityClassFile, resourceClassFile, form.DatabaseColumns, replacementsDictionary);
+					var model = EmitModel(entityClassFile, resourceClassFile, profileClassFile, form.DatabaseColumns, replacementsDictionary);
+
 					replacementsDictionary.Add("$orchestrationnamespace$", Orchestrator.ClassNamespace);
 					replacementsDictionary.Add("$model$", model);
 					replacementsDictionary.Add("$entitynamespace$", entityClassFile.ClassNameSpace);
@@ -95,11 +96,11 @@ namespace COFRSFrameworkInstaller
 			return Proceed;
 		}
 
-		private string EmitModel(EntityClassFile entityClassFile, ResourceClassFile resourceClassFile, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
+		private string EmitModel(EntityClassFile entityClassFile, ResourceClassFile resourceClassFile, ProfileClassFile profileClassFile, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
 		{
 			var results = new StringBuilder();
-			var classMembers = Utilities.LoadClassColumns(resourceClassFile.FileName, entityClassFile.FileName, columns);
 
+			//	IValidator interface
 			results.AppendLine("\t///\t<summary>");
 			results.AppendLine($"\t///\tInterface for the {resourceClassFile.ClassName} Validator");
 			results.AppendLine("\t///\t</summary>");
@@ -107,6 +108,8 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t{");
 			results.AppendLine("\t}");
 			results.AppendLine();
+
+			//	Validator Class with constructor
 			results.AppendLine("\t///\t<summary>");
 			results.AppendLine($"\t///\t{replacementsDictionary["$safeitemname$"]}");
 			results.AppendLine("\t///\t</summary>");
@@ -119,6 +122,8 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t}");
 			results.AppendLine();
+
+			//	Validator Class with constructor with user
 			results.AppendLine("\t\t///\t<summary>");
 			results.AppendLine($"\t\t///\tInitializes the {replacementsDictionary["$safeitemname$"]}");
 			results.AppendLine("\t\t///\t</summary>");
@@ -134,12 +139,10 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t///\t<summary>");
 			results.AppendLine($"\t\t///\tValidation for Queries");
 			results.AppendLine("\t\t///\t</summary>");
-			results.AppendLine("\t\t///\t<param name=\"keys\">The list of keys specifically included in the query</param>");
-			results.AppendLine("\t\t///\t<param name=\"queryString\">The RQL query string used to get the collection</param>");
-			results.AppendLine($"\t\tpublic override async Task ValidateForGetAsync(List<KeyValuePair<string,object>> keys, string queryString)");
+			results.AppendLine("\t\t///\t<param name=\"node\">The <see cref=\"RqlNode\"/> that constricts the query</param>");
+			results.AppendLine($"\t\tpublic override async Task ValidateForGetAsync(RqlNode node)");
 			results.AppendLine("\t\t{");
-			results.AppendLine("\t\t\tValidateQueryString(queryString);");
-			results.AppendLine("\t\t\tRequireIndexedQuery(keys, queryString, \"The query is too broad. Please specify a more refined query that will produce fewer records.\");");
+			results.AppendLine("\t\t\tRequireIndexedQuery(node, \"The query is too broad. Please specify a more refined query that will produce fewer records.\");");
 			results.AppendLine();
 			results.AppendLine("\t\t\tawait Task.CompletedTask.ConfigureAwait(false);");
 			results.AppendLine("\t\t}");
@@ -156,13 +159,9 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t\tpublic async Task ValidateForAddAndUpdateAsync({resourceClassFile.ClassName} item)");
 			results.AppendLine("\t\t{");
 
-			foreach (var member in classMembers)
-			{
-				EmitUpdateValidation(results, member, 0, null);
-			}
-
 			results.AppendLine();
-			results.AppendLine("\t\t\t//\tTo do: Replace the line below with code to perform any specific validations pertaining to adding or updating an item.");
+			results.AppendLine("\t\t\t//\tTo do: Replace the line below with code to perform any specific validations pertaining to");
+			results.AppendLine("\t\t\t//\t       adding or updating an item.");
 			results.AppendLine("\t\t\tawait Task.CompletedTask.ConfigureAwait(false);");
 			results.AppendLine("\t\t}");
 			results.AppendLine();
@@ -175,18 +174,10 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t///\tValidation for updating existing items");
 			results.AppendLine("\t\t///\t</summary>");
 			results.AppendLine("\t\t///\t<param name=\"item\">The candidate item being updated</param>");
-			results.AppendLine($"\t\tpublic override async Task ValidateForUpdateAsync({resourceClassFile.ClassName} item)");
+			results.AppendLine("\t\t///\t<param name=\"node\">The <see cref=\"RqlNode\"/> that constricts the update</param>");
+			results.AppendLine($"\t\tpublic override async Task ValidateForUpdateAsync({resourceClassFile.ClassName} item, RqlNode node)");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tawait ValidateForAddAndUpdateAsync(item).ConfigureAwait(false);");
-			results.AppendLine();
-			results.AppendLine("\t\t\tRequire(item.href != null, \"The href must not be null.\");");
-			results.AppendLine();
-			results.AppendLine("\t\t\t//\tEnsure that the item exists before we try to update it.");
-			results.AppendLine("\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
-			results.AppendLine("\t\t\t{");
-			results.AppendLine($"\t\t\t\tif (await service.GetSingleAsync<{resourceClassFile.ClassName}>(item.href, \"select(href)\").ConfigureAwait(false) == null)");
-			results.AppendLine("\t\t\t\t\tFailNotFound();");
-			results.AppendLine("\t\t\t}");
 			results.AppendLine();
 			results.AppendLine("\t\t\t//\tTo do: add any specific validations pertaining to updating an item.");
 			results.AppendLine("\t\t}");
@@ -215,9 +206,9 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t///\t<summary>");
 			results.AppendLine("\t\t///\tValidates a set of patch commands on an item");
 			results.AppendLine("\t\t///\t</summary>");
-			results.AppendLine("\t\t///\t<param name=\"keys\">The set of keys that uniquely identifies the object</param>");
 			results.AppendLine("\t\t///\t<param name=\"patchCommands\">The set of patch commands to validate</param>");
-			results.AppendLine("\t\tpublic override async Task ValidateForPatchAsync(List<KeyValuePair<string, object>> keys, IEnumerable<PatchCommand> patchCommands)");
+			results.AppendLine("\t\t///\t<param name=\"node\">The <see cref=\"RqlNode\"/> that constricts the update</param>");
+			results.AppendLine("\t\tpublic override async Task ValidateForPatchAsync(IEnumerable<PatchCommand> patchCommands, RqlNode node)");
 			results.AppendLine("\t\t{");
 
 			results.AppendLine("\t\t\tforeach (var command in patchCommands)");
@@ -225,91 +216,13 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t\t\tif (string.Equals(command.op, \"replace\", StringComparison.OrdinalIgnoreCase))");
 			results.AppendLine("\t\t\t\t{");
 
-			foreach (var member in classMembers)
-			{
-				if (member.EntityNames.Count == 1)
-				{
-					var entity = member.EntityNames[0];
+			results.AppendLine("\t\t\t\t}");
+			results.AppendLine("\t\t\t\telse if (string.Equals(command.op, \"add\", StringComparison.OrdinalIgnoreCase))");
+			results.AppendLine("\t\t\t\t{");
 
-					if (!entity.IsComputed)
-					{
-						if (entity.IsFixed)
-						{
-							if (entity.Length > 0)
-							{
-								if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Binary) ||
-									(entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Timestamp) ||
-									(entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.Binary))
-								{
-									if (entity.IsNullable)
-									{
-										results.AppendLine($"\t\t\t\t\tif (string.Equals(command.path, \"{member.DomainName}\", StringComparison.OrdinalIgnoreCase))");
-										results.AppendLine($"\t\t\t\t\t\tif (!string.IsNullOrWhiteSpace(command.value))");
-										results.AppendLine($"\t\t\t\t\t\t\tRequire(Convert.FromBase64String(command.value).Length != {entity.Length}, \"{member.DomainName} must be {entity.Length} bytes in length.\");");
-									}
-									else
-									{
-										results.AppendLine($"\t\t\t\t\tif (string.Equals(command.path, \"{member.DomainName}\", StringComparison.OrdinalIgnoreCase))");
-										results.AppendLine($"\t\t\t\t\t\tRequire(Convert.FromBase64String(command.value).Length != {entity.Length}, \"{member.DomainName} must be {entity.Length} bytes in length.\");");
-									}
-								}
-
-								else if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Char) ||
-										  (entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.NChar) ||
-										  (entity.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)entity.DataType == NpgsqlDbType.Char))
-								{
-									if (entity.IsNullable)
-									{
-										results.AppendLine($"\t\t\t\t\tif (string.Equals(command.path, \"{member.DomainName}\", StringComparison.OrdinalIgnoreCase))");
-										results.AppendLine($"\t\t\t\t\t\tif (!string.IsNullOrWhiteSpace(command.value))");
-										results.AppendLine($"\t\t\t\t\t\t\tRequire(command.value.Length != {entity.Length}, \"{member.DomainName} must be {entity.Length} characters in length.\");");
-									}
-									else
-									{
-										results.AppendLine($"\t\t\t\t\tif (string.Equals(command.path, \"{member.DomainName}\", StringComparison.OrdinalIgnoreCase))");
-										results.AppendLine($"\t\t\t\t\t\tRequire(command.value.Length != {entity.Length}, \"{member.DomainName} must be {entity.Length} characters in length.\");");
-									}
-								}
-							}
-						}
-						else if (entity.Length > 0)
-						{
-							if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.VarBinary) ||
-								(entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.VarBinary))
-							{
-								if (entity.IsNullable)
-								{
-									results.AppendLine($"\t\t\t\t\tif (string.Equals(command.path, \"{member.DomainName}\", StringComparison.OrdinalIgnoreCase))");
-									results.AppendLine($"\t\t\t\t\t\tif (!string.IsNullOrWhiteSpace(command.value))");
-									results.AppendLine($"\t\t\t\t\t\t\tRequire(Convert.FromBase64String(command.value).Length <= {entity.Length}, \"{member.DomainName} must be less than or equal to {entity.Length} bytes in length.\");");
-								}
-								else
-								{
-									results.AppendLine($"\t\t\t\t\tif (string.Equals(command.path, \"{member.DomainName}\", StringComparison.OrdinalIgnoreCase))");
-									results.AppendLine($"\t\t\t\t\t\tRequire(Convert.FromBase64String(command.value).Length <= {entity.Length}, \"{member.DomainName} must be less than or equal to {entity.Length} bytes in length.\");");
-								}
-							}
-
-							else if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.VarChar) ||
-									 (entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.NVarChar) ||
-									 (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.VarChar))
-							{
-								if (entity.IsNullable)
-								{
-									results.AppendLine($"\t\t\t\t\tif (string.Equals(command.path, \"{member.DomainName}\", StringComparison.OrdinalIgnoreCase))");
-									results.AppendLine($"\t\t\t\t\t\tif (!string.IsNullOrWhiteSpace(command.value))");
-									results.AppendLine($"\t\t\t\t\t\t\tRequire(command.value.Length <= {entity.Length}, \"{member.DomainName} must be less than or equal to {entity.Length} characters in length.\");");
-								}
-								else
-								{
-									results.AppendLine($"\t\t\t\t\tif (string.Equals(command.path, \"{member.DomainName}\", StringComparison.OrdinalIgnoreCase))");
-									results.AppendLine($"\t\t\t\t\t\tRequire(command.value.Length <= {entity.Length}, \"{member.DomainName} must be less than or equal to {entity.Length} characters in length.\");");
-								}
-							}
-						}
-					}
-				}
-			}
+			results.AppendLine("\t\t\t\t}");
+			results.AppendLine("\t\t\t\telse if (string.Equals(command.op, \"delete\", StringComparison.OrdinalIgnoreCase))");
+			results.AppendLine("\t\t\t\t{");
 
 			results.AppendLine("\t\t\t\t}");
 			results.AppendLine("\t\t\t}");
@@ -327,8 +240,8 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t///\t<summary>");
 			results.AppendLine($"\t\t///\tValidation for deleting an item");
 			results.AppendLine("\t\t///\t</summary>");
-			results.AppendLine("\t\t///\t<param name=\"keys\">The list of keys used to identify the item(s) being deleted</param>");
-			results.AppendLine($"\t\tpublic override async Task ValidateForDeleteAsync(List<KeyValuePair<string,object>> keys)");
+			results.AppendLine("\t\t///\t<param name=\"node\">The <see cref=\"RqlNode\"/> that constricts the delete</param>");
+			results.AppendLine($"\t\tpublic override async Task ValidateForDeleteAsync(RqlNode node)");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\t//\tTo do: Replace the line below with code to perform any specific validations pertaining to deleting an item.");
 			results.AppendLine("\t\t\tawait Task.CompletedTask.ConfigureAwait(false);");
@@ -336,207 +249,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t}");
 
 			return results.ToString();
-		}
-
-		private void EmitUpdateValidation(StringBuilder results, ClassMember member, int indent, string prefix)
-		{
-			var parent = string.IsNullOrWhiteSpace(prefix) ? string.Empty : $"{prefix}.";
-
-			if (!string.IsNullOrWhiteSpace(member.DomainName) &&
-				 (member.ChildMembers.Count > 0 || member.EntityNames.Count > 0))
-			{
-				if (member.ChildMembers.Count > 0)
-				{
-					var newIndent = indent;
-
-					if (IsNullable(member))
-					{
-						for (int i = 0; i < indent; i++) results.Append("\t");
-						results.AppendLine($"\t\t\tif (item.{parent}{member.DomainName} != null )");
-						for (int i = 0; i < indent; i++) results.Append("\t");
-						results.AppendLine("\t\t\t{");
-						newIndent = indent + 1;
-					}
-
-					foreach (var childMember in member.ChildMembers)
-					{
-						EmitUpdateValidation(results, childMember, newIndent, $"{parent}{member.DomainName}");
-					}
-
-					if (IsNullable(member))
-					{
-						for (int i = 0; i < indent; i++) results.Append("\t");
-						results.AppendLine("\t\t\t}");
-					}
-				}
-				else
-				{
-					var entity = member.EntityNames[0];
-
-					if (!entity.IsComputed)
-					{
-						if (entity.IsFixed)
-						{
-							if (entity.Length > 1)
-							{
-								if (entity.IsNullable)
-								{
-									if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Binary) ||
-										(entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Timestamp) ||
-										(entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.Binary))
-									{
-										for (int i = 0; i < indent; i++) results.Append("\t");
-										results.AppendLine($"\t\t\tif(item.{parent}{member.DomainName} != null )");
-										for (int i = 0; i < indent; i++) results.Append("\t");
-										results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length == {entity.Length}, \"{parent}{member.DomainName} must be {entity.Length} bytes in length.\");");
-									}
-
-									else if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Char) ||
-											  (entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.NChar) ||
-											  (entity.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)entity.DataType == NpgsqlDbType.Char))
-									{
-										for (int i = 0; i < indent; i++) results.Append("\t");
-										results.AppendLine($"\t\t\tif(!string.IsNullOrWhiteSpace(item.{parent}{member.DomainName}))");
-										for (int i = 0; i < indent; i++) results.Append("\t");
-										results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length == {entity.Length}, \"{parent}{member.DomainName} must be {entity.Length} characters in length.\");");
-									}
-									else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.String)
-									{
-										if (entity.Length > 1)
-										{
-											for (int i = 0; i < indent; i++) results.Append("\t");
-											results.AppendLine($"\t\t\tif(!string.IsNullOrWhiteSpace(item.{member.DomainName}))");
-											for (int i = 0; i < indent; i++) results.Append("\t");
-											results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length == {entity.Length}, \"{parent}{member.DomainName} must be {entity.Length} characters in length.\");");
-										}
-									}
-								}
-								else
-								{
-									if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Binary) ||
-										(entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Timestamp) ||
-										(entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.Binary))
-									{
-										for (int i = 0; i < indent; i++) results.Append("\t");
-										results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length == {entity.Length}, \"{parent}{member.DomainName} must be {entity.Length} bytes in length.\");");
-									}
-									else if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Char) ||
-											  (entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.NChar) ||
-											  (entity.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)entity.DataType == NpgsqlDbType.Char))
-									{
-										for (int i = 0; i < indent; i++) results.Append("\t");
-										results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length == {entity.Length}, \"{parent}{member.DomainName} must be {entity.Length} characters in length.\");");
-									}
-									else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.String)
-									{
-										if (entity.Length > 1)
-										{
-											for (int i = 0; i < indent; i++) results.Append("\t");
-											results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length == {entity.Length}, \"{parent}{member.DomainName} must be {entity.Length} characters in length.\");");
-										}
-									}
-								}
-							}
-						}
-						else if (entity.Length > 1)
-						{
-							if (entity.IsNullable)
-							{
-								if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.VarBinary) ||
-									(entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.VarBinary))
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tif(item.{parent}{member.DomainName} != null )");
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length <= {entity.Length}, \"{parent}{member.DomainName} must be less than or equal to {entity.Length} bytes in length.\");");
-								}
-
-								else if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.VarChar) ||
-										 (entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.NVarChar) ||
-										 (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.VarChar))
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tif(!string.IsNullOrWhiteSpace(item.{parent}{member.DomainName}))");
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length <= {entity.Length}, \"{parent}{member.DomainName} must be less than or equal to {entity.Length} characters in length.\");");
-								}
-								else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.VarChar)
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tif(!string.IsNullOrWhiteSpace(item.{parent}{member.DomainName}))");
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length == {entity.Length}, \"{parent}{member.DomainName} must be {entity.Length} characters in length.\");");
-								}
-								else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.TinyText)
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tif(!string.IsNullOrWhiteSpace(item.{parent}{member.DomainName}))");
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length <= 255, \"{parent}{member.DomainName} must be less than or equal to 255 characters in length.\");");
-								}
-								else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.Text)
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tif(!string.IsNullOrWhiteSpace(item.{parent}{member.DomainName}))");
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length <= 65535, \"{parent}{member.DomainName} must be less than or equal to 65,535 characters in length.\");");
-								}
-								else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.MediumText)
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tif(!string.IsNullOrWhiteSpace(item.{parent}{member.DomainName}))");
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length <= 16777215, \"{parent}{member.DomainName} must be less than or equal to 16,777,215 characters in length.\");");
-								}
-							}
-							else
-							{
-								if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Binary) ||
-									(entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Timestamp) ||
-									(entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.Binary))
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length <= {entity.Length}, \"{parent}{member.DomainName} must be less than or equal to {entity.Length} bytes in length.\");");
-								}
-								else if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.VarChar) ||
-										 (entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.NVarChar) ||
-										 (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.VarChar))
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\t\tRequire(item.{parent}{member.DomainName}.Length <= {entity.Length}, \"{parent}{member.DomainName} must be less than or equal to {entity.Length} characters in length.\");");
-								}
-								else if ((entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.Char) ||
-										 (entity.ServerType == DBServerType.SQLSERVER && (SqlDbType)entity.DataType == SqlDbType.NChar) ||
-										 (entity.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)entity.DataType == NpgsqlDbType.Char))
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length <= {entity.Length}, \"{parent}{member.DomainName} must be less than or equal to {entity.Length} characters in length.\");");
-								}
-								else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.VarChar)
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length == {entity.Length}, \"{parent}{member.DomainName} must be {entity.Length} characters in length.\");");
-								}
-								else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.TinyText)
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length <= 255, \"{parent}{member.DomainName} must be less than or equal to 255 characters in length.\");");
-								}
-								else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.Text)
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length <= 65535, \"{parent}{member.DomainName} must be less than or equal to 65,535 characters in length.\");");
-								}
-								else if (entity.ServerType == DBServerType.MYSQL && (MySqlDbType)entity.DataType == MySqlDbType.MediumText)
-								{
-									for (int i = 0; i < indent; i++) results.Append("\t");
-									results.AppendLine($"\t\t\tRequire(item.{parent}{member.DomainName}.Length <= 16777215, \"{parent}{member.DomainName} must be less than or equal to 16,777,215 characters in length.\");");
-								}
-							}
-						}
-					}
-				}
-			}
 		}
 
 		private bool UpdateServices(ResourceClassFile domainClassFile, Dictionary<string, string> replacementsDictionary)
@@ -629,7 +341,7 @@ namespace COFRSFrameworkInstaller
 											if (line.Contains("{"))
 												state++;
 
-											if (line.Contains("services.InitializeFactories();"))
+											if (line.Contains("return ApiOptions;"))
 												state--;
 
 											if (state == 3)
@@ -673,7 +385,7 @@ namespace COFRSFrameworkInstaller
 
 		private string FindServices(string folder)
 		{
-			string filePath = Path.Combine(folder, "ServicesConfig.cs");
+			string filePath = Path.Combine(folder, "ServiceConfig.cs");
 
 			if (File.Exists(filePath))
 				return filePath;
@@ -708,6 +420,7 @@ namespace COFRSFrameworkInstaller
 				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 		}
+
 		private void LoadDomainClass(string file, string domainClassName)
 		{
 			try
@@ -779,27 +492,6 @@ namespace COFRSFrameworkInstaller
 			{
 				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
-		}
-		private bool IsNullable(ClassMember member)
-		{
-			bool isNullable = false;
-
-			if (member.ChildMembers.Count > 0)
-			{
-				foreach (var childMember in member.ChildMembers)
-				{
-					isNullable |= IsNullable(childMember);
-				}
-			}
-			else
-			{
-				foreach (var entity in member.EntityNames)
-				{
-					isNullable |= entity.IsNullable;
-				}
-			}
-
-			return isNullable;
 		}
 	}
 }

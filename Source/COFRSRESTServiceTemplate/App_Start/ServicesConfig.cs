@@ -44,10 +44,14 @@ namespace $safeprojectname$.App_Start
 				.Where(t => !t.IsAbstract && !t.IsGenericTypeDefinition)
 				.Where(t => typeof(IController).IsAssignableFrom(t) || t.Name.EndsWith("Controller", StringComparison.OrdinalIgnoreCase)));
 
+			// instantiate and configure logging. Using serilog here, to log to console and a text-file.
 			var loggerConfig = new LoggerConfiguration().ReadFrom.Configuration(configuration);
+			Log.Logger = loggerConfig.CreateLogger();
 
-			services.AddSingleton(new LoggerFactory().AddSerilog(loggerConfig.CreateLogger()));
+			services.AddSingleton(new LoggerFactory().AddSerilog(Log.Logger));
 			services.AddLogging();
+
+			Log.Logger.Information("Service is starting...");
 
 			services.AddSingleton<ICacheProvider>(new DefaultCacheProvider(configuration.GetSection("ApiSettings").GetValue<int>("CacheLimit")));
 		 

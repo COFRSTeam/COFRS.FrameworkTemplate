@@ -1,6 +1,4 @@
 ﻿using COFRS;
-using $safeprojectname$.Orchestration.DomainModels;
-using $safeprojectname$.SwaggerExamples;
 using Microsoft.Extensions.Logging;
 using Microsoft.Web.Http;
 using Swashbuckle.Examples;
@@ -8,6 +6,8 @@ using Swashbuckle.Swagger.Annotations;
 using System.Net;
 using System.Web.Http;
 using System.Web.Routing;
+using $safeprojectname$.Models.ResourceModels;
+using $safeprojectname$.Models.SwaggerExamples;
 
 namespace $safeprojectname$.Controllers
 {
