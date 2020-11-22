@@ -293,13 +293,12 @@ namespace COFRSFrameworkInstaller
 			if (ExampleClass != null)
 				results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.Created, typeof({domain.ClassName}Example))]");
 
-			results.AppendLine($"\t\t[SwaggerResponseHeader(HttpStatusCode.Created, \"Location\", \"string\", \"Returns Href or Int of new {domain.ClassName}\")]");
+			results.AppendLine($"\t\t[SwaggerResponseHeader(HttpStatusCode.Created, \"Location\", \"string\", \"Returns Href of the new {domain.ClassName}\")]");
 			results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 			results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 			results.AppendLine($"\t\tpublic async Task<IHttpActionResult> Add{domain.ClassName}Async([FromBody] {domain.ClassName} item)");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
-			results.AppendLine("\t\t\tvar node = RqlNode.Parse(Request.RequestUri.Query);");
 			results.AppendLine();
 
 			if (hasValidator)

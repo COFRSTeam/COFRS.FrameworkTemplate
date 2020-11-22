@@ -251,7 +251,7 @@ namespace COFRSFrameworkInstaller
 			return results.ToString();
 		}
 
-		private bool UpdateServices(ResourceClassFile domainClassFile, Dictionary<string, string> replacementsDictionary)
+		private bool UpdateServices(ResourceClassFile resourceClassFile, Dictionary<string, string> replacementsDictionary)
 		{
 			var servicesFile = FindServices(replacementsDictionary["$solutiondirectory$"]);
 
@@ -335,20 +335,20 @@ namespace COFRSFrameworkInstaller
 										}
 										else if (state == 4)
 										{
-											if (line.ToLower().Contains(($"services.AddTransientWithParameters<I{domainClassFile.ClassName}Validator, {replacementsDictionary["$safeitemname$"]}>()").ToLower()))
+											if (line.ToLower().Contains(($"services.AddTransientWithParameters<I{resourceClassFile.ClassName}Validator, {replacementsDictionary["$safeitemname$"]}>()").ToLower()))
 												validatorRegistered = true;
 
 											if (line.Contains("{"))
 												state++;
 
-											if (line.Contains("return ApiOptions;"))
+											if (line.Contains("services.InitializeFactories();"))
 												state--;
 
 											if (state == 3)
 											{
 												if (!validatorRegistered)
 												{
-													writer.WriteLine($"\t\t\tservices.AddTransientWithParameters<I{domainClassFile.ClassName}Validator, {replacementsDictionary["$safeitemname$"]}>();");
+													writer.WriteLine($"\t\t\tservices.AddTransientWithParameters<I{resourceClassFile.ClassName}Validator, {replacementsDictionary["$safeitemname$"]}>();");
 												}
 												state = 1000000;
 											}
@@ -385,7 +385,7 @@ namespace COFRSFrameworkInstaller
 
 		private string FindServices(string folder)
 		{
-			string filePath = Path.Combine(folder, "ServiceConfig.cs");
+			string filePath = Path.Combine(folder, "ServicesConfig.cs");
 
 			if (File.Exists(filePath))
 				return filePath;

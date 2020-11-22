@@ -65,7 +65,8 @@ namespace $safeprojectname$
 				ContractResolver = new COFRSJsonContractResolver(),
 				Converters = new List<JsonConverter>
 					{
-						new ApiJsonEnumConverter(),
+                        new ApiJsonConverter(),
+                        new ApiJsonEnumConverter(),
 						new ApiJsonByteArrayConverter()
 					}
 			};
