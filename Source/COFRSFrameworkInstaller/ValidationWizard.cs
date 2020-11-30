@@ -142,7 +142,8 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t///\t<param name=\"node\">The <see cref=\"RqlNode\"/> that constricts the query</param>");
 			results.AppendLine($"\t\tpublic override async Task ValidateForGetAsync(RqlNode node)");
 			results.AppendLine("\t\t{");
-			results.AppendLine("\t\t\tRequireIndexedQuery(node, \"The query is too broad. Please specify a more refined query that will produce fewer records.\");");
+			results.AppendLine("\t\t\t//\tUn-comment out the line below if this table is large, and you want to prevent users from requesting a full table scan");
+			results.AppendLine("\t\t\t//\tRequireIndexedQuery(node, \"The query is too broad. Please specify a more refined query that will produce fewer records.\");");
 			results.AppendLine();
 			results.AppendLine("\t\t\tawait Task.CompletedTask.ConfigureAwait(false);");
 			results.AppendLine("\t\t}");
@@ -213,15 +214,15 @@ namespace COFRSFrameworkInstaller
 
 			results.AppendLine("\t\t\tforeach (var command in patchCommands)");
 			results.AppendLine("\t\t\t{");
-			results.AppendLine("\t\t\t\tif (string.Equals(command.op, \"replace\", StringComparison.OrdinalIgnoreCase))");
+			results.AppendLine("\t\t\t\tif (string.Equals(command.Op, \"replace\", StringComparison.OrdinalIgnoreCase))");
 			results.AppendLine("\t\t\t\t{");
 
 			results.AppendLine("\t\t\t\t}");
-			results.AppendLine("\t\t\t\telse if (string.Equals(command.op, \"add\", StringComparison.OrdinalIgnoreCase))");
+			results.AppendLine("\t\t\t\telse if (string.Equals(command.Op, \"add\", StringComparison.OrdinalIgnoreCase))");
 			results.AppendLine("\t\t\t\t{");
 
 			results.AppendLine("\t\t\t\t}");
-			results.AppendLine("\t\t\t\telse if (string.Equals(command.op, \"delete\", StringComparison.OrdinalIgnoreCase))");
+			results.AppendLine("\t\t\t\telse if (string.Equals(command.Op, \"delete\", StringComparison.OrdinalIgnoreCase))");
 			results.AppendLine("\t\t\t\t{");
 
 			results.AppendLine("\t\t\t\t}");
@@ -338,8 +339,7 @@ namespace COFRSFrameworkInstaller
 											if (line.ToLower().Contains(($"services.AddTransientWithParameters<I{resourceClassFile.ClassName}Validator, {replacementsDictionary["$safeitemname$"]}>()").ToLower()))
 												validatorRegistered = true;
 
-											if (line.Contains("{"))
-												state++;
+											state += line.CountOf('{') - line.CountOf('}');
 
 											if (line.Contains("services.InitializeFactories();"))
 												state--;
@@ -355,11 +355,7 @@ namespace COFRSFrameworkInstaller
 										}
 										else
 										{
-											if (line.Contains("{"))
-												state++;
-
-											if (line.Contains("}"))
-												state--;
+											state += line.CountOf('{') - line.CountOf('}');
 										}
 
 										writer.WriteLine(line);

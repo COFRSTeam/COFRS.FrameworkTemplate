@@ -57,13 +57,13 @@ namespace COFRSFrameworkInstaller
 
 						if (column.IsPrimaryKey)
 						{
-							var member = members.FirstOrDefault(m => string.Equals(m.DomainName, "href", StringComparison.OrdinalIgnoreCase));
+							var member = members.FirstOrDefault(m => string.Equals(m.DomainName, "Href", StringComparison.OrdinalIgnoreCase));
 
 							if (member == null)
 							{
 								member = new ClassMember()
 								{
-									DomainName = "href",
+									DomainName = "Href",
 									DomainType = string.Empty,
 									EntityNames = new List<DBColumn>(),
 									ChildMembers = new List<ClassMember>()
@@ -107,10 +107,10 @@ namespace COFRSFrameworkInstaller
 								shortColumnName = column.ForeignTableName;
 
 							var normalizer = new NameNormalizer(shortColumnName);
-							var domainName = normalizer.PluralCamelCase;
+							var domainName = normalizer.PluralForm;
 
 							if (string.Equals(shortColumnName, normalizer.SingleForm, StringComparison.OrdinalIgnoreCase))
-								domainName = normalizer.SingleCamelCase;
+								domainName = normalizer.SingleForm;
 
 							var member = members.FirstOrDefault(m => string.Equals(m.DomainName, domainName, StringComparison.OrdinalIgnoreCase));
 
@@ -151,10 +151,10 @@ namespace COFRSFrameworkInstaller
 						else
 						{
 							var normalizer = new NameNormalizer(column.EntityName);
-							var domainName = normalizer.PluralCamelCase;
+							var domainName = normalizer.PluralForm;
 
 							if (string.Equals(column.EntityName, normalizer.SingleForm, StringComparison.OrdinalIgnoreCase))
-								domainName = normalizer.SingleCamelCase;
+								domainName = normalizer.SingleForm;
 
 							var member = members.FirstOrDefault(m => string.Equals(m.DomainName, domainName, StringComparison.OrdinalIgnoreCase));
 
@@ -337,10 +337,10 @@ namespace COFRSFrameworkInstaller
 								shortColumnName = column.ForeignTableName;
 
 							var normalizer = new NameNormalizer(shortColumnName);
-							var domainName = normalizer.PluralCamelCase;
+							var domainName = normalizer.PluralForm;
 
 							if (string.Equals(shortColumnName, normalizer.SingleForm, StringComparison.OrdinalIgnoreCase))
-								domainName = normalizer.SingleCamelCase;
+								domainName = normalizer.SingleForm;
 
 							var member = members.FirstOrDefault(m => string.Equals(m.DomainName, domainName, StringComparison.OrdinalIgnoreCase));
 
@@ -381,10 +381,10 @@ namespace COFRSFrameworkInstaller
 						else
 						{
 							var normalizer = new NameNormalizer(column.EntityName);
-							var domainName = normalizer.PluralCamelCase;
+							var domainName = normalizer.PluralForm;
 
 							if (string.Equals(column.EntityName, normalizer.SingleForm, StringComparison.OrdinalIgnoreCase))
-								domainName = normalizer.SingleCamelCase;
+								domainName = normalizer.SingleForm;
 
 							var member = members.FirstOrDefault(m => string.Equals(m.DomainName, domainName, StringComparison.OrdinalIgnoreCase));
 

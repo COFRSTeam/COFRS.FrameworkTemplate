@@ -77,15 +77,7 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tvar rootUrl = Startup.AppConfig.GetSection(\"ApiSettings\").GetValue<string>(\"RootUrl\");");
 			results.AppendLine("\t\t\twhile (rootUrl.EndsWith(\"/\") || rootUrl.EndsWith(\"\\\\\"))");
-
-			if (replacementsDictionary["$targetframeworkversion$"] == "3.1")
-			{
-				results.AppendLine("\t\t\t\trootUrl = rootUrl[0..^1];");
-			}
-			else
-			{
-				results.AppendLine("\t\t\t\trootUrl = rootUrl.Substring(0, rootUrl.Length - 1);");
-			}
+			results.AppendLine("\t\t\t\trootUrl = rootUrl.Substring(0, rootUrl.Length - 1);");
 
 			results.AppendLine();
 			results.AppendLine($"\t\t\tCreateMap<{domainClassFile.ClassName}, {entityClassFile.ClassName}>()");
@@ -101,7 +93,7 @@ namespace COFRSFrameworkInstaller
 				else if (member.ChildMembers.Count == 0 && member.EntityNames.Count == 0)
 				{
 				}
-				else if (string.Equals(member.DomainName, "href", StringComparison.OrdinalIgnoreCase))
+				else if (string.Equals(member.DomainName, "Href", StringComparison.OrdinalIgnoreCase))
 				{
 					int ix = 0 - member.EntityNames.Count + 1;
 					foreach (var entityColumn in member.EntityNames)
@@ -252,10 +244,10 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine();
 
 			results.AppendLine($"\t\t\tCreateMap<RqlCollection<{entityClassFile.ClassName}>, RqlCollection<{domainClassFile.ClassName}>>()");
-			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.href, opts => opts.MapFrom(src => new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.href.Query}}\")))");
-			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.first, opts => opts.MapFrom(src => src.first == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.first.Query}}\")))");
-			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.next, opts => opts.MapFrom(src => src.next == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.next.Query}}\")))");
-			results.Append($"\t\t\t\t.ForMember(dest => dest.previous, opts => opts.MapFrom(src => src.previous == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.previous.Query}}\")))");
+			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.Href, opts => opts.MapFrom(src => new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.Href.Query}}\")))");
+			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.First, opts => opts.MapFrom(src => src.First == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.First.Query}}\")))");
+			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.Next, opts => opts.MapFrom(src => src.Next == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.Next.Query}}\")))");
+			results.Append($"\t\t\t\t.ForMember(dest => dest.Previous, opts => opts.MapFrom(src => src.Previous == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.Previous.Query}}\")))");
 
 			results.AppendLine(";");
 			results.AppendLine("\t\t}");
