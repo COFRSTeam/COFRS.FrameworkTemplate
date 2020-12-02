@@ -533,13 +533,15 @@ select c.name as column_name,
 									if (string.Equals(dbColumn.dbDataType, "geometry", StringComparison.OrdinalIgnoreCase))
 									{
 										_tableList.SelectedIndex = -1;
-										throw new Exception("COFRS .NET Core does not support the SQL Server geometry data type.");
+										MessageBox.Show("COFRS does not support the SQL Server geometry data type. You cannot create an entity model from this table.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+										return;
 									}
 
 									if (string.Equals(dbColumn.dbDataType, "geography", StringComparison.OrdinalIgnoreCase))
 									{
 										_tableList.SelectedIndex = -1;
-										throw new Exception("COFRS .NET Core does not support the SQL Server geography data type.");
+										MessageBox.Show("COFRS does not support the SQL Server geography data type. You cannot create an entity model from this table.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+										return;
 									}
 
 									DatabaseColumns.Add(dbColumn);
