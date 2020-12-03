@@ -18,9 +18,10 @@ namespace COFRSFrameworkInstaller
 	{
 		private bool Proceed = false;
 		private string SolutionFolder { get; set; }
-		private ResourceClassFile Orchestrator { get; set; }
-		private ResourceClassFile ExampleClass { get; set; }
-		private ResourceClassFile ValidatorClass { get; set; }
+		private ResourceClassFile Orchestrator;
+		private ResourceClassFile ExampleClass;
+		private ResourceClassFile CollectionExampleClass;
+		private ResourceClassFile ValidatorClass;
 
 		// This method is called before opening any item that
 		// has the OpenInEditor attribute.
@@ -67,9 +68,10 @@ namespace COFRSFrameworkInstaller
 
 					Orchestrator = null;
 					ExampleClass = null;
+					CollectionExampleClass = null;
 					ValidatorClass = null;
 
-					LoadClassList(resourceClassFile.ClassName);
+					Utilities.LoadClassList(SolutionFolder, resourceClassFile.ClassName, ref Orchestrator, ref ValidatorClass, ref ExampleClass, ref CollectionExampleClass);
 					var policy = LoadPolicy(SolutionFolder);
 
 					replacementsDictionary.Add("$companymoniker$", string.IsNullOrWhiteSpace(moniker) ? "acme" : moniker);
@@ -189,8 +191,8 @@ namespace COFRSFrameworkInstaller
 
 			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof(RqlCollection<{domain.ClassName}>))]");
 
-			if (ExampleClass != null)
-				results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.OK, typeof({domain.ClassName}CollectionExample))]");
+			if (CollectionExampleClass != null)
+				results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.OK, typeof({CollectionExampleClass.ClassName}))]");
 
 			results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 			results.AppendLine("\t\t[SupportRQL]");
@@ -202,7 +204,7 @@ namespace COFRSFrameworkInstaller
 
 			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{ValidatorClass.ClassName}>(User);");
 				results.AppendLine("\t\t\tawait validator.ValidateForGetAsync(node).ConfigureAwait(false);");
 				results.AppendLine();
 			}
@@ -235,7 +237,7 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof({domain.ClassName}))]");
 
 				if (ExampleClass != null)
-					results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.OK, typeof({domain.ClassName}Example))]");
+					results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.OK, typeof({ExampleClass.ClassName}))]");
 
 				results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 				results.AppendLine("\t\t[SupportRQL]");
@@ -252,7 +254,7 @@ namespace COFRSFrameworkInstaller
 
 				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{ValidatorClass.ClassName}>(User);");
 					results.AppendLine("\t\t\tawait validator.ValidateForGetAsync(node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
@@ -286,12 +288,12 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
 
 			if (ExampleClass != null)
-				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({domain.ClassName}), typeof({domain.ClassName}Example))]");
+				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({domain.ClassName}), typeof({ExampleClass.ClassName}))]");
 
 			results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.Created, Type = typeof({domain.ClassName}))]");
 
 			if (ExampleClass != null)
-				results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.Created, typeof({domain.ClassName}Example))]");
+				results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.Created, typeof({ExampleClass.ClassName}))]");
 
 			results.AppendLine($"\t\t[SwaggerResponseHeader(HttpStatusCode.Created, \"Location\", \"string\", \"Returns Href of the new {domain.ClassName}\")]");
 			results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
@@ -303,7 +305,7 @@ namespace COFRSFrameworkInstaller
 
 			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{ValidatorClass.ClassName}>(User);");
 				results.AppendLine("\t\t\tawait validator.ValidateForAddAsync(item).ConfigureAwait(false);");
 				results.AppendLine();
 			}
@@ -331,7 +333,7 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
 
 			if (ExampleClass != null)
-				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({domain.ClassName}), typeof({domain.ClassName}Example))]");
+				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({domain.ClassName}), typeof({ExampleClass.ClassName}))]");
 
 			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 			results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
@@ -344,7 +346,7 @@ namespace COFRSFrameworkInstaller
 
 			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{ValidatorClass.ClassName}>(User);");
 				results.AppendLine("\t\t\tawait validator.ValidateForUpdateAsync(item, node).ConfigureAwait(false);");
 				results.AppendLine();
 			}
@@ -392,7 +394,7 @@ namespace COFRSFrameworkInstaller
 
 				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{ValidatorClass.ClassName}>(User);");
 					results.AppendLine("\t\t\tawait validator.ValidateForPatchAsync(commands, node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
@@ -435,7 +437,7 @@ namespace COFRSFrameworkInstaller
 
 				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{domain.ClassName}Validator>(User);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{ValidatorClass.ClassName}>(User);");
 					results.AppendLine("\t\t\tawait validator.ValidateForDeleteAsync(node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
@@ -477,6 +479,7 @@ namespace COFRSFrameworkInstaller
 			else
 				results.AppendLine(")");
 		}
+
 		private void EmitUrl(StringBuilder results, string routeName, IEnumerable<ClassMember> pkcolumns)
 		{
 			results.Append($"\t\t\tvar url = new Uri(options.RootUrl, $\"{routeName}/id");

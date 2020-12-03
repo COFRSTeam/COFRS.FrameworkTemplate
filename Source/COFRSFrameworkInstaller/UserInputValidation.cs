@@ -706,8 +706,7 @@ select s.name, t.name
 					}
 				}
 
-				if (_tableList.Items.Count > 0)
-					_tableList.SelectedIndex = 0;
+				_tableList.SelectedIndex = -1;
 			}
 			catch (Exception error)
 			{
