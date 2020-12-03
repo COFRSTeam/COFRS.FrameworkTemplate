@@ -336,7 +336,7 @@ namespace COFRSFrameworkInstaller
 										}
 										else if (state == 4)
 										{
-											if (line.ToLower().Contains(($"services.AddTransientWithParameters<I{resourceClassFile.ClassName}Validator, {replacementsDictionary["$safeitemname$"]}>()").ToLower()))
+											if (line.ToLower().Contains(($"services.AddTransientWithParameters<I{replacementsDictionary["$safeitemname$"]}, {replacementsDictionary["$safeitemname$"]}>()").ToLower()))
 												validatorRegistered = true;
 
 											state += line.CountOf('{') - line.CountOf('}');
@@ -348,7 +348,7 @@ namespace COFRSFrameworkInstaller
 											{
 												if (!validatorRegistered)
 												{
-													writer.WriteLine($"\t\t\tservices.AddTransientWithParameters<I{resourceClassFile.ClassName}Validator, {replacementsDictionary["$safeitemname$"]}>();");
+													writer.WriteLine($"\t\t\tservices.AddTransientWithParameters<I{replacementsDictionary["$safeitemname$"]}, {replacementsDictionary["$safeitemname$"]}>();");
 												}
 												state = 1000000;
 											}
