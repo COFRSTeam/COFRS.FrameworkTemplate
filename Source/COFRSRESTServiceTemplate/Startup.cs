@@ -67,7 +67,8 @@ namespace $safeprojectname$
 					{
                         new ApiJsonConverter(),
                         new ApiJsonEnumConverter(),
-						new ApiJsonByteArrayConverter()
+						new ApiJsonByteArrayConverter(),
+						new ApiJsonImageConverter()
 					}
 			};
 

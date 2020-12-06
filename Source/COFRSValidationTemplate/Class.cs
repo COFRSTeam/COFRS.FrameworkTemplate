@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using COFRS;
 using $entitynamespace$;
 using $orchestrationnamespace$;
-using $domainnamespace$;
+using $resourcenamespace$;
 
 namespace $rootnamespace$
 {

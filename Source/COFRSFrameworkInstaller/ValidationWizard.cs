@@ -75,7 +75,7 @@ namespace COFRSFrameworkInstaller
 					replacementsDictionary.Add("$orchestrationnamespace$", Orchestrator.ClassNamespace);
 					replacementsDictionary.Add("$model$", model);
 					replacementsDictionary.Add("$entitynamespace$", entityClassFile.ClassNameSpace);
-					replacementsDictionary.Add("$domainnamespace$", resourceClassFile.ClassNamespace);
+					replacementsDictionary.Add("$resourcenamespace$", resourceClassFile.ClassNamespace);
 
 					Proceed = UpdateServices(resourceClassFile, replacementsDictionary);
 				}
@@ -286,7 +286,7 @@ namespace COFRSFrameworkInstaller
 
 										if (state == 1)
 										{
-											if (line.ToLower().Contains(replacementsDictionary["$domainnamespace$"].ToLower()))
+											if (line.ToLower().Contains(replacementsDictionary["$resourcenamespace$"].ToLower()))
 											{
 												hasDomainNamespace = true;
 											}
@@ -305,7 +305,7 @@ namespace COFRSFrameworkInstaller
 											{
 												if (!hasDomainNamespace)
 												{
-													writer.WriteLine($"using {replacementsDictionary["$domainnamespace$"]};");
+													writer.WriteLine($"using {replacementsDictionary["$resourcenamespace$"]};");
 												}
 
 												if (!hasValidationNamespace)

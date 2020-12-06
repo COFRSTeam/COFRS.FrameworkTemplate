@@ -52,15 +52,15 @@ namespace COFRSFrameworkInstaller
 
 				if (form.ShowDialog() == DialogResult.OK)
 				{
-					var classFile = (EntityClassFile)form._entityModelList.SelectedItem;
-					var domainFile = (ResourceClassFile)form._resourceModelList.SelectedItem;
-					var model = EmitModel(replacementsDictionary["$targetframeworkversion$"], classFile, domainFile, form.DatabaseColumns, form.Examples, replacementsDictionary);
-					var collectionmodel = EmitCollectionModel(replacementsDictionary["$targetframeworkversion$"], replacementsDictionary, classFile, domainFile, form.DatabaseColumns, form.Examples);
+					var entityClassFile = (EntityClassFile)form._entityModelList.SelectedItem;
+					var resourceClassFile = (ResourceClassFile)form._resourceModelList.SelectedItem;
+					var model = EmitModel(replacementsDictionary["$targetframeworkversion$"], entityClassFile, resourceClassFile, form.DatabaseColumns, form.Examples, replacementsDictionary);
+					var collectionmodel = EmitCollectionModel(replacementsDictionary["$targetframeworkversion$"], replacementsDictionary, entityClassFile, resourceClassFile, form.DatabaseColumns, form.Examples);
 
 					replacementsDictionary.Add("$model$", model);
 					replacementsDictionary.Add("$collectionmodel$", collectionmodel);
-					replacementsDictionary.Add("$entitynamespace$", classFile.ClassNameSpace);
-					replacementsDictionary.Add("$domainnamespace$", domainFile.ClassNamespace);
+					replacementsDictionary.Add("$entitynamespace$", entityClassFile.ClassNameSpace);
+					replacementsDictionary.Add("$resourcenamespace$", resourceClassFile.ClassNamespace);
 
 					Proceed = true;
 				}
@@ -83,8 +83,6 @@ namespace COFRSFrameworkInstaller
 
 		private string EmitModel(string version, EntityClassFile entityClassFile, ResourceClassFile domainClassFile, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary)
 		{
-			replacementsDictionary.Add("$usexml$", "false");
-
 			var results = new StringBuilder();
 			var classMembers = Utilities.LoadClassColumns(domainClassFile.FileName, entityClassFile.FileName, Columns);
 
@@ -122,7 +120,12 @@ namespace COFRSFrameworkInstaller
 					else if (column.ServerType == DBServerType.SQLSERVER)
 						value = GetSqlServerValue(column.ColumnName, Columns, Example);
 
-					results.Append($"\t\t\t\t{column.EntityName} = {value}");
+					if (string.Equals(column.EntityType, "Image", StringComparison.OrdinalIgnoreCase))
+						results.Append($"\t\t\t\t{column.EntityName} = ImageEx.Parse({value})");
+					else if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Image)
+						results.Append($"\t\t\t\t{column.EntityName} = Convert.FromBase64String({value})");
+					else
+						results.Append($"\t\t\t\t{column.EntityName} = {value}");
 				}
 			}
 
@@ -177,7 +180,12 @@ namespace COFRSFrameworkInstaller
 					else if (column.ServerType == DBServerType.SQLSERVER)
 						value = GetSqlServerValue(column.ColumnName, Columns, Example);
 
-					results.Append($"\t\t\t\t{column.EntityName} = {value}");
+					if (string.Equals(column.EntityType, "Image", StringComparison.OrdinalIgnoreCase))
+						results.Append($"\t\t\t\t{column.EntityName} = ImageEx.Parse({value})");
+					else if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Image)
+						results.Append($"\t\t\t\t{column.EntityName} = Convert.FromBase64String({value})");
+					else
+						results.Append($"\t\t\t\t{column.EntityName} = {value}");
 				}
 			}
 
@@ -253,6 +261,16 @@ namespace COFRSFrameworkInstaller
 					}
 
 				case SqlDbType.Image:
+					{
+						if (column.IsNullable)
+						{
+							if (value.Value<byte[]>() == null)
+								return "null";
+						}
+
+						return $"\"{Convert.ToBase64String(value.Value<byte[]>())}\"";
+					}
+
 				case SqlDbType.Timestamp:
 					{
 						if (column.IsNullable)

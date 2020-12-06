@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using Swashbuckle.Examples;
-using $domainnamespace$;
+using $resourcenamespace$;
 using $entitynamespace$;
-using COFRS;$if$ ($usexml$ == true)
-using System.Xml;$endif$
+using COFRS;
 
 namespace $rootnamespace$
 {

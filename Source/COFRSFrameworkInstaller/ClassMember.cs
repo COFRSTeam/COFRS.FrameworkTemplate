@@ -10,12 +10,12 @@ namespace COFRSFrameworkInstaller
 		/// <summary>
 		/// The name of the domain class member
 		/// </summary>
-		public string DomainName { get; set; }
+		public string ResourceMemberName { get; set; }
 
 		/// <summary>
 		/// The datatype of the domain class member
 		/// </summary>
-		public string DomainType { get; set; }
+		public string ResourceMemberType { get; set; }
 
 		/// <summary>
 		/// The entity members associated with this domain class member
@@ -29,7 +29,7 @@ namespace COFRSFrameworkInstaller
 
 		public override string ToString()
 		{
-			return DomainName;
+			return ResourceMemberName;
 		}
 	}
 }
