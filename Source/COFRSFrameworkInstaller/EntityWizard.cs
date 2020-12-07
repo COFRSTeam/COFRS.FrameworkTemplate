@@ -64,7 +64,7 @@ namespace COFRSFrameworkInstaller
 		private string EmitObject(DBTable table, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
 		{
 			var result = new StringBuilder();
-			replacementsDictionary.Add("$Image$", "false");
+			replacementsDictionary.Add("$image$", "false");
 
 			result.AppendLine("\t///\t<summary>");
 			result.AppendLine($"\t///\t{replacementsDictionary["$safeitemname$"]}");
