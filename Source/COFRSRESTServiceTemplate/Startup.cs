@@ -62,6 +62,8 @@ namespace $safeprojectname$
 			{
 				NullValueHandling = NullValueHandling.Ignore,
 				Formatting = Formatting.Indented,
+				DateParseHandling = DateParseHandling.DateTimeOffset,
+				DateFormatHandling = DateFormatHandling.IsoDateFormat,
 				ContractResolver = new COFRSJsonContractResolver(),
 				Converters = new List<JsonConverter>
 					{

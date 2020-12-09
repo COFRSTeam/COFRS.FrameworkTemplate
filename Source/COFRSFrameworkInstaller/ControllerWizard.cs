@@ -337,6 +337,7 @@ namespace COFRSFrameworkInstaller
 
 			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 			results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
+			results.AppendLine("\t\t[SupportRQL]");
 			results.AppendLine($"\t\tpublic async Task<IHttpActionResult> Update{domain.ClassName}Async([FromBody] {domain.ClassName} item)");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
