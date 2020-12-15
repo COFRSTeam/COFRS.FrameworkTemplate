@@ -53,7 +53,11 @@ namespace $safeprojectname$.App_Start
 
 			Log.Logger.Information("Service is starting...");
 
-			services.AddSingleton<ICacheProvider>(new DefaultCacheProvider(configuration.GetSection("ApiSettings").GetValue<int>("CacheLimit")));
+			//	If you wish to use caching, uncomment out the next line, and replace the DefaultCacheProvider
+			//	with a provider to the caching service of your choice. Also, change the -1 to the number of
+			//	megabytes the cache should be limited to (-1 = no limit).
+
+			//	services.AddSingleton<ICacheProvider>(new DefaultCacheProvider(-1));
 		 
 			ApiOptions = ApiOptions.Load(configuration);
 			services.AddSingleton<IApiOptions>(ApiOptions);
