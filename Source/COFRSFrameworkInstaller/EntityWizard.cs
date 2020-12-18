@@ -205,6 +205,13 @@ namespace COFRSFrameworkInstaller
 					AppendAutofield(result, ref first);
 				}
 
+				if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Decimal) ||
+					(column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Decimal) ||
+					(column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Numeric))
+				{
+					AppendPrecision(result, column.NumericPrecision, column.NumericScale, ref first);
+				}
+
 				AppendDatabaseType(result, column, ref first);
 
 				if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Image)
@@ -243,6 +250,13 @@ namespace COFRSFrameworkInstaller
 				result.Append("NativeDataType=\"Decimal\"");
 			else
 				result.Append($"NativeDataType=\"{column.dbDataType}\"");
+		}
+
+		private void AppendPrecision(StringBuilder result, int NumericPrecision, int NumericScale, ref bool first)
+		{
+			AppendComma(result, ref first);
+
+			result.Append($"Precision={NumericPrecision}, Scale={NumericScale}");
 		}
 
 		private void AppendFixed(StringBuilder result, long length, bool isFixed, ref bool first)
