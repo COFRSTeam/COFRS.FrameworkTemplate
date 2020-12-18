@@ -413,7 +413,9 @@ select a.attname as columnname,
 SELECT c.COLUMN_NAME as 'columnName',
        c.COLUMN_TYPE as 'datatype',
        case when c.CHARACTER_MAXIMUM_LENGTH is null then -1 else c.CHARACTER_MAXIMUM_LENGTH end as 'max_len',
-       case when c.GENERATION_EXPRESSION != '' then 1 else 0 end as 'is_computed',
+       case when c.NUMERIC_PRECISION is null then 0 else c.NUMERIC_PRECISION end as 'precision',
+        case when c.NUMERIC_SCALE is null then 0 else c.NUMERIC_SCALE end as 'scale',       
+	   case when c.GENERATION_EXPRESSION != '' then 1 else 0 end as 'is_computed',
        case when c.EXTRA = 'auto_increment' then 1 else 0 end as 'is_identity',
        case when c.COLUMN_KEY = 'PRI' then 1 else 0 end as 'is_primary',
        case when c.COLUMN_KEY != '' then 1 else 0 end as 'is_indexed',
@@ -429,6 +431,7 @@ left outer join information_schema.KEY_COLUMN_USAGE as cu on cu.CONSTRAINT_SCHEM
   AND c.TABLE_NAME=@tablename
 ORDER BY c.ORDINAL_POSITION;
 ";
+
 
 						using (var command = new MySqlCommand(query, connection))
 						{
@@ -446,13 +449,15 @@ ORDER BY c.ORDINAL_POSITION;
 										DataType = DBHelper.ConvertMySqlDataType(reader.GetString(1)),
 										dbDataType = reader.GetString(1),
 										Length = Convert.ToInt64(reader.GetValue(2)),
-										IsComputed = Convert.ToBoolean(reader.GetValue(3)),
-										IsIdentity = Convert.ToBoolean(reader.GetValue(4)),
-										IsPrimaryKey = Convert.ToBoolean(reader.GetValue(5)),
-										IsIndexed = Convert.ToBoolean(reader.GetValue(6)),
-										IsNullable = Convert.ToBoolean(reader.GetValue(7)),
-										IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-										ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+										NumericPrecision = Convert.ToInt32(reader.GetValue(3)),
+										NumericScale = Convert.ToInt32(reader.GetValue(4)),
+										IsComputed = Convert.ToBoolean(reader.GetValue(5)),
+										IsIdentity = Convert.ToBoolean(reader.GetValue(6)),
+										IsPrimaryKey = Convert.ToBoolean(reader.GetValue(7)),
+										IsIndexed = Convert.ToBoolean(reader.GetValue(8)),
+										IsNullable = Convert.ToBoolean(reader.GetValue(9)),
+										IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
+										ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
 										ServerType = DBServerType.MYSQL
 									};
 
@@ -485,6 +490,8 @@ select c.name as column_name,
 			when x.name = 'ntext' then -1
 			else c.max_length 
 			end as max_length,
+       case when c.precision is null then 0 else c.precision end as precision,
+       case when c.scale is null then 0 else c.scale end as scale,
 	   c.is_nullable, 
 	   c.is_computed, 
 	   c.is_identity,
@@ -520,13 +527,15 @@ select c.name as column_name,
 										dbDataType = reader.GetString(1),
 										DataType = DBHelper.ConvertSqlServerDataType(reader.GetString(1)),
 										Length = Convert.ToInt64(reader.GetValue(2)),
-										IsNullable = Convert.ToBoolean(reader.GetValue(3)),
-										IsComputed = Convert.ToBoolean(reader.GetValue(4)),
-										IsIdentity = Convert.ToBoolean(reader.GetValue(5)),
-										IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6)),
-										IsIndexed = Convert.ToBoolean(reader.GetValue(7)),
-										IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-										ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+										NumericPrecision = Convert.ToInt32(reader.GetValue(3)),
+										NumericScale = Convert.ToInt32(reader.GetValue(4)),
+										IsNullable = Convert.ToBoolean(reader.GetValue(5)),
+										IsComputed = Convert.ToBoolean(reader.GetValue(6)),
+										IsIdentity = Convert.ToBoolean(reader.GetValue(7)),
+										IsPrimaryKey = Convert.ToBoolean(reader.GetValue(8)),
+										IsIndexed = Convert.ToBoolean(reader.GetValue(9)),
+										IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
+										ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
 										ServerType = DBServerType.SQLSERVER
 									};
 
