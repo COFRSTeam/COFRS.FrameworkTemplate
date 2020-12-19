@@ -1421,6 +1421,35 @@ SELECT datname
 				}
 			}
 		}
-		#endregion
+        #endregion
+
+        private void OnPortNumberChanged(object sender, EventArgs e)
+        {
+			try
+			{
+				if (!Populating)
+				{
+					_dbList.Items.Clear();
+					_tableList.Items.Clear();
+					var server = (DBServer)_serverList.SelectedItem;
+
+					if (server != null)
+					{
+						server.PortNumber = Convert.ToInt32(_portNumber.Value);
+
+						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
+
+						Save();
+
+						if (TestConnection(server))
+							PopulateDatabases();
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
 	}
 }
