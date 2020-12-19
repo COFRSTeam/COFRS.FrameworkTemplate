@@ -569,11 +569,6 @@ namespace COFRSFrameworkInstaller
 
 					if (server != null)
 					{
-						if (server.RememberPassword)
-							server.Password = _password.Text;
-						else
-							server.Password = string.Empty;
-
 						server.PortNumber = Convert.ToInt32(_portNumber.Value);
 
 						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
