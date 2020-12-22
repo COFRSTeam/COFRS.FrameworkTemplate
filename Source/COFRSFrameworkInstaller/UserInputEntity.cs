@@ -37,7 +37,6 @@ namespace COFRSFrameworkInstaller
 		/// <param name="e"></param>
 		private void OnLoad(object sender, EventArgs e)
 		{
-			_portNumber.Location = new Point(93, 60);
 			DatabaseColumns = new List<DBColumn>();
 			ReadServerList();
 		}
