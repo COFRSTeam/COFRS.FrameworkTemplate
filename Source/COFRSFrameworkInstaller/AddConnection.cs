@@ -241,7 +241,6 @@ namespace COFRSFrameworkInstaller
 				_authenticationLabel.Text = "Port Number";
 				_authentication.Hide();
 				_authentication.Enabled = false;
-				_portNumber.Location = new Point(133, 63);
 				_portNumber.Enabled = true;
 				_portNumber.Show();
 				_userName.Enabled = true;
@@ -257,7 +256,6 @@ namespace COFRSFrameworkInstaller
 				_authenticationLabel.Text = "Authentication";
 				_authentication.Show();
 				_authentication.Enabled = true;
-				_portNumber.Location = new Point(133, 63);
 				_portNumber.Enabled = false;
 				_portNumber.Hide();
 				_userName.Text = string.Empty;
