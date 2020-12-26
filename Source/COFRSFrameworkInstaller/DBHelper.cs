@@ -115,6 +115,8 @@ namespace COFRSFrameworkInstaller
 		{
 			if (string.Equals(dataType, "tinyint", StringComparison.OrdinalIgnoreCase))
 				return MySqlDbType.Byte;
+			else if (string.Equals(dataType, "tinyint(1)", StringComparison.OrdinalIgnoreCase))
+				return MySqlDbType.Byte;
 			else if (string.Equals(dataType, "tinyint unsigned", StringComparison.OrdinalIgnoreCase))
 				return MySqlDbType.UByte;
 			else if (string.Equals(dataType, "smallint", StringComparison.OrdinalIgnoreCase))

@@ -205,7 +205,7 @@
             // 
             this._portNumber.Location = new System.Drawing.Point(133, 64);
             this._portNumber.Maximum = new decimal(new int[] {
-            65534,
+            65535,
             0,
             0,
             0});
