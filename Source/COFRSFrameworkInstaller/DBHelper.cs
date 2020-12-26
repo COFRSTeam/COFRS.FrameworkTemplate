@@ -181,6 +181,8 @@ namespace COFRSFrameworkInstaller
 				return MySqlDbType.MediumBlob;
 			else if (dataType.StartsWith("longblob", StringComparison.OrdinalIgnoreCase))
 				return MySqlDbType.LongBlob;
+			else if (dataType.StartsWith("json", StringComparison.OrdinalIgnoreCase))
+				return MySqlDbType.JSON;
 
 			throw new Exception($"Unrecognized data type: {dataType}");
 		}
@@ -894,6 +896,7 @@ namespace COFRSFrameworkInstaller
 
 				case MySqlDbType.Enum:
 				case MySqlDbType.Set:
+				case MySqlDbType.JSON:
 					return "string";
 			}
 
@@ -1219,6 +1222,7 @@ namespace COFRSFrameworkInstaller
 
 				case MySqlDbType.Enum:
 				case MySqlDbType.Set:
+				case MySqlDbType.JSON:
 					return "string";
 			}
 
