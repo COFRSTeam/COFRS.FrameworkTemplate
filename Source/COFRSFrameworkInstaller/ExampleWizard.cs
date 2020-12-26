@@ -687,6 +687,17 @@ namespace COFRSFrameworkInstaller
 						return $"\"{value.Value<string>()}\"";
 					}
 
+				case MySqlDbType.JSON:
+					{
+						if (column.IsNullable)
+						{
+							if (string.IsNullOrWhiteSpace(value.Value<string>()))
+								return "null";
+						}
+
+						return $"\"{value.Value<string>().Replace("\"", "\\\"")}\"";
+					}
+
 				case MySqlDbType.DateTime:
 				case MySqlDbType.Timestamp:
 					{
