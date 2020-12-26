@@ -239,8 +239,8 @@ namespace COFRSFrameworkInstaller
 			if (_dbServerType.SelectedIndex == 0 || _dbServerType.SelectedIndex == 1)
 			{
 				_authenticationLabel.Text = "Port Number";
-				_authentication.Hide();
 				_authentication.Enabled = false;
+				_authentication.Hide();
 				_portNumber.Enabled = true;
 				_portNumber.Show();
 				_userName.Enabled = true;

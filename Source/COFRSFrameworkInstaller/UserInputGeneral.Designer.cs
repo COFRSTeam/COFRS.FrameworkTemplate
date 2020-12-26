@@ -313,12 +313,12 @@
             // 
             this._portNumber.Location = new System.Drawing.Point(612, 114);
             this._portNumber.Maximum = new decimal(new int[] {
-            65536,
+            65535,
             0,
             0,
             0});
             this._portNumber.Minimum = new decimal(new int[] {
-            1,
+            1024,
             0,
             0,
             0});
@@ -326,7 +326,7 @@
             this._portNumber.Size = new System.Drawing.Size(120, 20);
             this._portNumber.TabIndex = 38;
             this._portNumber.Value = new decimal(new int[] {
-            1,
+            1024,
             0,
             0,
             0});

@@ -344,7 +344,7 @@ namespace COFRSFrameworkInstaller
             // 
             this._portNumber.Location = new System.Drawing.Point(443, 245);
             this._portNumber.Maximum = new decimal(new int[] {
-            1024,
+            65535,
             0,
             0,
             0});
