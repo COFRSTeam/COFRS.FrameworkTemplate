@@ -55,8 +55,8 @@
     <Reference Include="COFRS.Common, Version=0.0.4.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\COFRS.Common.0.0.4-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
     </Reference>
-    $if$ ($databasetech$ == mysql)<Reference Include="COFRS.MySql, Version=0.0.7.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.MySql.0.0.7-alpha\lib\$compactversion$\COFRS.MySql.dll</HintPath>
+    $if$ ($databasetech$ == mysql)<Reference Include="COFRS.MySql, Version=0.0.8.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.MySql.0.0.8-alpha\lib\$compactversion$\COFRS.MySql.dll</HintPath>
     </Reference>
     <Reference Include="MySql.Data, Version=8.0.22.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\MySql.Data.8.0.22\lib\$compactversion$\MySql.Data</HintPath>
