@@ -427,7 +427,6 @@ select a.attname as columnname,
                                 };
 
                                 DatabaseColumns.Add(dbColumn);
-
                             }
                         }
                     }

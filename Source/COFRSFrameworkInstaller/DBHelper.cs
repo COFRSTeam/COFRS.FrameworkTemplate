@@ -108,6 +108,30 @@ namespace COFRSFrameworkInstaller
 				return NpgsqlDbType.Json;
 			else if (string.Equals(dataType, "_json", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Array | NpgsqlDbType.Json;
+			else if (string.Equals(dataType, "jsonb", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Jsonb;
+			else if (string.Equals(dataType, "_jsonb", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Jsonb;
+			else if (string.Equals(dataType, "xml", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Xml;
+			else if (string.Equals(dataType, "_xml", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Xml;
+			else if (string.Equals(dataType, "inet", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Inet;
+			else if (string.Equals(dataType, "_inet", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Inet;
+			else if (string.Equals(dataType, "cidr", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Cidr;
+			else if (string.Equals(dataType, "_cidr", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Cidr;
+			else if (string.Equals(dataType, "macaddr", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.MacAddr;
+			else if (string.Equals(dataType, "_macaddr", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.MacAddr;
+			else if (string.Equals(dataType, "macaddr8", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.MacAddr8;
+			else if (string.Equals(dataType, "_macaddr8", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.MacAddr8;
 
 			throw new Exception($"Unrecognized data type: {dataType}");
 		}
@@ -566,7 +590,7 @@ namespace COFRSFrameworkInstaller
 						return "bool";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Boolean:
-					return "bool[]";
+					return "BitArray";
 
 				case NpgsqlDbType.Bit:
 					if (column.Length == 1)
@@ -578,17 +602,20 @@ namespace COFRSFrameworkInstaller
 					}
 					else
 					{
-						return "bool[]";
+						return "BitArray";
 					}
 
 				case NpgsqlDbType.Varbit:
-					return "bool[]";
+					return "BitArray";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Varbit:
-					return "bool[][]";
+					return "BitArray[]";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Bit:
-					return "bool[][]";
+					if (column.Length == 1)
+						return "BitArray";
+					else
+						return "BitArray[]";
 
 				case NpgsqlDbType.Smallint:
 					if (column.IsNullable)
@@ -618,15 +645,7 @@ namespace COFRSFrameworkInstaller
 					return "long[]";
 
 				case NpgsqlDbType.Bytea:
-					if (column.Length == 1)
-					{
-						if (column.IsNullable)
-							return "byte?";
-						else
-							return "byte";
-					}
-					else
-						return "byte[]";
+					return "byte[]";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Bytea:
 					return "byte[][]";
@@ -755,6 +774,31 @@ namespace COFRSFrameworkInstaller
 
 				case NpgsqlDbType.Xml:
 					return "string";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Xml:
+					return "string[]";
+
+				case NpgsqlDbType.Jsonb:
+					return "string";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Jsonb:
+					return "string[]";
+
+				case NpgsqlDbType.Inet:
+					return "IPAddress";
+
+				case NpgsqlDbType.Cidr:
+					return "IPEndPoint";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Inet:
+					return "IPAddress[]";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Cidr:
+					return "IPEndPoint[]";
+
+				case NpgsqlDbType.MacAddr:
+				case NpgsqlDbType.MacAddr8:
+					return "PhysicalAddress";
 			}
 
 			return "Unknown";
@@ -906,6 +950,15 @@ namespace COFRSFrameworkInstaller
 		{
 			switch ((NpgsqlDbType)column.DataType)
 			{
+				case NpgsqlDbType.Boolean:
+					if (column.IsNullable)
+						return "bool?";
+					else
+						return "bool";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Boolean:
+					return "BitArray";
+
 				case NpgsqlDbType.Bit:
 					if (column.Length == 1)
 					{
@@ -915,19 +968,21 @@ namespace COFRSFrameworkInstaller
 							return "bool";
 					}
 					else
-						return "bool[]";
+					{
+						return "BitArray";
+					}
+
+				case NpgsqlDbType.Varbit:
+					return "BitArray";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Varbit:
+					return "BitArray[]";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Bit:
-					return "bool[][]";
-
-				case NpgsqlDbType.Boolean:
-					if (column.IsNullable)
-						return "bool?";
+					if (column.Length == 1)
+						return "BitArray";
 					else
-						return "bool";
-
-				case NpgsqlDbType.Array | NpgsqlDbType.Boolean:
-					return "bool[]";
+						return "BitArray[]";
 
 				case NpgsqlDbType.Smallint:
 					if (column.IsNullable)
@@ -958,13 +1013,11 @@ namespace COFRSFrameworkInstaller
 
 				case NpgsqlDbType.Text:
 				case NpgsqlDbType.Varchar:
-				case NpgsqlDbType.Json:
 					return "string";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Text:
 				case NpgsqlDbType.Array | NpgsqlDbType.Varchar:
 				case NpgsqlDbType.Array | NpgsqlDbType.Char:
-				case NpgsqlDbType.Array | NpgsqlDbType.Json:
 					return "string[]";
 
 				case NpgsqlDbType.Char:
@@ -977,12 +1030,6 @@ namespace COFRSFrameworkInstaller
 					}
 					else
 						return "string";
-
-				case NpgsqlDbType.Varbit:
-					return "bool[]";
-
-				case NpgsqlDbType.Array | NpgsqlDbType.Varbit:
-					return "bool[][]";
 
 				case NpgsqlDbType.Bytea:
 					return "byte[]";
@@ -1081,6 +1128,32 @@ namespace COFRSFrameworkInstaller
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Uuid:
 					return "Guid[]";
+
+				case NpgsqlDbType.Jsonb:
+				case NpgsqlDbType.Json:
+				case NpgsqlDbType.Xml:
+					return "string";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Jsonb:
+				case NpgsqlDbType.Array | NpgsqlDbType.Json:
+				case NpgsqlDbType.Array | NpgsqlDbType.Xml:
+					return "string[]";
+
+				case NpgsqlDbType.Inet:
+					return "IPAddress";
+
+				case NpgsqlDbType.Cidr:
+					return "IPEndPoint";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Inet:
+					return "IPAddress[]";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Cidr:
+					return "IPEndPoint[]";
+
+				case NpgsqlDbType.MacAddr:
+				case NpgsqlDbType.MacAddr8:
+					return "PhysicalAddress";
 			}
 
 			return "Unknown";

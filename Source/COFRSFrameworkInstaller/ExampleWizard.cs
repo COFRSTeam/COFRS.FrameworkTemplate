@@ -4,10 +4,13 @@ using MySql.Data.MySqlClient;
 using Newtonsoft.Json.Linq;
 using NpgsqlTypes;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.NetworkInformation;
 using System.Text;
 using System.Windows.Forms;
 
@@ -109,6 +112,10 @@ namespace COFRSFrameworkInstaller
 		{
 			var results = new StringBuilder();
 			var classMembers = Utilities.LoadClassColumns(domainClassFile.FileName, entityClassFile.FileName, Columns);
+			replacementsDictionary.Add("$image$", "false");
+			replacementsDictionary.Add("$net$", "false");
+			replacementsDictionary.Add("$netinfo$", "false");
+			replacementsDictionary.Add("$barray$", "false");
 
 			results.AppendLine("\t///\t<summary>");
 			results.AppendLine($"\t///\t{domainClassFile.ClassName} Example");
@@ -143,6 +150,25 @@ namespace COFRSFrameworkInstaller
 						value = GetPostgresqlValue(column.ColumnName, Columns, Example);
 					else if (column.ServerType == DBServerType.SQLSERVER)
 						value = GetSqlServerValue(column.ColumnName, Columns, Example);
+
+					if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Image)
+						replacementsDictionary["$image$"] = "true";
+					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
+						replacementsDictionary["$net$"] = "true";
+					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Cidr)
+						replacementsDictionary["$net$"] = "true";
+					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.MacAddr)
+						replacementsDictionary["$netinfo$"] = "true";
+					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.MacAddr8)
+						replacementsDictionary["$netinfo$"] = "true";
+					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Boolean))
+						replacementsDictionary["$barray$"] = "true";
+					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit))
+						replacementsDictionary["$barray$"] = "true";
+					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bit && column.Length > 1)
+						replacementsDictionary["$barray$"] = "true";
+					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varbit)
+						replacementsDictionary["$barray$"] = "true";
 
 					if (string.Equals(column.EntityType, "Image", StringComparison.OrdinalIgnoreCase))
 						results.Append($"\t\t\t\t{column.EntityName} = ImageEx.Parse({value})");
@@ -1040,6 +1066,7 @@ namespace COFRSFrameworkInstaller
 						}
 
 					case NpgsqlDbType.Json:
+					case NpgsqlDbType.Jsonb:
 						{
 							if (column.IsNullable)
 							{
@@ -1054,6 +1081,7 @@ namespace COFRSFrameworkInstaller
 						}
 
 					case NpgsqlDbType.Array | NpgsqlDbType.Json:
+					case NpgsqlDbType.Array | NpgsqlDbType.Jsonb:
 						{
 							if (column.IsNullable)
 							{
@@ -1085,108 +1113,92 @@ namespace COFRSFrameworkInstaller
 						{
 							if (column.IsNullable)
 							{
-								if (value.Type == JTokenType.Array && value.Value<JArray>() == null)
+								if (value.Type == JTokenType.Null)
+									return "null";
+								else if (value.Type == JTokenType.Array && value.Value<JArray>() == null)
 									return "null";
 								else if (value.Type == JTokenType.String && value.Value<string>() == null)
 									return "null";
 							}
 
-							var result = new StringBuilder("new bool[] {");
-							bool first = true;
-
-							if (value.Type == JTokenType.Array)
+							if (value.Type == JTokenType.String)
 							{
-								foreach (var c in value.Value<JArray>())
-								{
-									if (first)
-										first = false;
-									else
-										result.Append(", ");
+								if (string.IsNullOrWhiteSpace(value.Value<string>()))
+									return "null";
 
-									result.Append(c.Value<bool>().ToString().ToLower());
-								}
+								return $"BitArrayExt.Parse(\"{value.Value<string>()}\")";
 							}
-							else if (value.Type == JTokenType.String)
+							else
 							{
-								var v = value.Value<string>();
-								foreach (var c in v)
+								var strVal = new StringBuilder();
+								foreach (bool bVal in value.Value<JArray>())
 								{
-									if (first)
-										first = false;
-									else
-										result.Append(", ");
-
-									if (c == '1')
-										result.Append("true");
-									else
-										result.Append("false");
+									strVal.Append(bVal ? "1" : "0");
 								}
+
+								return $"BitArrayExt.Parse(\"{value.Value<string>()}\")";
 							}
-
-							result.Append("}");
-
-							return result.ToString();
 						}
 
 					case NpgsqlDbType.Array | NpgsqlDbType.Varbit:
 						{
 							if (column.IsNullable)
 							{
-								if (value.Value<JArray>() == null)
+								if (value.Type == JTokenType.Null)
+									return "null";
+								else if (value.Value<JArray>() == null)
 									return "null";
 							}
 
-							var result = new StringBuilder();
-							var answer = value.Value<JArray>();
+							var array = value.Value<JArray>();
 
-							result.Append("new bool[][] {");
-							bool firstGroup = true;
+							if (array.Count == 0)
+								return "null";
 
-							foreach (var group in answer)
-							{
-								if (firstGroup)
-									firstGroup = false;
-								else
-									result.Append(", ");
+							var childValue = array[0];
 
-								result.Append("new bool[] {");
-
+							if ( childValue.Type == JTokenType.String)
+                            {
+								var result = new StringBuilder("new BitArray[] {");
 								bool first = true;
 
-								if (group.Type == JTokenType.Array)
-								{
-									foreach (var b in group.Value<JArray>())
-									{
-										if (first)
-											first = false;
-										else
-											result.Append(", ");
+								foreach ( string strValue in array)
+                                {
+									if (first)
+										first = false;
+									else
+										result.Append(",");
 
-										result.Append(b.Value<bool>().ToString().ToLower());
-									}
-								}
-								else if (group.Type == JTokenType.String)
-								{
-									var v = group.Value<string>();
-									foreach (var c in v)
-									{
-										if (first)
-											first = false;
-										else
-											result.Append(", ");
-
-										if (c == '1')
-											result.Append("true");
-										else
-											result.Append("false");
-									}
+									result.Append($"BitArrayExt.Parse(\"{value.Value<string>()}\")");
 								}
 
 								result.Append("}");
-							}
+								return result.ToString();
+                            }
+							else
+                            {
+								var result = new StringBuilder("new BitArray[] {");
+								bool first = true;
 
-							result.Append("}");
-							return result.ToString();
+								foreach (JArray avalue in array)
+								{
+									if (first)
+										first = false;
+									else
+										result.Append(",");
+
+									var sValue = new StringBuilder();
+									foreach ( bool bVal in avalue)
+                                    {
+										sValue.Append(bVal ? "1" : "0");
+                                    }
+
+									result.Append($"BitArrayExt.Parse(\"{sValue}\")");
+								}
+
+								result.Append("}");
+								return result.ToString();
+							}
 						}
 
 					case NpgsqlDbType.Bit:
@@ -1214,103 +1226,91 @@ namespace COFRSFrameworkInstaller
 							}
 							else
 							{
-								var result = new StringBuilder("new bool[] {");
-								bool first = true;
-
-								if (value.Type == JTokenType.Array)
-								{
-									foreach (var c in value.Value<JArray>())
-									{
-										if (first)
-											first = false;
-										else
-											result.Append(", ");
-
-										result.Append(c.Value<bool>().ToString().ToLower());
-									}
-								}
-								else if (value.Type == JTokenType.String)
-								{
-									var v = value.Value<string>();
-
-									foreach (var c in v)
-									{
-										if (first)
-											first = false;
-										else
-											result.Append(", ");
-
-										if (c == '1')
-											result.Append("true");
-										else
-											result.Append("false");
-									}
-								}
-
-								result.Append("}");
-								return result.ToString();
+								return $"BitArrayExt.Parse(\"{value.Value<string>()}\")";
 							}
 						}
 
 					case NpgsqlDbType.Array | NpgsqlDbType.Bit:
 						{
+							if (value.Type == JTokenType.Null)
+							{
+								return null;
+							}
+
 							if (column.IsNullable)
 							{
-								if (value.Value<JArray>() == null)
+								if (value.Type == JTokenType.Null)
+									return "null";
+								else if (value.Type == JTokenType.String)
+								{
+									if (string.IsNullOrWhiteSpace(value.Value<string>()))
+										return null;
+								}
+								else if (value.Value<JArray>() == null)
 									return "null";
 							}
 
-							var result = new StringBuilder();
-							var answer = value.Value<JArray>();
-
-							result.Append("new bool[][] {");
-							bool firstGroup = true;
-
-							foreach (var group in answer)
+							if (value.Type == JTokenType.String)
 							{
-								if (firstGroup)
-									firstGroup = false;
-								else
-									result.Append(", ");
-
-								result.Append("new bool[] {");
-
-								bool first = true;
-
-								if (group.Type == JTokenType.Array)
-								{
-									foreach (var b in group.Value<JArray>())
-									{
-										if (first)
-											first = false;
-										else
-											result.Append(", ");
-
-										result.Append(b.Value<bool>().ToString().ToLower());
-									}
-								}
-								else if (group.Type == JTokenType.String)
-								{
-									var v = group.Value<string>();
-									foreach (var c in v)
-									{
-										if (first)
-											first = false;
-										else
-											result.Append(", ");
-
-										if (c == '1')
-											result.Append("true");
-										else
-											result.Append("false");
-									}
-								}
-
-								result.Append("}");
+								return $"BitArrayExt.Parse(\"{value.Value<string>()}\")";
 							}
+							else if (value.Type == JTokenType.Array)
+							{
+								var array = value.Value<JArray>();
 
-							result.Append("}");
-							return result.ToString();
+								if (array.Count == 0)
+									return null;
+
+								var childElement = array[0];
+
+								if (childElement.Type == JTokenType.Boolean)
+								{
+									var sresult = new StringBuilder();
+									foreach (bool bVal in array)
+									{
+										sresult.Append(bVal ? "1" : "0");
+									}
+
+									return $"BitArrayExt.Parse(\"{sresult.ToString()}\")";
+								}
+								else
+								{
+									var result = new StringBuilder();
+									var answer = value.Value<JArray>();
+
+									result.Append("new BitArray[] {");
+									bool firstGroup = true;
+
+									foreach (var group in answer)
+									{
+										if (firstGroup)
+											firstGroup = false;
+										else
+											result.Append(", ");
+
+										if (group.Type == JTokenType.String)
+										{
+											result.Append($"BitArrayExt.Parse(\"{group.Value<string>()}\")");
+										}
+										else
+                                        {
+											var strValue = new StringBuilder();
+
+											foreach ( bool bVal in group)
+                                            {
+												strValue.Append(bVal ? "1" : "0");
+                                            }
+
+											result.Append($"BitArrayExt.Parse(\"{strValue.ToString()}\")");
+										}
+									}
+
+									result.Append("}");
+									return result.ToString();
+								}
+							}
+							else
+								return "Unknown";
 						}
 
 					case NpgsqlDbType.Bytea:
@@ -1322,6 +1322,163 @@ namespace COFRSFrameworkInstaller
 							}
 
 							return $"Convert.FromBase64String(\"{Convert.ToBase64String(value.Value<byte[]>())}\")";
+						}
+
+					case NpgsqlDbType.Inet:
+						{
+							if (column.IsNullable)
+							{
+								if (string.IsNullOrWhiteSpace(value.Value<string>()))
+									return "null";
+							}
+							
+							return $"IPAddress.Parse(\"{value.Value<string>()}\")";
+						}
+
+					case NpgsqlDbType.Array | NpgsqlDbType.Inet:
+						{
+							if (column.IsNullable)
+							{
+								if (value.Value<JArray>() == null)
+									return "null";
+							}
+
+							var result = new StringBuilder("new IPAddress[] {");
+							var array = value.Value<JArray>();
+
+							bool first = true;
+
+							foreach (var group in array)
+							{
+								if (first)
+									first = false;
+								else
+									result.Append(", ");
+
+								result.Append($"IPAddress.Parse(\"{group.Value<string>()}\")");
+							}
+
+							result.Append("}");
+
+							return result.ToString();
+						}
+
+					case NpgsqlDbType.Cidr:
+						{
+							if (column.IsNullable)
+							{
+								if (string.IsNullOrWhiteSpace(value.Value<string>()))
+									return "null";
+							}
+
+							return $"IPEndPointExt.Parse(\"{value.Value<string>()}\")";
+						}
+
+
+					case NpgsqlDbType.Array | NpgsqlDbType.Cidr:
+						{
+							if (column.IsNullable)
+							{
+								if (value.Value<JArray>() == null)
+									return "null";
+							}
+
+							var result = new StringBuilder("new IPEndPoint[] {");
+							var array = value.Value<JArray>();
+
+							bool first = true;
+
+							foreach (var group in array)
+							{
+								if (first)
+									first = false;
+								else
+									result.Append(", ");
+
+								result.Append($"IPEndPointExt.Parse(\"{group.Value<string>()}\")");
+							}
+
+							result.Append("}");
+
+							return result.ToString();
+						}
+
+					case NpgsqlDbType.MacAddr:
+						{
+							if (column.IsNullable)
+							{
+								if (string.IsNullOrWhiteSpace(value.Value<string>()))
+									return "null";
+							}
+
+							return $"PhysicalAddress.Parse(\"{value.Value<string>()}\")";
+						}
+
+					case NpgsqlDbType.Array | NpgsqlDbType.MacAddr:
+						{
+							if (column.IsNullable)
+							{
+								if (value.Value<JArray>() == null)
+									return "null";
+							}
+
+							var result = new StringBuilder("new string[] {");
+							var array = value.Value<JArray>();
+
+							bool first = true;
+
+							foreach (var group in array)
+							{
+								if (first)
+									first = false;
+								else
+									result.Append(", ");
+
+								result.Append($"PhysicalAddress.Parse(\"{group.Value<string>()}\")");
+							}
+
+							result.Append("}");
+
+							return result.ToString();
+						}
+
+					case NpgsqlDbType.MacAddr8:
+						{
+							if (column.IsNullable)
+							{
+								if (string.IsNullOrWhiteSpace(value.Value<string>()))
+									return "null";
+							}
+
+							return $"PhysicalAddress.Parse(\"{value.Value<string>()}\")";
+						}
+
+					case NpgsqlDbType.Array | NpgsqlDbType.MacAddr8:
+						{
+							if (column.IsNullable)
+							{
+								if (value.Value<JArray>() == null)
+									return "null";
+							}
+
+							var result = new StringBuilder("new string[] {");
+							var array = value.Value<JArray>();
+
+							bool first = true;
+
+							foreach (var group in array)
+							{
+								if (first)
+									first = false;
+								else
+									result.Append(", ");
+
+								result.Append($"PhysicalAddress.Parse(\"{group.Value<string>()}\")");
+							}
+
+							result.Append("}");
+
+							return result.ToString();
 						}
 
 					case NpgsqlDbType.Array | NpgsqlDbType.Bytea:
@@ -1360,10 +1517,7 @@ namespace COFRSFrameworkInstaller
 									return "null";
 							}
 
-							if (value.Value<bool>())
-								return "true";
-
-							return "false";
+							return value.Value<bool>() ? "true" : "false";
 						}
 
 					case NpgsqlDbType.Array | NpgsqlDbType.Boolean:
@@ -1374,24 +1528,7 @@ namespace COFRSFrameworkInstaller
 									return "null";
 							}
 
-							var result = new StringBuilder("new bool[] {");
-							bool first = true;
-
-							foreach (var c in value.Value<JArray>())
-							{
-								if (first)
-									first = false;
-								else
-									result.Append(", ");
-
-								if (c.Value<bool>())
-									result.Append("true");
-								else
-									result.Append("false");
-							}
-							result.Append("}");
-
-							return result.ToString();
+							return $"BitArrayExt.Parse({value.Value<string>()})";
 						}
 
 					case NpgsqlDbType.Xml:
