@@ -88,6 +88,9 @@ namespace COFRSFrameworkInstaller
 		{
 			var result = new StringBuilder();
 			replacementsDictionary.Add("$image$", "false");
+			replacementsDictionary.Add("$net$", "false");
+			replacementsDictionary.Add("$netinfo$", "false");
+			replacementsDictionary.Add("$barray$", "false");
 
 			result.AppendLine("\t///\t<summary>");
 			result.AppendLine($"\t///\t{replacementsDictionary["$safeitemname$"]}");
@@ -239,6 +242,30 @@ namespace COFRSFrameworkInstaller
 
 				if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Image)
 					replacementsDictionary["$image$"] = "true";
+
+				if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
+					replacementsDictionary["$net$"] = "true";
+
+				if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Cidr)
+					replacementsDictionary["$net$"] = "true";
+
+				if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.MacAddr)
+					replacementsDictionary["$netinfo$"] = "true";
+
+				if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.MacAddr8)
+					replacementsDictionary["$netinfo$"] = "true";
+
+				if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Boolean))
+					replacementsDictionary["$barray$"] = "true";
+
+				if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit))
+					replacementsDictionary["$barray$"] = "true";
+
+				if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bit && column.Length > 1)
+					replacementsDictionary["$barray$"] = "true";
+
+				if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varbit)
+					replacementsDictionary["$barray$"] = "true";
 
 				//	Correct for reserved words
 				CorrectForReservedNames(result, column, ref first);
