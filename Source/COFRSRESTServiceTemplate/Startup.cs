@@ -68,9 +68,7 @@ namespace $safeprojectname$
 				Converters = new List<JsonConverter>
 					{
                         new ApiJsonConverter(),
-                        new ApiJsonEnumConverter(),
-						new ApiJsonByteArrayConverter(),
-						new ApiJsonImageConverter()
+						new ApiJsonSpecialTypesConverter()
 					}
 			};
 
