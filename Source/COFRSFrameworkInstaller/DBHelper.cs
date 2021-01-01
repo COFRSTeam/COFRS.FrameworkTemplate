@@ -360,6 +360,7 @@ namespace COFRSFrameworkInstaller
 			switch ((NpgsqlDbType)column.DataType)
 			{
 				case NpgsqlDbType.Bit:
+				case NpgsqlDbType.Boolean:
 					return "bool";
 
 				case NpgsqlDbType.Smallint:
@@ -374,6 +375,7 @@ namespace COFRSFrameworkInstaller
 				case NpgsqlDbType.Real:
 					return "float";
 
+				case NpgsqlDbType.Numeric:
 				case NpgsqlDbType.Money:
 					return "decimal";
 
