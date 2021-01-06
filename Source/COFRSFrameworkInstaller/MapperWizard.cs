@@ -229,7 +229,7 @@ namespace COFRSFrameworkInstaller
 				else if (member.EntityNames.Count > 0 && member.EntityNames[0].IsForeignKey)
 				{
 					var nf = new NameNormalizer(member.EntityNames[0].ForeignTableName);
-					var isNullable = member.EntityNames.Where(c => c.IsNullable = true).Count() > 0;
+					var isNullable = member.EntityNames.Where(c => c.IsNullable).Count() > 0;
 
 					if (first)
 						first = false;
@@ -443,13 +443,13 @@ namespace COFRSFrameworkInstaller
 
 				if (!string.Equals(entityColumn.EntityType, member.ResourceMemberType, StringComparison.OrdinalIgnoreCase))
 				{
-					if (first)
-						first = false;
-					else
-						results.AppendLine();
-
 					if (string.Equals(entityColumn.EntityType, "char[]", StringComparison.OrdinalIgnoreCase) && string.Equals(member.ResourceMemberType, "string", StringComparison.OrdinalIgnoreCase))
 					{
+						if (first)
+							first = false;
+						else
+							results.AppendLine();
+
 						if (entityColumn.IsNullable)
 							results.Append($"\t\t\t\t.ForMember(dest => dest.{member.ResourceMemberName}, opts => opts.MapFrom( src => src.{entityColumn.EntityName} == null ? null : new string(src.{entityColumn.EntityName})))");
 						else
@@ -457,6 +457,11 @@ namespace COFRSFrameworkInstaller
 					}
 					else if (string.Equals(entityColumn.EntityType, "string", StringComparison.OrdinalIgnoreCase) && string.Equals(member.ResourceMemberType, "char[]", StringComparison.OrdinalIgnoreCase))
 					{
+						if (first)
+							first = false;
+						else
+							results.AppendLine();
+
 						if (entityColumn.IsNullable)
 							results.Append($"\t\t\t\t.ForMember(dest => dest.{member.ResourceMemberName}, opts => opts.MapFrom( src => src.{entityColumn.EntityName} == null ? null : src.{entityColumn.EntityName}.ToArray()))");
 						else
@@ -464,6 +469,11 @@ namespace COFRSFrameworkInstaller
 					}
 					else if (string.Equals(entityColumn.EntityType, "Image", StringComparison.OrdinalIgnoreCase) && string.Equals(member.ResourceMemberType, "byte[]", StringComparison.OrdinalIgnoreCase))
 					{
+						if (first)
+							first = false;
+						else
+							results.AppendLine();
+
 						ImageConversionRequired = true;
 
 						if (entityColumn.IsNullable)
@@ -473,6 +483,11 @@ namespace COFRSFrameworkInstaller
 					}
 					else if (string.Equals(entityColumn.EntityType, "byte[]", StringComparison.OrdinalIgnoreCase) && string.Equals(member.ResourceMemberType, "Image", StringComparison.OrdinalIgnoreCase))
 					{
+						if (first)
+							first = false;
+						else
+							results.AppendLine();
+
 						ImageConversionRequired = true;
 
 						if (entityColumn.IsNullable)
