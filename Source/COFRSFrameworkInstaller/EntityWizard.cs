@@ -135,6 +135,11 @@ namespace COFRSFrameworkInstaller
 					AppendIndexed(result, ref first);
 				}
 
+				if (column.IsForeignKey)
+				{
+					AppendForeignKey(result, ref first);
+				}
+
 				AppendNullable(result, column.IsNullable, ref first);
 
 				if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NVarChar)
@@ -345,6 +350,12 @@ namespace COFRSFrameworkInstaller
 		{
 			AppendComma(result, ref first);
 			result.Append("IsIndexed = true");
+		}
+
+		private void AppendForeignKey(StringBuilder result, ref bool first)
+		{
+			AppendComma(result, ref first);
+			result.Append("IsForeignKey = true");
 		}
 
 		private void AppendNullable(StringBuilder result, bool isNullable, ref bool first)
