@@ -70,8 +70,8 @@
     <Reference Include="Npgsql, Version=5.0.1.1, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
       <HintPath>..\packages\Npgsql.5.0.1.1\lib\netstandard2.0\Npgsql.dll</HintPath>
     </Reference>
-    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.23.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.23-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
+    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.24.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.24-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
     </Reference>
     $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.3.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\COFRS.OAuth.0.0.3-alpha\lib\$compactversion$\COFRS.OAuth.dll</HintPath>
