@@ -234,7 +234,7 @@ namespace COFRSFrameworkInstaller
 
 			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 			results.AppendLine("\t\t\t{");
-			results.AppendLine($"\t\t\t\tvar collection = await service.GetCollectionAsync<{domain.ClassName}>(HttpContext.Current.Request, node).ConfigureAwait(false);");
+			results.AppendLine($"\t\t\t\tvar collection = await service.GetCollectionAsync<{domain.ClassName}>(HttpContext.Current.Request.QueryString.ToString(), node).ConfigureAwait(false);");
 			results.AppendLine($"\t\t\t\treturn Ok(collection);");
 			results.AppendLine("\t\t\t}");
 			results.AppendLine("\t\t}");
