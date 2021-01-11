@@ -49,14 +49,14 @@
     <Reference Include="AutoMapper, Version=10.0.0.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
       <HintPath>..\packages\AutoMapper.10.1.1\lib\net461\AutoMapper.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS, Version=0.0.22.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.0.0.22-alpha\lib\$compactversion$\COFRS.dll</HintPath>
+    <Reference Include="COFRS, Version=0.0.23.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.0.0.23-alpha\lib\$compactversion$\COFRS.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS.Common, Version=0.0.8.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.Common.0.0.8-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
+    <Reference Include="COFRS.Common, Version=0.0.9.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.Common.0.0.9-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
     </Reference>
-    $if$ ($databasetech$ == mysql)<Reference Include="COFRS.MySql, Version=0.0.12.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.MySql.0.0.12-alpha\lib\$compactversion$\COFRS.MySql.dll</HintPath>
+    $if$ ($databasetech$ == mysql)<Reference Include="COFRS.MySql, Version=0.0.14.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.MySql.0.0.14-alpha\lib\$compactversion$\COFRS.MySql.dll</HintPath>
     </Reference>
     <Reference Include="MySql.Data, Version=8.0.22.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\MySql.Data.8.0.22\lib\$compactversion$\MySql.Data</HintPath>
@@ -64,14 +64,14 @@
     $endif$$if$ ($databasetech$ == postgresql)<Reference Include="System.Threading.Channels, Version=5.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Threading.Channels.5.0.0\lib\net461\System.Threading.Channels.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS.Postgresql, Version=0.0.9.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.Postgresql.0.0.9-alpha\lib\$compactversion$\COFRS.Postgresql.dll</HintPath>
+    <Reference Include="COFRS.Postgresql, Version=0.0.10.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.Postgresql.0.0.10-alpha\lib\$compactversion$\COFRS.Postgresql.dll</HintPath>
     </Reference>
     <Reference Include="Npgsql, Version=5.0.1.1, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
       <HintPath>..\packages\Npgsql.5.0.1.1\lib\netstandard2.0\Npgsql.dll</HintPath>
     </Reference>
-    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.24.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.24-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
+    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.25.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.25-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
     </Reference>
     $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.3.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\COFRS.OAuth.0.0.3-alpha\lib\$compactversion$\COFRS.OAuth.dll</HintPath>
