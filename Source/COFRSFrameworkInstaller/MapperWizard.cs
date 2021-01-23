@@ -81,13 +81,13 @@ namespace COFRSFrameworkInstaller
 			return Proceed;
 		}
 
-		private string EmitModel(EntityClassFile entityClassFile, ResourceClassFile domainClassFile, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
+		private string EmitModel(EntityClassFile entityClassFile, ResourceClassFile resourceClasssFile, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
 		{
 			replacementsDictionary.Add("$image$", "false");
 			var ImageConversionRequired = false;
 			var results = new StringBuilder();
-			var nn = new NameNormalizer(domainClassFile.ClassName);
-			var classMembers = Utilities.LoadClassColumns(domainClassFile.FileName, entityClassFile.FileName, columns);
+			var nn = new NameNormalizer(resourceClasssFile.ClassName);
+			var classMembers = Utilities.LoadClassColumns(resourceClasssFile.FileName, entityClassFile.FileName, columns);
 
 			results.AppendLine("\t///\t<summary>");
 			results.AppendLine($"\t///\t{nn.SingleForm} Profile for AutoMapper");
@@ -103,11 +103,19 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tvar rootUrl = Startup.AppConfig.GetSection(\"ApiSettings\").GetValue<string>(\"RootUrl\");");
 			results.AppendLine("\t\t\twhile (rootUrl.EndsWith(\"/\") || rootUrl.EndsWith(\"\\\\\"))");
-			results.AppendLine("\t\t\t\trootUrl = rootUrl.Substring(0, rootUrl.Length - 1);");
+
+			if (replacementsDictionary["$targetframeworkversion$"] == "3.1" || replacementsDictionary["$targetframeworkversion$"] == "5.0")
+			{
+				results.AppendLine("\t\t\t\trootUrl = rootUrl[0..^1];");
+			}
+			else
+			{
+				results.AppendLine("\t\t\t\trootUrl = rootUrl.Substring(0, rootUrl.Length - 1);");
+			}
 
 			#region Create the Resource to Entity Mapping
 			results.AppendLine();
-			results.AppendLine($"\t\t\tCreateMap<{domainClassFile.ClassName}, {entityClassFile.ClassName}>()");
+			results.AppendLine($"\t\t\tCreateMap<{resourceClasssFile.ClassName}, {entityClassFile.ClassName}>()");
 
 			bool first = true;
 
@@ -201,10 +209,10 @@ namespace COFRSFrameworkInstaller
 				}
 			}
 			results.AppendLine();
-            #endregion
+			#endregion
 
-            #region CreateEntity to Resource Mappint
-			results.AppendLine($"\t\t\tCreateMap<{entityClassFile.ClassName}, {domainClassFile.ClassName}>()");
+			#region Create Entity to Resource Mapping
+			results.AppendLine($"\t\t\tCreateMap<{entityClassFile.ClassName}, {resourceClasssFile.ClassName}>()");
 
 			//	Emit known mappings
 			first = true;
@@ -257,7 +265,7 @@ namespace COFRSFrameworkInstaller
 				}
 				else
 				{
-					EmitEntityToResourceMapping(results, member, ref first, ref ImageConversionRequired);
+					EmityEntityToResourceMapping(results, member, ref first, ref ImageConversionRequired);
 				}
 			}
 			results.AppendLine(";");
@@ -270,16 +278,13 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t\t\t//\tTo do: Write mapping for {member.ResourceMemberName}");
 			}
 			results.AppendLine();
-            #endregion
+			#endregion
 
-            #region Create Collection Mapping
-            results.AppendLine($"\t\t\tCreateMap<RqlCollection<{entityClassFile.ClassName}>, RqlCollection<{domainClassFile.ClassName}>>()");
+			results.AppendLine($"\t\t\tCreateMap<RqlCollection<{entityClassFile.ClassName}>, RqlCollection<{resourceClasssFile.ClassName}>>()");
 			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.Href, opts => opts.MapFrom(src => new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.Href.Query}}\")))");
 			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.First, opts => opts.MapFrom(src => src.First == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.First.Query}}\")))");
 			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.Next, opts => opts.MapFrom(src => src.Next == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.Next.Query}}\")))");
 			results.AppendLine($"\t\t\t\t.ForMember(dest => dest.Previous, opts => opts.MapFrom(src => src.Previous == null ? null : new Uri($\"{{rootUrl}}/{nn.PluralCamelCase}{{src.Previous.Query}}\")));");
-			#endregion
-
 			results.AppendLine("\t\t}");
 			results.AppendLine("\t}");
 
@@ -326,7 +331,7 @@ namespace COFRSFrameworkInstaller
 			return isNullable;
 		}
 
-		private void EmitChildSet(StringBuilder results, ClassMember member, ref bool first, ref bool subFirst)
+		private void EmitChildSet(StringBuilder results, ClassMember member, ref bool subFirst)
 		{
 			if (member.EntityNames.Count > 0)
 			{
@@ -372,7 +377,7 @@ namespace COFRSFrameworkInstaller
 			}
 		}
 
-		private void EmitEntityToResourceMapping(StringBuilder results, ClassMember member, ref bool first, ref bool ImageConversionRequired)
+		private void EmityEntityToResourceMapping(StringBuilder results, ClassMember member, ref bool first, ref bool ImageConversionRequired)
 		{
 			if (member.ChildMembers.Count > 0)
 			{
@@ -399,7 +404,7 @@ namespace COFRSFrameworkInstaller
 					subFirst = true;
 					foreach (var childMember in member.ChildMembers)
 					{
-						EmitChildSet(results, childMember, ref first, ref subFirst);
+						EmitChildSet(results, childMember, ref subFirst);
 					}
 
 					results.Append("}))");
@@ -430,7 +435,7 @@ namespace COFRSFrameworkInstaller
 						bool subFirst = true;
 						foreach (var childMember in member.ChildMembers)
 						{
-							EmitChildSet(results, childMember, ref first, ref subFirst);
+							EmitChildSet(results, childMember, ref subFirst);
 						}
 
 						results.Append($"}}))");
@@ -676,10 +681,54 @@ namespace COFRSFrameworkInstaller
 						else
 						{
 							if (entityColumn.IsNullable)
-								results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom( src => src.{prefix} == null ? null : src.{prefix}.{member.ResourceMemberName}.HasValue ? new DateTimeOffset(src.{prefix}{member.ResourceMemberName}.Value) : (DateTimeOffset?) null))");
+								results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom( src => src.{prefix} == null ? null : src.{prefix}.{member.ResourceMemberName}.HasValue ? new DateTimeOffset(src.{prefix}.{member.ResourceMemberName}.Value) : (DateTimeOffset?) null))");
 							else
 								results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom( src => new DateTimeOffset(src.{prefix}.{member.ResourceMemberName})))");
 						}
+					}
+					else if (string.Equals(entityColumn.EntityType, "string", StringComparison.OrdinalIgnoreCase) && string.Equals(member.ResourceMemberType, "Uri", StringComparison.OrdinalIgnoreCase))
+					{
+						if (first)
+							first = false;
+						else
+							results.AppendLine();
+
+						if (string.IsNullOrWhiteSpace(prefix))
+						{
+							if (entityColumn.IsNullable)
+								results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom(src => src.{member.ResourceMemberName} == null ? (string) null : src.{member.ResourceMemberName}.IsAbsoluteUri ? src.{member.ResourceMemberName}.ToString() : (new Uri(new Uri(rootUrl), src.{member.ResourceMemberName}.ToString())).ToString()))");
+							else
+								results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom(src => src.{member.ResourceMemberName}.IsAbsoluteUri ? src.{member.ResourceMemberName}.ToString() : (new Uri(new Uri(rootUrl), src.{member.ResourceMemberName}.ToString())).ToString()))");
+						}
+						else
+						{
+							if (entityColumn.IsNullable)
+								results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom(src => src.{prefix} == null ? (string) null : {prefix}.{member.ResourceMemberName} == null ? (string) null : src.{prefix}.{member.ResourceMemberName}.IsAbsoluteUri ? src.{prefix}.{member.ResourceMemberName}.ToString() : (new Uri(new Uri(rootUrl), src.{prefix}.{member.ResourceMemberName}.ToString())).ToString()))");
+							else
+								results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom(src => src.{prefix} == null ? null : src => src.{prefix}.{member.ResourceMemberName}.IsAbsoluteUri ? src.{prefix}.{member.ResourceMemberName}.ToString() : (new Uri(new Uri(rootUrl), src.{prefix}.{member.ResourceMemberName}.ToString())).ToString()))");
+						}
+					}
+				}
+				else if (string.Equals(entityColumn.EntityType, "Uri", StringComparison.OrdinalIgnoreCase))
+				{
+					if (first)
+						first = false;
+					else
+						results.AppendLine();
+
+					if (string.IsNullOrWhiteSpace(prefix))
+					{
+						if (entityColumn.IsNullable)
+							results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom(src => src.{member.ResourceMemberName} == null ? (Uri) null : src.{member.ResourceMemberName}.IsAbsoluteUri ? src.{member.ResourceMemberName} : new Uri(new Uri(rootUrl), src.{member.ResourceMemberName}.ToString())))");
+						else
+							results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom(src => src.{member.ResourceMemberName}.IsAbsoluteUri ? src.{member.ResourceMemberName} : new Uri(new Uri(rootUrl), src.{member.ResourceMemberName}.ToString())))");
+					}
+					else
+					{
+						if (entityColumn.IsNullable)
+							results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom(src => src.{prefix} == null ? (Uri) null : {prefix}.{member.ResourceMemberName} == null ? (Uri) null : src.{prefix}.{member.ResourceMemberName}.IsAbsoluteUri ? src.{prefix}.{member.ResourceMemberName} : new Uri(new Uri(rootUrl), src.{prefix}.{member.ResourceMemberName}.ToString())))");
+						else
+							results.Append($"\t\t\t\t.ForMember(dest => dest.{entityColumn.EntityName}, opts => opts.MapFrom(src => src.{prefix} == null ? (Uri) null : src => src.{prefix}.{member.ResourceMemberName}.IsAbsoluteUri ? src.{prefix}.{member.ResourceMemberName} : new Uri(new Uri(rootUrl), src.{prefix}.{member.ResourceMemberName}.ToString())))");
 					}
 				}
 				else if (!string.Equals(member.ResourceMemberName, member.EntityNames[0].EntityName, StringComparison.OrdinalIgnoreCase))
