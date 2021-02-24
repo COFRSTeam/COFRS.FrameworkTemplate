@@ -49,11 +49,11 @@
     <Reference Include="AutoMapper, Version=10.0.0.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
       <HintPath>..\packages\AutoMapper.10.1.1\lib\net461\AutoMapper.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS, Version=0.0.30.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.0.0.30-alpha\lib\$compactversion$\COFRS.dll</HintPath>
+    <Reference Include="COFRS, Version=0.0.45.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.0.0.45-alpha\lib\$compactversion$\COFRS.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS.Common, Version=0.0.10.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.Common.0.0.10-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
+    <Reference Include="COFRS.Common, Version=0.0.16.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.Common.0.0.16-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
     </Reference>
     $if$ ($databasetech$ == mysql)<Reference Include="COFRS.MySql, Version=0.0.20.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\COFRS.MySql.0.0.20-alpha\lib\$compactversion$\COFRS.MySql.dll</HintPath>
@@ -70,11 +70,11 @@
     <Reference Include="Npgsql, Version=5.0.1.1, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
       <HintPath>..\packages\Npgsql.5.0.1.1\lib\netstandard2.0\Npgsql.dll</HintPath>
     </Reference>
-    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.31.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.31-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
+    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.39.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.39-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
     </Reference>
-    $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.8.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\packages\COFRS.OAuth.0.0.8-alpha\lib\$compactversion$\COFRS.OAuth.dll</HintPath>
+    $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.14.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\COFRS.OAuth.0.0.14-alpha\lib\$compactversion$\COFRS.OAuth.dll</HintPath>
     </Reference>
     <Reference Include="IdentityModel, Version=3.10.4.0, Culture=neutral, PublicKeyToken=e7877f4675df049f, processorArchitecture=MSIL">
       <HintPath>..\packages\IdentityModel.3.10.4\lib\net452\IdentityModel.dll</HintPath>
