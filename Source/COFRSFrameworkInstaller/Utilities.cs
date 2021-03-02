@@ -12,6 +12,45 @@ namespace COFRSFrameworkInstaller
 {
 	public static class Utilities
 	{
+		/// <summary>
+		/// Extracts the members of the resource class
+		/// </summary>
+		/// <param name="classFile"></param>
+		/// <returns></returns>
+		public static List<ResourceMember> ExtractMembers(ResourceClassFile classFile)
+		{
+			var members = new List<ResourceMember>();
+
+			using (var stream = new FileStream(classFile.FileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+			{
+				using (var reader = new StreamReader(stream))
+				{
+					while (!reader.EndOfStream)
+					{
+						var line = reader.ReadLine();
+
+						var match = Regex.Match(line, "[ \t]*public[ \t]+(?<datatype>[a-zA-Z][a-zA-Z0-9]+[\\?]{0,1})[ \t]+(?<name>[a-zA-Z_][a-zA-Z0-9_]*)");
+
+						if (match.Success)
+						{
+							if (!string.Equals(match.Groups["datatype"].Value, "class", StringComparison.OrdinalIgnoreCase))
+							{
+								var member = new ResourceMember()
+								{
+									DataType = match.Groups["datatype"].Value,
+									Name = match.Groups["name"].Value
+								};
+
+								members.Add(member);
+							}
+						}
+					}
+				}
+			}
+
+			return members;
+		}
+
 		public static List<ClassMember> LoadEntityClassMembers(string entityFileName, List<DBColumn> columns)
 		{
 			List<ClassMember> members = new List<ClassMember>();
