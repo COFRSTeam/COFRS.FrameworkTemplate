@@ -56,31 +56,8 @@ namespace $safeprojectname$
 		{
 			//	Create the httpConfiguration and the service collection for this service
 			var httpConfiguration = new HttpConfiguration();
-
-			//	configure JSON
-			var defaultSettings = new JsonSerializerSettings
-			{
-				NullValueHandling = NullValueHandling.Ignore,
-				Formatting = Formatting.Indented,
-				DateParseHandling = DateParseHandling.DateTimeOffset,
-				DateFormatHandling = DateFormatHandling.IsoDateFormat,
-				ContractResolver = new COFRSJsonContractResolver(),
-				Converters = new List<JsonConverter>
-					{
-                        new ApiJsonConverter(),
-						new ApiJsonSpecialTypesConverter()
-					}
-			};
-
-			JsonConvert.DefaultSettings = () => { return defaultSettings; };
-			httpConfiguration.Formatters.JsonFormatter.SerializerSettings = defaultSettings;
-			
-			//	setup filters and routing
-			FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
-			RouteConfig.RegisterRoutes(RouteTable.Routes);
-
-			httpConfiguration.UseRql();
 			var services = new ServiceCollection();
+			services.AddSingleton(httpConfiguration);
 
 			$if$ ( $securitymodel$ == OAuth )var authorityUrl = AppConfig["OAuth2:AuthorityURL"];
 			var scopes = Scope.Load(AppConfig.GetSection("OAuth2:Scopes"));
@@ -99,7 +76,13 @@ namespace $safeprojectname$
 
 			app.ConfigureAuthentication(services, idsOptions, scopes, policies);
 			
-			$endif$//	Setup dependency injection
+			$endif$//	setup filters and routing
+			FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
+			RouteConfig.RegisterRoutes(RouteTable.Routes);
+
+			httpConfiguration.UseRql();
+
+			//	Setup dependency injection
 			var provider = services.BuildServiceProvider();
 			DependencyResolver.SetResolver(new COFRSMvcDependencyResolver(provider));
 			httpConfiguration.DependencyResolver = new COFRSApiDependencyResolver(provider);
@@ -113,8 +96,22 @@ namespace $safeprojectname$
 			httpConfiguration.EnableCors(cors);
 			httpConfiguration.Services.Replace(typeof(IExceptionHandler), new COFRSExceptionHandler());
 
-			//	Set up versioning
-			var apiExplorer = httpConfiguration.UseVerioning(provider, new ApiVersion(1, 0));
+			//	configure JSON
+			var defaultSettings = new JsonSerializerSettings
+			{
+				NullValueHandling = NullValueHandling.Ignore,
+				Formatting = Formatting.Indented,
+				DateParseHandling = DateParseHandling.DateTimeOffset,
+				DateFormatHandling = DateFormatHandling.IsoDateFormat,
+				ContractResolver = new COFRSJsonContractResolver(),
+				Converters = new List<JsonConverter>
+				{
+					new ApiJsonSpecialTypesConverter()
+				}
+			};
+
+			JsonConvert.DefaultSettings = () => { return defaultSettings; };
+			var apiExplorer = httpConfiguration.UseVerioning(provider, new ApiVersion(1, 0), defaultSettings);
 
 			//	Configure Swagger
 			$if$ ($securitymodel$ == OAuth)app.RegisterSwagger(AppConfig, options, httpConfiguration, apiExplorer, scopes);
