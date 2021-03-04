@@ -23,7 +23,6 @@ namespace $safeprojectname$.App_Start
 		private static TranslationOptions TranslationOptions { get; set; }
 		private static RepositoryOptions RepositoryOptions { get; set; }
 		private static ApiOptions ApiOptions { get; set; }
-		private static ObjectPoolProvider Provider { get; set; }
 		$if$ ($securitymodel$ == OAuth)private static Scopes Scopes { get; set; }
 		/// An extention method used to configure services with Microsoft's dependency injection services.
 		/// </summary>
@@ -63,8 +62,8 @@ namespace $safeprojectname$.App_Start
 			services.AddSingleton<IApiOptions>(ApiOptions);
 			services.AddApiOptions(ApiOptions);
 
-			Provider = new DefaultObjectPoolProvider();
-			services.AddSingleton(Provider);
+            ObjectPoolProvider provider = (ObjectPoolProvider)new DefaultObjectPoolProvider();
+			services.AddSingleton(provider);
 
 			TranslationOptions = new TranslationOptions(configuration.GetSection("ApiSettings").GetValue<string>("RootUrl"));
 			services.AddSingleton<ITranslationOptions>(TranslationOptions);
