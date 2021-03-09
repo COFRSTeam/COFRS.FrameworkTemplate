@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("COFRSFrameworkInstaller")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("COFRS Team")]
 [assembly: AssemblyProduct("COFRSFrameworkInstaller")]
-[assembly: AssemblyCopyright("")]
+[assembly: AssemblyCopyright("Copyright © COFRS Team 2021")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 

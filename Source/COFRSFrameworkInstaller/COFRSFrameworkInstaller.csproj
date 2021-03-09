@@ -3,6 +3,7 @@
   <PropertyGroup>
     <MinimumVisualStudioVersion>16.0</MinimumVisualStudioVersion>
     <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
+    <TargetFrameworkProfile />
   </PropertyGroup>
   <PropertyGroup>
     <SignAssembly>true</SignAssembly>
@@ -21,7 +22,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>COFRSFrameworkInstaller</RootNamespace>
     <AssemblyName>COFRSFrameworkInstaller</AssemblyName>
-    <TargetFrameworkVersion>v4.7.2</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
     <UseCodebase>true</UseCodebase>
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
@@ -58,6 +59,13 @@
       <DependentUpon>AddConnection.cs</DependentUpon>
     </Compile>
     <Compile Include="ClassMember.cs" />
+    <Compile Include="Emitter.cs" />
+    <Compile Include="UserInputFullStack.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="UserInputFullStack.Designer.cs">
+      <DependentUpon>UserInputFullStack.cs</DependentUpon>
+    </Compile>
     <Compile Include="ControllerWizard.cs" />
     <Compile Include="DBAuthentication.cs" />
     <Compile Include="DBColumn.cs" />
@@ -66,6 +74,7 @@
     <Compile Include="DBServerType.cs" />
     <Compile Include="DBTable.cs" />
     <Compile Include="EntityMember.cs" />
+    <Compile Include="FullStackControllerWizard.cs" />
     <Compile Include="ProfileClassFile.cs" />
     <Compile Include="ResourceClassFile.cs" />
     <Compile Include="ResourceMember.cs" />
@@ -154,6 +163,9 @@
     <EmbeddedResource Include="AddConnection.resx">
       <DependentUpon>AddConnection.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="UserInputFullStack.resx">
+      <DependentUpon>UserInputFullStack.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="UserInputResource.resx">
       <DependentUpon>UserInputResource.cs</DependentUpon>
     </EmbeddedResource>
@@ -216,6 +228,13 @@
     <ProjectReference Include="..\COFRSExamplesTemplate\COFRSExamplesTemplate.csproj">
       <Project>{53077316-2074-4619-B521-9E9A6E22E1E0}</Project>
       <Name>COFRSExamplesTemplate</Name>
+      <VSIXSubPath>ItemTemplates</VSIXSubPath>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+    </ProjectReference>
+    <ProjectReference Include="..\COFRSFullStackTemplate\COFRSFullStackTemplate.csproj">
+      <Project>{B95B75BB-A72C-44BC-8937-5ABAB9B41520}</Project>
+      <Name>COFRSFullStackTemplate</Name>
       <VSIXSubPath>ItemTemplates</VSIXSubPath>
       <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
       <IncludeOutputGroupsInVSIX>TemplateProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>

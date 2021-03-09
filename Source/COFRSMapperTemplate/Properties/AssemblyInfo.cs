@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("COFRS Mapper Template")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("Michael Zuniga")]
+[assembly: AssemblyCompany("COFRS Team")]
 [assembly: AssemblyProduct("COFRSMapperTemplate")]
-[assembly: AssemblyCopyright("Copyright © Michael Zuniga 2020")]
+[assembly: AssemblyCopyright("Copyright © COFRS Team 2021")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
