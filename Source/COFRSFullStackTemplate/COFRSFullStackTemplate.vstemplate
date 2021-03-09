@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<VSTemplate Version="3.0.0" Type="Item" xmlns="http://schemas.microsoft.com/developer/vstemplate/2005" xmlns:sdk="http://schemas.microsoft.com/developer/vstemplate-sdkextension/2010">
+  <TemplateData>
+    <Name>COFRS Web API Controller Full Stack</Name>
+    <Description>Creates a Web API Controller for a COFRS REST Service with entity model, resource model, model mapping, examples and validation</Description>
+    <Icon>COFRS.ico</Icon>
+    <TemplateID>e8511e57-1980-476d-85ba-0dc76e205c2c</TemplateID>
+    <ProjectType>CSharp</ProjectType>
+    <RequiredFrameworkVersion>2.0</RequiredFrameworkVersion>
+    <NumberOfParentCategoriesToRollUp>1</NumberOfParentCategoriesToRollUp>
+    <DefaultName>ResourceName</DefaultName>
+  </TemplateData>
+  <TemplateContent>
+    <References>
+      <Reference>
+        <Assembly>System</Assembly>
+      </Reference>
+    </References>
+    <Folder Name="Models">
+      <Folder Name="EntityModels">
+        <ProjectItem ReplaceParameters="true" TargetFileName="$entityClass$.cs" OpenInEditor="true">Emodel.cs</ProjectItem>
+      </Folder>
+      <Folder Name="ResourceModels">
+        <ProjectItem ReplaceParameters="true" TargetFileName="$resourceClass$.cs" OpenInEditor="true">Model.cs</ProjectItem>
+      </Folder>
+      <Folder Name="Mapping">
+        <ProjectItem ReplaceParameters="true" TargetFileName="$mapClass$.cs" OpenInEditor="true">Map.cs</ProjectItem>
+      </Folder>
+      <Folder Name="SwaggerExamples">
+        <ProjectItem ReplaceParameters="true" TargetFileName="$swaggerClass$.cs" OpenInEditor="true">Example.cs</ProjectItem>
+      </Folder>
+    </Folder>
+    <Folder Name="Validation">
+      <ProjectItem ReplaceParameters="true" TargetFileName="$validatorClass$.cs" OpenInEditor="true">Validator.cs</ProjectItem>
+    </Folder>
+    <Folder Name="Controllers">
+      <ProjectItem ReplaceParameters="true" TargetFileName="$controllerClass$.cs" OpenInEditor="true">Controller.cs</ProjectItem>
+    </Folder>
+  </TemplateContent>
+  <WizardExtension>
+    <Assembly>COFRSFrameworkInstaller, Version=1.0.0.0, Culture=neutral, PublicKeyToken=5946b1f14e385125</Assembly>
+    <FullClassName>COFRSFrameworkInstaller.FullStackControllerWizard</FullClassName>
+  </WizardExtension>
+</VSTemplate>

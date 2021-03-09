@@ -5,11 +5,11 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("COFRSEntityTemplate")]
+[assembly: AssemblyTitle("COFRSFullStackTemplate")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("COFRS Team")]
-[assembly: AssemblyProduct("COFRSEntityTemplate")]
+[assembly: AssemblyProduct("COFRSFullStackTemplate")]
 [assembly: AssemblyCopyright("Copyright © COFRS Team 2021")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("91783e80-81ee-4384-a725-db9d4d00e9f1")]
+[assembly: Guid("b95b75bb-a72c-44bc-8937-5abab9b41520")]
 
 // Version information for an assembly consists of the following four values:
 //

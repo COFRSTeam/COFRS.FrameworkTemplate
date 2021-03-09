@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "COFRSExamplesTemplate", "CO
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "COFRSControllerTemplate", "COFRSControllerTemplate\COFRSControllerTemplate.csproj", "{1A85E553-5083-4D8C-BD48-03DA56B40D62}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "COFRSFullStackTemplate", "COFRSFullStackTemplate\COFRSFullStackTemplate.csproj", "{B95B75BB-A72C-44BC-8937-5ABAB9B41520}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -57,6 +59,10 @@ Global
 		{1A85E553-5083-4D8C-BD48-03DA56B40D62}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1A85E553-5083-4D8C-BD48-03DA56B40D62}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{1A85E553-5083-4D8C-BD48-03DA56B40D62}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B95B75BB-A72C-44BC-8937-5ABAB9B41520}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B95B75BB-A72C-44BC-8937-5ABAB9B41520}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B95B75BB-A72C-44BC-8937-5ABAB9B41520}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B95B75BB-A72C-44BC-8937-5ABAB9B41520}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
