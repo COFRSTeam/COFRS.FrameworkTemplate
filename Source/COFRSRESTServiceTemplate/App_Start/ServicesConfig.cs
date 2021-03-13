@@ -1,6 +1,7 @@
 ﻿using AutoMapper;
 using COFRS;
 $if$ ($securitymodel$ == OAuth)using COFRS.OAuth;
+using System.Collections.Generic;
 $endif$using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,8 @@ namespace $safeprojectname$.App_Start
 		private static RepositoryOptions RepositoryOptions { get; set; }
 		private static ApiOptions ApiOptions { get; set; }
 		$if$ ($securitymodel$ == OAuth)private static Scopes Scopes { get; set; }
+
+		/// <summary>
 		/// An extention method used to configure services with Microsoft's dependency injection services.
 		/// </summary>
 		/// <param name="services">The <see cref="IServiceCollection"/> that this function extends.</param>
