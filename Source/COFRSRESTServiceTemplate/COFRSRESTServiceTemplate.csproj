@@ -78,7 +78,9 @@
     <Content Include="App_Start\ServicesConfig.cs" />
     <Content Include="Orchestration\IServiceOrchestrator.cs" />
     <Content Include="Orchestration\ServiceOrchestrator.cs" />
-    <Content Include="Models\SwaggerExamples\PatchExample.cs" />
+    <Content Include="Models\SwaggerExamples\PatchExample.cs">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
