@@ -16,8 +16,7 @@ using System.Web.Http.ExceptionHandling;
 using System.Web.Mvc;
 using System.Web.Routing;
 using Newtonsoft.Json;
-$if$ ($securitymodel$ == OAuth)using IdentityServer3.AccessTokenValidation;
-$endif$using ConfigurationBuilder = Microsoft.Extensions.Configuration.ConfigurationBuilder;
+using ConfigurationBuilder = Microsoft.Extensions.Configuration.ConfigurationBuilder;
 
 [assembly: OwinStartup(typeof($safeprojectname$.Startup))]
 
