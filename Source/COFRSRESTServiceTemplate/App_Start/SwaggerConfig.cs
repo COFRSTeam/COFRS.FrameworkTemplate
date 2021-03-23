@@ -28,22 +28,23 @@ namespace $safeprojectname$.App_Start
 
 			var rootUrl = config.GetSection("ApiSettings").GetValue<string>("RootUrl");
 			$if$ ($securitymodel$ == OAuth)var authorityUrl = config["OAuth2:AuthorityURL"];
+			var discoveryDocument = IdentityService.Client.GetDiscoveryDocument().Result;
+			var tokenEndPoint = discoveryDocument.token_endpoint;
 
-			var tokenEndPoint = AuthenticationServices.GetTokenEndpoint(authorityUrl).GetAwaiter().GetResult();
 			$endif$
-				// This is the call to our swashbuckle config that needs to be called 
-				httpConfiguration
-				.EnableSwagger("{apiVersion}/swagger",
-				swagger =>
-				{
-					// build a swagger document and endpoint for each discovered API version
-					swagger.MultipleApiVersions(
-						(apiDescription, version) => apiDescription.GetGroupName() == version,
-						info =>
+			// This is the call to our swashbuckle config that needs to be called 
+			httpConfiguration
+			.EnableSwagger("{apiVersion}/swagger",
+			swagger =>
+			{
+				// build a swagger document and endpoint for each discovered API version
+				swagger.MultipleApiVersions(
+					(apiDescription, version) => apiDescription.GetGroupName() == version,
+					info =>
+					{
+						foreach (var group in apiExplorer.ApiDescriptions)
 						{
-							foreach (var group in apiExplorer.ApiDescriptions)
-							{
-								var description = @"
+							var description = @"
 <p style=""font-family:verdana; color:#6495ED;"">A detailed description of the service goes here.The description
 should give the reader a good idea of what the service does, and should list any dependencies or
 restrictions upon its use. The description is written in HTML, so don't be afraid to use formatting
@@ -53,48 +54,48 @@ should be visually appealing as well.</p>
 <p style=""font-family:verdana; color:#6495ED;"">Note, however, that the support for HTML tags in .NET Framework
 is severly limited.</p>";
 
-								if (group.IsDeprecated)
-								{
-									description += "This API version has been deprecated.";
-								}
+							if (group.IsDeprecated)
+							{
+								description += "This API version has been deprecated.";
+							}
 
-								info.Version(group.Name, $"$safeprojectname$ {group.ApiVersion}")
-									.Contact(c => c.Name("Author").Email("author.email@provider.com"))
-									.Description(description);
+							info.Version(group.Name, $"$safeprojectname$ {group.ApiVersion}")
+								.Contact(c => c.Name("Author").Email("author.email@provider.com"))
+								.Description(description);
 }
-						});
+					});
 
-					$if$ ($securitymodel$ == OAuth)var theScopes = new Dictionary<string, string>();
-					foreach (var scope in scopes)
-						theScopes.Add(scope.Name, scope.Description);
+				$if$ ($securitymodel$ == OAuth)var theScopes = new Dictionary<string, string>();
+				foreach (var scope in scopes)
+					theScopes.Add(scope.Name, scope.Description);
 
-					swagger.OAuth2("oauth2")
-						.Description("OAuth2 Client Credentials")
-						.Flow("application")
-						.TokenUrl(tokenEndPoint)
-						.Scopes(s =>
-						{
+				swagger.OAuth2("oauth2")
+					.Description("OAuth2 Client Credentials")
+					.Flow("application")
+					.TokenUrl(tokenEndPoint)
+					.Scopes(s =>
+					{
 						foreach (var scope in scopes)
 							s.Add(scope.Name, scope.Name);
 					});
 
-					swagger.OperationFilter<AssignOAuth2SecurityRequirements>();
-					$endif$swagger.OperationFilter<SwaggerDefaultValues>();
-					swagger.OperationFilter<ApiSwaggerFilter>();
-					swagger.OperationFilter<ExamplesOperationFilter>();
-					swagger.OperationFilter<DescriptionOperationFilter>();
-					swagger.DescribeAllEnumsAsStrings(true);
-					swagger.RootUrl((req) => rootUrl);
-					swagger.IncludeXmlComments(GetXmlPath("$safeprojectname$.xml"));
-					swagger.IncludeXmlComments(GetXmlPath("COFRS.Common.xml"));
-					swagger.IncludeXmlComments(GetXmlPath("COFRS.xml"));
-				})
-				.EnableSwaggerUi(c =>
-				{
-					c.DocumentTitle("$safeprojectname$");
-					c.EnableDiscoveryUrlSelector();
-					c.DisableValidator();
-				});
+				swagger.OperationFilter<AssignOAuth2SecurityRequirements>();
+				$endif$swagger.OperationFilter<SwaggerDefaultValues>();
+				swagger.OperationFilter<ApiSwaggerFilter>();
+				swagger.OperationFilter<ExamplesOperationFilter>();
+				swagger.OperationFilter<DescriptionOperationFilter>();
+				swagger.DescribeAllEnumsAsStrings(true);
+				swagger.RootUrl((req) => rootUrl);
+				swagger.IncludeXmlComments(GetXmlPath("$safeprojectname$.xml"));
+				swagger.IncludeXmlComments(GetXmlPath("COFRS.Common.xml"));
+				swagger.IncludeXmlComments(GetXmlPath("COFRS.xml"));
+			})
+			.EnableSwaggerUi(c =>
+			{
+				c.DocumentTitle("$safeprojectname$");
+				c.EnableDiscoveryUrlSelector();
+				c.DisableValidator();
+			});
 
 			return app;
 		}
