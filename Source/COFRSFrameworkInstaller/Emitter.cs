@@ -60,7 +60,7 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
 
 			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
+				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
 
 			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof(RqlCollection<{resourceClassName}>))]");
 
@@ -106,7 +106,7 @@ namespace COFRSFrameworkInstaller
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
 
 				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
+					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
 
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof({resourceClassName}))]");
 
@@ -158,7 +158,7 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
 
 			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
+				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
 
 			if (!string.IsNullOrWhiteSpace(exampleClassName))
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({resourceClassName}), typeof({exampleClassName}))]");
@@ -204,7 +204,7 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
 
 			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
+				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
 
 			if (!string.IsNullOrWhiteSpace(exampleClassName))
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({resourceClassName}), typeof({exampleClassName}))]");
@@ -251,7 +251,7 @@ namespace COFRSFrameworkInstaller
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
 
 				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
+					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
 
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof(IEnumerable<PatchCommand>), typeof(PatchExample))]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
@@ -294,7 +294,7 @@ namespace COFRSFrameworkInstaller
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
 
 				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
+					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
 
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
