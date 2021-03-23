@@ -72,7 +72,7 @@ is severly limited.</p>";
 				swagger.OAuth2("oauth2")
 					.Description("OAuth2 Client Credentials")
 					.Flow("application")
-					.TokenUrl(tokenEndPoint)
+					.TokenUrl(tokenEndPoint.AbsoluteUri)
 					.Scopes(s =>
 					{
 						foreach (var scope in scopes)

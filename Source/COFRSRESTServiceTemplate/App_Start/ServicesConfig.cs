@@ -24,24 +24,14 @@ namespace $safeprojectname$.App_Start
 		private static TranslationOptions TranslationOptions { get; set; }
 		private static RepositoryOptions RepositoryOptions { get; set; }
 		private static ApiOptions ApiOptions { get; set; }
-		$if$ ($securitymodel$ == OAuth)private static Scopes Scopes { get; set; }
 
-		/// <summary>
-		/// An extention method used to configure services with Microsoft's dependency injection services.
-		/// </summary>
-		/// <param name="services">The <see cref="IServiceCollection"/> that this function extends.</param>
-		/// <param name="configuration">The <see cref="IConfiguration"/> for the service.</param>
-		/// <param name="scopes">The list of <see cref="Scope"/>s required by this service</param>
-		/// <returns>An <see cref="IApiOptions"/> interface to the API options defined for the service.</returns>
-		public static IApiOptions ConfigureServices(this IServiceCollection services, IConfiguration configuration, List<Scope> scopes)
-		$else$/// <summary>
 		/// An extention method used to configure services with Microsoft's dependency injection services.
 		/// </summary>
 		/// <param name="services">The <see cref="IServiceCollection"/> that this function extends.</param>
 		/// <param name="configuration">The <see cref="IConfiguration"/> for the service.</param>
 		/// <returns>An <see cref="IApiOptions"/> interface to the API options defined for the service.</returns>
 		public static IApiOptions ConfigureServices(this IServiceCollection services, IConfiguration configuration)
-		$endif${
+		{
 			services.AddControllersAsServices(typeof(Startup).Assembly.GetExportedTypes()
 				.Where(t => !t.IsAbstract && !t.IsGenericTypeDefinition)
 				.Where(t => typeof(IController).IsAssignableFrom(t) || t.Name.EndsWith("Controller", StringComparison.OrdinalIgnoreCase)));
