@@ -59,23 +59,16 @@ namespace $safeprojectname$
 			var services = new ServiceCollection();
 			services.AddSingleton(httpConfiguration);
 
-			$if$ ( $securitymodel$ == OAuth )var authorityUrl = AppConfig["OAuth2:AuthorityURL"];
+			//	Configure the internal services used by this service
+			var options = services.ConfigureServices(AppConfig);
+
+			$if$ ( $securitymodel$ == OAuth )//  Configure Authentication and Authorization security services
+            var authorityUrl = AppConfig["OAuth2:AuthorityURL"];
 			var scopes = Scope.Load(AppConfig.GetSection("OAuth2:Scopes"));
 			var policies = Policy.Load(AppConfig.GetSection("OAuth2:Policies"));
+		    var resources = Resource.Load(AppConfig.GetSection("OAuth2:Resources"));
+		    app.ConfigureAuthentication(services, authorityUrl, resources, scopes, policies);
 
-			$endif$//	Configure the internal services used by this service
-			$if$ ($securitymodel$ == OAuth)var options = services.ConfigureServices(AppConfig, scopes);$else$var options = services.ConfigureServices(AppConfig);$endif$
-
-			$if$ ($securitymodel$ == OAuth)var idsOptions = new IdentityServerBearerTokenAuthenticationOptions
-			 {
-				 Authority = authorityUrl,
-				 ValidationMode = ValidationMode.ValidationEndpoint,
-				 EnableValidationResultCache = true,
-				 ValidationResultCacheDuration = TimeSpan.FromMinutes(30)
-			 };
-
-			app.ConfigureAuthentication(services, idsOptions, scopes, policies);
-			
 			$endif$//	setup filters and routing
 			FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
 			RouteConfig.RegisterRoutes(RouteTable.Routes);
