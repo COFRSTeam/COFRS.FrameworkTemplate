@@ -25,6 +25,7 @@ namespace $safeprojectname$.App_Start
 		private static RepositoryOptions RepositoryOptions { get; set; }
 		private static ApiOptions ApiOptions { get; set; }
 
+		/// <summary>
 		/// An extention method used to configure services with Microsoft's dependency injection services.
 		/// </summary>
 		/// <param name="services">The <see cref="IServiceCollection"/> that this function extends.</param>
