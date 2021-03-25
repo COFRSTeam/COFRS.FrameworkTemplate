@@ -103,6 +103,8 @@ namespace COFRSFrameworkInstaller
 					Proceed = emitter.UpdateServices(solutionDirectory, replacementsDictionary["$safeitemname$"],
 														entityClassFile.ClassNameSpace, resourceClassFile.ClassNamespace,
 														rootNamespace);
+
+					UpdateServices(resourceClassFile, replacementsDictionary);
 				}
 				else
 					Proceed = false;

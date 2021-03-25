@@ -150,10 +150,10 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Npgsql">
-      <Version>5.0.0</Version>
+      <Version>5.0.4</Version>
     </PackageReference>
     <PackageReference Include="MySql.Data">
-      <Version>8.0.22</Version>
+      <Version>8.0.23</Version>
     </PackageReference>
     <PackageReference Include="VSSDK.TemplateWizardInterface.8">
       <Version>8.0.4</Version>
