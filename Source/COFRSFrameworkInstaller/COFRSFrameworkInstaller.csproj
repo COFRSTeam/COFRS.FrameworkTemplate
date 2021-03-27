@@ -155,8 +155,8 @@
     <PackageReference Include="MySql.Data">
       <Version>8.0.23</Version>
     </PackageReference>
-    <PackageReference Include="VSSDK.TemplateWizardInterface.8">
-      <Version>8.0.4</Version>
+    <PackageReference Include="VSSDK.TemplateWizardInterface.12">
+      <Version>12.0.4</Version>
     </PackageReference>
   </ItemGroup>
   <ItemGroup>
