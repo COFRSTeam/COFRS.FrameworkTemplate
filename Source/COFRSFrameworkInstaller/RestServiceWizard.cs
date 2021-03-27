@@ -85,6 +85,14 @@ namespace COFRSFrameworkInstaller
                     else
                         securityModel = "OAuth";
 
+                    if (compactVersion == "net461")
+                        replacementsDictionary.Add("$automapperversion$", compactVersion);
+                    else
+                        replacementsDictionary.Add("$automapperversion$", "net47");
+
+                    if (compactVersion == "net461")
+                        replacementsDictionary.Add("$mysqlversion$", "net452");
+
                     // Add custom parameters.
                     replacementsDictionary.Add("$companymoniker$", inputForm.CompanyMoniker.Text);
                     replacementsDictionary.Add("$securitymodel$", securityModel);
