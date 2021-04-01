@@ -59,6 +59,8 @@ namespace COFRSFrameworkInstaller
             this.label2 = new System.Windows.Forms.Label();
             this._serverTypeList = new System.Windows.Forms.ComboBox();
             this.label1 = new System.Windows.Forms.Label();
+            this.policyCombo = new System.Windows.Forms.ComboBox();
+            this.policyLabel = new System.Windows.Forms.Label();
             this.panel1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this._portNumber)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
@@ -137,7 +139,7 @@ namespace COFRSFrameworkInstaller
             // 
             // _portNumber
             // 
-            this._portNumber.Location = new System.Drawing.Point(704, 251);
+            this._portNumber.Location = new System.Drawing.Point(577, 117);
             this._portNumber.Maximum = new decimal(new int[] {
             65534,
             0,
@@ -352,13 +354,33 @@ namespace COFRSFrameworkInstaller
             this.label1.TabIndex = 58;
             this.label1.Text = "Server Type";
             // 
-            // COFRSInputFullStack
+            // policyCombo
+            // 
+            this.policyCombo.FormattingEnabled = true;
+            this.policyCombo.Location = new System.Drawing.Point(561, 250);
+            this.policyCombo.Name = "policyCombo";
+            this.policyCombo.Size = new System.Drawing.Size(269, 21);
+            this.policyCombo.Sorted = true;
+            this.policyCombo.TabIndex = 85;
+            // 
+            // policyLabel
+            // 
+            this.policyLabel.AutoSize = true;
+            this.policyLabel.Location = new System.Drawing.Point(520, 253);
+            this.policyLabel.Name = "policyLabel";
+            this.policyLabel.Size = new System.Drawing.Size(35, 13);
+            this.policyLabel.TabIndex = 86;
+            this.policyLabel.Text = "Policy";
+            // 
+            // UserInputFullStack
             // 
             this.AcceptButton = this._okButton;
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this._cancelButton;
             this.ClientSize = new System.Drawing.Size(843, 520);
+            this.Controls.Add(this.policyLabel);
+            this.Controls.Add(this.policyCombo);
             this.Controls.Add(this.PluralName);
             this.Controls.Add(this.SingularName);
             this.Controls.Add(this.label5);
@@ -387,7 +409,7 @@ namespace COFRSFrameworkInstaller
             this.Controls.Add(this._serverTypeList);
             this.Controls.Add(this.label1);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow;
-            this.Name = "COFRSInputFullStack";
+            this.Name = "UserInputFullStack";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "COFRS Controller Generator Full Stack";
             this.Load += new System.EventHandler(this.OnLoad);
@@ -430,5 +452,7 @@ namespace COFRSFrameworkInstaller
         private System.Windows.Forms.Label label2;
         private System.Windows.Forms.ComboBox _serverTypeList;
         private System.Windows.Forms.Label label1;
+        private System.Windows.Forms.ComboBox policyCombo;
+        private System.Windows.Forms.Label policyLabel;
     }
 }

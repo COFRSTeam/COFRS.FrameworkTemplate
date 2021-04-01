@@ -34,6 +34,18 @@ namespace COFRSFrameworkInstaller
         public string ConnectionString { get; set; }
         public string DefaultConnectionString { get; set; }
         public JObject Examples { get; set; }
+		public string Policy { 
+			get {
+				if ( policyCombo.Items.Count > 0  )
+                {
+					return policyCombo.SelectedItem.ToString();
+                }
+                else
+                {
+					return string.Empty;
+                }
+			}
+		}
 
         #endregion
 
@@ -53,6 +65,25 @@ namespace COFRSFrameworkInstaller
 
             LoadAppSettings();
             ReadServerList();
+
+			var policies = Utilities.LoadPolicies(SolutionFolder);
+
+			if ( policies != null )
+            {
+				policyCombo.Visible = true;
+				policyLabel.Visible = true;
+				policyCombo.Items.Add("Anonymous");
+
+				foreach (var policy in policies)
+					policyCombo.Items.Add(policy);
+
+				policyCombo.SelectedIndex = 0;
+            }
+			else
+            {
+				policyLabel.Visible = false;
+				policyCombo.Visible = false;
+            }
         }
 		#endregion
 

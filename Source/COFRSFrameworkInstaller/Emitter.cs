@@ -28,6 +28,12 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t///\t{resourceClassName} Controller");
 			results.AppendLine("\t///\t</summary>");
 			results.AppendLine("\t[ApiVersion(\"1.0\")]");
+			if (!string.IsNullOrWhiteSpace(policy))
+				if ( string.Equals(policy, "Anonymous", StringComparison.OrdinalIgnoreCase))
+					results.AppendLine($"[AllowAnonymous]");
+				else
+					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
+
 			results.AppendLine($"\tpublic class {controllerClassName} : COFRSController");
 			results.AppendLine("\t{");
 			results.AppendLine($"\t\tprivate readonly ILogger<{controllerClassName}> Logger;");
@@ -58,10 +64,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t[HttpGet]");
 			results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
-
-			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof(RqlCollection<{resourceClassName}>))]");
 
 			if (!string.IsNullOrWhiteSpace(exampleCollectionClassName))
@@ -104,10 +106,6 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine("\t\t[HttpGet]");
 				results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
-
-				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof({resourceClassName}))]");
 
 				if (!string.IsNullOrWhiteSpace(exampleClassName))
@@ -156,10 +154,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t[HttpPost]");
 			results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
-
-			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 			if (!string.IsNullOrWhiteSpace(exampleClassName))
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({resourceClassName}), typeof({exampleClassName}))]");
 
@@ -202,10 +196,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t[HttpPut]");
 			results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
-
-			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 			if (!string.IsNullOrWhiteSpace(exampleClassName))
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({resourceClassName}), typeof({exampleClassName}))]");
 
@@ -249,10 +239,6 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine("\t\t[HttpPatch]");
 				results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
-
-				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof(IEnumerable<PatchCommand>), typeof(PatchExample))]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
@@ -292,10 +278,6 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine("\t\t[HttpDelete]");
 				results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
-
-				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 
@@ -3557,7 +3539,7 @@ namespace COFRSFrameworkInstaller
 
 											state += line.CountOf('{') - line.CountOf('}');
 
-											if (line.Contains("return ApiOptions;"))
+											if (line.Contains("services.InitializeFactories();"))
 												state--;
 
 											if (state == 3)
@@ -3597,7 +3579,7 @@ namespace COFRSFrameworkInstaller
 
 		public string FindServices(string folder)
 		{
-			string filePath = Path.Combine(folder, "ServiceConfig.cs");
+			string filePath = Path.Combine(folder, "ServicesConfig.cs");
 
 			if (File.Exists(filePath))
 				return filePath;

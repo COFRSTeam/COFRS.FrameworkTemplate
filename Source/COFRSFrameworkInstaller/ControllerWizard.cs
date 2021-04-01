@@ -95,7 +95,7 @@ namespace COFRSFrameworkInstaller
 					ValidatorClass = null;
 
 					Utilities.LoadClassList(SolutionFolder, resourceClassFile.ClassName, ref Orchestrator, ref ValidatorClass, ref ExampleClass, ref CollectionExampleClass);
-					var policy = LoadPolicy(SolutionFolder);
+					var policy = form.Policy;
 
 					replacementsDictionary.Add("$companymoniker$", string.IsNullOrWhiteSpace(moniker) ? "acme" : moniker);
 					replacementsDictionary.Add("$securitymodel$", string.IsNullOrWhiteSpace(policy) ? "none" : "OAuth");
@@ -178,6 +178,13 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine($"\t///\t{domain.ClassName} Controller");
 			results.AppendLine("\t///\t</summary>");
 			results.AppendLine("\t[ApiVersion(\"1.0\")]");
+
+			if (!string.IsNullOrWhiteSpace(policy))
+				if (string.Equals(policy, "Anonymous", StringComparison.OrdinalIgnoreCase))
+					results.AppendLine($"[AllowAnonymous]");
+				else
+					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
+
 			results.AppendLine($"\tpublic class {replacementsDictionary["$safeitemname$"]} : COFRSController");
 			results.AppendLine("\t{");
 			results.AppendLine($"\t\tprivate readonly ILogger<{replacementsDictionary["$safeitemname$"]}> Logger;");
@@ -208,10 +215,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t[HttpGet]");
 			results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
-
-			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof(RqlCollection<{domain.ClassName}>))]");
 
 			if (CollectionExampleClass != null)
@@ -253,10 +256,6 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine("\t\t[HttpGet]");
 				results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
-
-				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof({domain.ClassName}))]");
 
 				if (ExampleClass != null)
@@ -303,10 +302,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t[HttpPost]");
 			results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
-
-			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 			if (ExampleClass != null)
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({domain.ClassName}), typeof({ExampleClass.ClassName}))]");
 
@@ -348,10 +343,6 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t\t[HttpPut]");
 			results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
-
-			if (!string.IsNullOrWhiteSpace(policy))
-				results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 			if (ExampleClass != null)
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({domain.ClassName}), typeof({ExampleClass.ClassName}))]");
 
@@ -393,10 +384,6 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine("\t\t[HttpPatch]");
 				results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
-
-				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 
 				results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
@@ -436,10 +423,6 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine("\t\t[HttpDelete]");
 				results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
-
-				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"[ResourceAuthorize(Policy = \"{policy}\")]");
-
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 
 				EmitEndpoint(domain, "Delete", results, pkcolumns);
@@ -493,21 +476,6 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine(", [FromBody] IEnumerable<PatchCommand> commands)");
 			else
 				results.AppendLine(")");
-		}
-
-		private void EmitUrl(StringBuilder results, string routeName, IEnumerable<ClassMember> pkcolumns)
-		{
-			results.Append($"\t\t\tvar url = new Uri(options.RootUrl, $\"{routeName}/id");
-
-			foreach (var domainColumn in pkcolumns)
-			{
-				foreach (var column in domainColumn.EntityNames)
-				{
-					results.Append($"/{{{column.EntityName}}}");
-				}
-			}
-
-			results.Append("\");");
 		}
 
 		private static string BuildRoute(string routeName, IEnumerable<ClassMember> pkcolumns)
@@ -810,25 +778,6 @@ namespace COFRSFrameworkInstaller
 			return "Unknown";
 		}
 
-		private void LoadClassList(string DomainClassName)
-		{
-			try
-			{
-				foreach (var file in Directory.GetFiles(SolutionFolder, "*.cs"))
-				{
-					LoadDomainClass(file, DomainClassName);
-				}
-
-				foreach (var folder in Directory.GetDirectories(SolutionFolder))
-				{
-					LoadDomainList(folder, DomainClassName);
-				}
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
 		private void LoadDomainClass(string file, string domainClassName)
 		{
 			try

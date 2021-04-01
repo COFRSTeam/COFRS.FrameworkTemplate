@@ -29,6 +29,20 @@ namespace COFRSFrameworkInstaller
 		public DBTable DatabaseTable { get; set; }
 		public List<DBColumn> DatabaseColumns { get; set; }
 		public JObject Examples { get; set; }
+		public string Policy
+		{
+			get
+			{
+				if (policyCombo.Visible == true)
+				{
+					return policyCombo.SelectedItem.ToString();
+				}
+				else
+				{
+					return string.Empty;
+				}
+			}
+		}
 		#endregion
 
 		#region Utility functions
@@ -46,16 +60,39 @@ namespace COFRSFrameworkInstaller
 			{
 				_InstructionsLabel.Text = "Select the database and table that contains the resource/entity combination you wish to translate between. This will select the Entity and Resource models in the dropdowns provided if they exist. Both entity and resource models must exist to generate the AutoMapper Profile. Then press OK to generate the AutoMapper Profile class.";
 				_titleLabel.Text = "COFRS AutoMapper Profile Generator";
+				policyCombo.Visible = false;
+				PolicyLabel.Visible = false;
 			}
 			else if (InstallType == 4)
 			{
 				_InstructionsLabel.Text = "Select the database and table that contains the resource/entity combination you wish to create examples for. This will select the Entity and Resource models in the dropdowns provided if they exist. Both entity and resource models must exist to generate the example classes. Then press OK to generate the example classes.";
 				_titleLabel.Text = "COFRS Examples Class Generator";
+				policyCombo.Visible = false;
+				PolicyLabel.Visible = false;
 			}
 			else if (InstallType == 5)
 			{
 				_InstructionsLabel.Text = "Select the database and table that contains the resource/entity combination you wish to create a controller for. This will select the Entity and Resource models in the dropdowns provided if they exist. Both entity and resource models must exist to generate a controller. Then press OK to generate the controller.";
 				_titleLabel.Text = "COFRS Controller Class Generator";
+
+				var policies = Utilities.LoadPolicies(SolutionFolder);
+				if ( policies != null )
+				{
+					policyCombo.Visible = true;
+					PolicyLabel.Visible = true;
+					policyCombo.Items.Add("Anonymous");
+					foreach ( var policy in policies )
+					{
+						policyCombo.Items.Add(policy);
+					}
+
+					policyCombo.SelectedIndex = 0;
+				}
+				else
+				{
+					policyCombo.Visible = false;
+					PolicyLabel.Visible = false;
+				}
 			}
 
 			ReadServerList();
@@ -526,8 +563,6 @@ ORDER BY c.ORDINAL_POSITION;
                         {
                             while (reader.Read())
                             {
-                                var x = reader.GetValue(8);
-
                                 var dbColumn = new DBColumn
                                 {
                                     ColumnName = reader.GetString(0),
