@@ -119,7 +119,7 @@ namespace COFRSFrameworkInstaller
                     replacementsDictionary["$controllerClass$"] = controllerClassName;
 
                     var moniker = LoadMoniker(SolutionFolder);
-                    var policy = LoadPolicy(SolutionFolder);
+					var policy = form.Policy;
 
                     replacementsDictionary.Add("$companymoniker$", string.IsNullOrWhiteSpace(moniker) ? "acme" : moniker);
                     replacementsDictionary.Add("$securitymodel$", string.IsNullOrWhiteSpace(policy) ? "none" : "OAuth");

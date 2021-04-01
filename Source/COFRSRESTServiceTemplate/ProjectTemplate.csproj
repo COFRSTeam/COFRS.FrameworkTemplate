@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$packagesfolder$\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.1\build\net46\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props" Condition="Exists('$packagesfolder$\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.1\build\net46\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props')" />
+  <Import Project="..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.1\build\net46\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props" Condition="Exists('..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.1\build\net46\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -49,8 +49,8 @@
     <Reference Include="AutoMapper, Version=10.0.0.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
       <HintPath>..\packages\AutoMapper.10.1.1\lib\net461\AutoMapper.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS, Version=0.0.57.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.0.0.57-alpha\lib\$compactversion$\COFRS.dll</HintPath>
+    <Reference Include="COFRS, Version=0.0.59.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.0.0.59-alpha\lib\$compactversion$\COFRS.dll</HintPath>
     </Reference>
     <Reference Include="COFRS.Common, Version=0.0.22.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\COFRS.Common.0.0.22-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
@@ -70,14 +70,14 @@
 	  <Reference Include="Npgsql, Version=5.0.4.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
       <HintPath>..\packages\Npgsql.5.0.4.0\lib\netstandard2.0\Npgsql.dll</HintPath>
     </Reference>
-    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.51.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.51-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
+    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.52.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.52-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
     </Reference>
 	  <Reference Include="System.Data.SqlClient, Version=4.6.1.2, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
 		  <HintPath>..\packages\System.Data.SqlClient.4.8.2\lib\net461\System.Data.SqlClient.dll</HintPath>
 	  </Reference>
-	  $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.28.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.OAuth.0.0.28-alpha\lib\$compactversion$\COFRS.OAuth.dll</HintPath>
+	  $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.29.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.OAuth.0.0.29-alpha\lib\$compactversion$\COFRS.OAuth.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.IdentityModel.JsonWebTokens, Version=5.6.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.IdentityModel.JsonWebTokens.5.6.0\lib\net461\Microsoft.IdentityModel.JsonWebTokens.dll</HintPath>
@@ -458,11 +458,6 @@
 	</Reference>
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Microsoft.CodeDom.Providers.DotNetCompilerPlatform">
-      <HintPath>..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.1\lib\net45\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup>
     <Compile Include="App_Start\FilterConfig.cs" />
     <Compile Include="App_Start\RouteConfig.cs" />
     <Compile Include="App_Start\ServicesConfig.cs" />
@@ -478,7 +473,12 @@
     <Compile Include="Repository\ServiceRepository.cs" />
     <Compile Include="Startup.cs" />
   </ItemGroup>
-  <ItemGroup >
+	<ItemGroup>
+		<Reference Include="Microsoft.CodeDom.Providers.DotNetCompilerPlatform">
+			<HintPath>..\packages\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.1\lib\net45\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+	<ItemGroup >
     <Content Include="$safeprojectname$.xml" >
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
@@ -554,13 +554,7 @@
       </FlavorProperties>
     </VisualStudio>
   </ProjectExtensions>
-  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-    <PropertyGroup>
-      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
-    </PropertyGroup>
-    <Error Condition="!Exists('$packagesfolder$\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.1\build\net46\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props')" Text="$([System.String]::Format('$(ErrorText)', '$packagesfolder$\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.2.0.1\build\net46\Microsoft.CodeDom.Providers.DotNetCompilerPlatform.props'))" />
-  </Target>
-  <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
+	<!-- To modify your build process, add your task inside one of the targets below and uncomment it.
        Other similar extension points exist, see Microsoft.Common.targets.
   <Target Name="BeforeBuild">
   </Target>

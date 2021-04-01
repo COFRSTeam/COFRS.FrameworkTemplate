@@ -102,7 +102,10 @@ namespace COFRSFrameworkInstaller
                     replacementsDictionary.Add("$logPath$", logPath);
                     replacementsDictionary.Add("$portNumber$", portNumber.ToString());
                     replacementsDictionary.Add("$packagesfolder$", packagesFolder);
+
                     Proceed = true;
+
+
                 }
                 else
                 {
@@ -123,3 +126,6 @@ namespace COFRSFrameworkInstaller
         }
     }
 }
+
+
+

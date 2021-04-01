@@ -1,4 +1,6 @@
 ﻿using MySql.Data.MySqlClient;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using NpgsqlTypes;
 using System;
 using System.Collections.Generic;
@@ -12,6 +14,41 @@ namespace COFRSFrameworkInstaller
 {
 	public static class Utilities
 	{
+		public static List<string> LoadPolicies(string solutionFolder)
+		{
+			var results = new List<string>();
+
+			try
+			{
+				var configFile = Utilities.FindFile(solutionFolder, "appSettings.json");
+
+				if (string.IsNullOrWhiteSpace(configFile))
+					return null;
+
+				using (var stream = new FileStream(configFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+				{
+					using (var textReader = new StreamReader(stream))
+					{
+						using (var reader = new JsonTextReader(textReader))
+						{
+							var jsonConfig = JObject.Load(reader, new JsonLoadSettings { CommentHandling = CommentHandling.Ignore, LineInfoHandling = LineInfoHandling.Ignore });
+							var oAuth2Settings = jsonConfig["OAuth2"].Value<JObject>();
+							var policyArray = oAuth2Settings["Policies"].Value<JArray>();
+
+							foreach (var policy in policyArray)
+								results.Add(policy["Policy"].Value<string>());
+						}
+					}
+				}
+			}
+			catch (Exception)
+			{
+				results = null;
+			}
+
+			return results;
+		}
+
 		/// <summary>
 		/// Extracts the members of the resource class
 		/// </summary>
@@ -199,7 +236,7 @@ namespace COFRSFrameworkInstaller
 							{
 								ClassMember potentialMember = null;
 
-								potentialMember = members.FirstOrDefault(m => domainName.Length > m.ResourceMemberName.Length ? string.Equals(m.ResourceMemberName, domainName.Substring(0, m.ResourceMemberName.Length), StringComparison.OrdinalIgnoreCase) : false);
+								potentialMember = members.FirstOrDefault(m => domainName.Length > m.ResourceMemberName.Length && string.Equals(m.ResourceMemberName, domainName.Substring(0, m.ResourceMemberName.Length), StringComparison.OrdinalIgnoreCase));
 
 								if (potentialMember != null)
 								{
@@ -418,7 +455,7 @@ namespace COFRSFrameworkInstaller
 
 							if (member == null)
 							{
-								var potentialMember = members.FirstOrDefault(m => column.EntityName.Length > m.ResourceMemberName.Length ? string.Equals(m.ResourceMemberName, column.EntityName.Substring(0, m.ResourceMemberName.Length), StringComparison.OrdinalIgnoreCase) : false);
+								var potentialMember = members.FirstOrDefault(m => column.EntityName.Length > m.ResourceMemberName.Length && string.Equals(m.ResourceMemberName, column.EntityName.Substring(0, m.ResourceMemberName.Length), StringComparison.OrdinalIgnoreCase));
 
 								if (potentialMember != null)
 								{
@@ -533,20 +570,19 @@ namespace COFRSFrameworkInstaller
 
 		private static void LoadChildMembers(string folder, ClassMember member)
 		{
-			string memberProperName = string.Empty;
+            if (member.ResourceMemberType.Contains("<"))
+                return;
 
-			if (member.ResourceMemberType.Contains("<"))
+            if (member.ResourceMemberType.Contains(">"))
 				return;
 
-			if (member.ResourceMemberType.Contains(">"))
-				return;
+            string memberProperName;
+            if (member.ResourceMemberType.EndsWith("?"))
+                memberProperName = member.ResourceMemberType.Substring(0, member.ResourceMemberType.Length - 1);
+            else
+                memberProperName = member.ResourceMemberType;
 
-			if (member.ResourceMemberType.EndsWith("?"))
-				memberProperName = member.ResourceMemberType.Substring(0, member.ResourceMemberType.Length - 1);
-			else
-				memberProperName = member.ResourceMemberType;
-
-			var fileName = FindFile(folder, memberProperName + ".cs");
+            var fileName = FindFile(folder, memberProperName + ".cs");
 
 			if (!string.IsNullOrWhiteSpace(fileName))
 			{

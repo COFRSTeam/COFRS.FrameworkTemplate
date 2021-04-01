@@ -56,6 +56,8 @@
             this.pictureBox1 = new System.Windows.Forms.PictureBox();
             this._portNumber = new System.Windows.Forms.NumericUpDown();
             this.panel1 = new System.Windows.Forms.Panel();
+            this.policyCombo = new System.Windows.Forms.ComboBox();
+            this.PolicyLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this._portNumber)).BeginInit();
             this.panel1.SuspendLayout();
@@ -276,7 +278,7 @@
             this._resourceModelList.FormattingEnabled = true;
             this._resourceModelList.Location = new System.Drawing.Point(103, 245);
             this._resourceModelList.Name = "_resourceModelList";
-            this._resourceModelList.Size = new System.Drawing.Size(314, 21);
+            this._resourceModelList.Size = new System.Drawing.Size(324, 21);
             this._resourceModelList.TabIndex = 31;
             this._resourceModelList.SelectedIndexChanged += new System.EventHandler(this.OnResourceModelChanged);
             // 
@@ -342,6 +344,24 @@
             this.panel1.Size = new System.Drawing.Size(942, 100);
             this.panel1.TabIndex = 39;
             // 
+            // policyCombo
+            // 
+            this.policyCombo.FormattingEnabled = true;
+            this.policyCombo.Location = new System.Drawing.Point(570, 245);
+            this.policyCombo.Name = "policyCombo";
+            this.policyCombo.Size = new System.Drawing.Size(324, 21);
+            this.policyCombo.Sorted = true;
+            this.policyCombo.TabIndex = 40;
+            // 
+            // PolicyLabel
+            // 
+            this.PolicyLabel.AutoSize = true;
+            this.PolicyLabel.Location = new System.Drawing.Point(472, 248);
+            this.PolicyLabel.Name = "PolicyLabel";
+            this.PolicyLabel.Size = new System.Drawing.Size(35, 13);
+            this.PolicyLabel.TabIndex = 41;
+            this.PolicyLabel.Text = "Policy";
+            // 
             // UserInputGeneral
             // 
             this.AcceptButton = this._okButton;
@@ -349,6 +369,8 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.CancelButton = this._cancelButton;
             this.ClientSize = new System.Drawing.Size(906, 575);
+            this.Controls.Add(this.PolicyLabel);
+            this.Controls.Add(this.policyCombo);
             this.Controls.Add(this.panel1);
             this.Controls.Add(this._portNumber);
             this.Controls.Add(this._removeServerButton);
@@ -417,5 +439,7 @@
 		private System.Windows.Forms.Button _removeServerButton;
 		private System.Windows.Forms.NumericUpDown _portNumber;
 		private System.Windows.Forms.Panel panel1;
-	}
+        public System.Windows.Forms.ComboBox policyCombo;
+        private System.Windows.Forms.Label PolicyLabel;
+    }
 }
