@@ -49,8 +49,8 @@
     <Reference Include="AutoMapper, Version=10.0.0.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
       <HintPath>..\packages\AutoMapper.10.1.1\lib\net461\AutoMapper.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS, Version=0.0.61.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.0.0.61-alpha\lib\$compactversion$\COFRS.dll</HintPath>
+    <Reference Include="COFRS, Version=0.0.62.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.0.0.62-alpha\lib\$compactversion$\COFRS.dll</HintPath>
     </Reference>
     <Reference Include="COFRS.Common, Version=0.0.23.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\COFRS.Common.0.0.23-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
@@ -70,14 +70,14 @@
 	  <Reference Include="Npgsql, Version=5.0.4.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
       <HintPath>..\packages\Npgsql.5.0.4.0\lib\netstandard2.0\Npgsql.dll</HintPath>
     </Reference>
-    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.54.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.54-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
+    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.55.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.55-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
     </Reference>
 	  <Reference Include="System.Data.SqlClient, Version=4.6.1.2, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
 		  <HintPath>..\packages\System.Data.SqlClient.4.8.2\lib\net461\System.Data.SqlClient.dll</HintPath>
 	  </Reference>
-	  $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.30.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.OAuth.0.0.30-alpha\lib\$compactversion$\COFRS.OAuth.dll</HintPath>
+	  $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.31.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.OAuth.0.0.31-alpha\lib\$compactversion$\COFRS.OAuth.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.IdentityModel.JsonWebTokens, Version=5.6.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.IdentityModel.JsonWebTokens.5.6.0\lib\net461\Microsoft.IdentityModel.JsonWebTokens.dll</HintPath>

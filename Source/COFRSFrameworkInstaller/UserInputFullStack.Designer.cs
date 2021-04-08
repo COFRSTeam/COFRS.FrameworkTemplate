@@ -356,6 +356,7 @@ namespace COFRSFrameworkInstaller
             // 
             // policyCombo
             // 
+            this.policyCombo.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.policyCombo.FormattingEnabled = true;
             this.policyCombo.Location = new System.Drawing.Point(561, 250);
             this.policyCombo.Name = "policyCombo";
