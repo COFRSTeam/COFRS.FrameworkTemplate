@@ -49,8 +49,8 @@
     <Reference Include="AutoMapper, Version=10.0.0.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
       <HintPath>..\packages\AutoMapper.10.1.1\lib\net461\AutoMapper.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS, Version=0.0.62.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.0.0.62-alpha\lib\$compactversion$\COFRS.dll</HintPath>
+    <Reference Include="COFRS, Version=0.0.64.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.0.0.64-alpha\lib\$compactversion$\COFRS.dll</HintPath>
     </Reference>
     <Reference Include="COFRS.Common, Version=0.0.25.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\COFRS.Common.0.0.25-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
@@ -64,8 +64,8 @@
     $endif$$if$ ($databasetech$ == postgresql)<Reference Include="System.Threading.Channels, Version=5.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Threading.Channels.5.0.0\lib\net461\System.Threading.Channels.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS.Postgresql, Version=0.0.18.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.Postgresql.0.0.18-alpha\lib\$compactversion$\COFRS.Postgresql.dll</HintPath>
+    <Reference Include="COFRS.Postgresql, Version=0.0.19.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.Postgresql.0.0.19-alpha\lib\$compactversion$\COFRS.Postgresql.dll</HintPath>
     </Reference>
 	  <Reference Include="Npgsql, Version=5.0.4.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
       <HintPath>..\packages\Npgsql.5.0.4.0\lib\netstandard2.0\Npgsql.dll</HintPath>
