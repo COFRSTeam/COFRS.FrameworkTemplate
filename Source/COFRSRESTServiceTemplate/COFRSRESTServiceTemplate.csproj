@@ -85,6 +85,7 @@
   <ItemGroup>
     <Content Include="COFRS.ico" />
     <Content Include="Models\SwaggerExamples\HeartbeatExample.cs" />
+    <Content Include="ReadMe.txt" />
     <Content Include="Repository\ServiceRepository.cs" />
     <Content Include="Repository\IServiceRepository.cs" />
     <Content Include="COFRS.Common.xml" />
@@ -113,7 +114,9 @@
     <Content Include="appSettings.Production.json" />
     <Content Include="appSettings.QA.json" />
     <Content Include="appSettings.Staging.json" />
-    <None Include="ProjectTemplate.csproj" />
+    <Content Include="ProjectTemplate.csproj">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Content Include="Web.config" />
     <Content Include="Web.Debug.config" />
     <Content Include="Web.Release.config" />

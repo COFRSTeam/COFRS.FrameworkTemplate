@@ -69,7 +69,7 @@ namespace COFRSFrameworkInstaller
                     var compactVersion = replacementsDictionary["$targetframeworkversion$"];
                     compactVersion = "net" + compactVersion.Replace(".", "");
 
-                    var logPath = Path.Combine(replacementsDictionary["$destinationdirectory$"], "App_Data\\log-{Date}.json").Replace("\\", "\\\\");
+                    var logPath = Path.Combine(replacementsDictionary["$destinationdirectory$"], "App_Data\\log-{Date}.json");
 
                     var portNumber = randomNumberGenerator.Next(1024, 65534);
 
