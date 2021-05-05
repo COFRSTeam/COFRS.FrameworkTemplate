@@ -1,12 +1,15 @@
 ﻿using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using Npgsql;
+using NpgsqlTypes;
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace COFRSFrameworkInstaller
@@ -18,7 +21,12 @@ namespace COFRSFrameworkInstaller
 		private bool Populating = false;
 		public DBTable DatabaseTable { get; set; }
 		public List<DBColumn> DatabaseColumns { get; set; }
+		public string SolutionFolder { get; set; }
+		public string RootNamespace { get; set; }
 		public string ConnectionString { get; set; }
+		public string DefaultConnectionString { get; set; }
+		public List<EntityClassFile> _entityClassList { get; set; }
+		public Dictionary<string, string> replacementsDictionary { get; set; }
 		#endregion
 
 		#region Utility functions
@@ -37,8 +45,11 @@ namespace COFRSFrameworkInstaller
 		/// <param name="e"></param>
 		private void OnLoad(object sender, EventArgs e)
 		{
+			_portNumber.Location = new Point(93, 60);
 			DatabaseColumns = new List<DBColumn>();
+			LoadAppSettings();
 			ReadServerList();
+			_entityClassList = Utilities.LoadEntityClassList(SolutionFolder);
 		}
 		#endregion
 
@@ -186,24 +197,49 @@ namespace COFRSFrameworkInstaller
 		{
 			try
 			{
+				_tableList.SelectedIndex = -1;
+
 				var server = (DBServer)_serverList.SelectedItem;
 				var db = (string)_dbList.SelectedItem;
 
 				if (server.DBType == DBServerType.POSTGRESQL)
 				{
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
-					ConnectionString = connectionString;
 					_tableList.Items.Clear();
 
+					ConnectionString = connectionString;
 					using (var connection = new NpgsqlConnection(connectionString))
 					{
 						connection.Open();
 
 						var query = @"
-SELECT schemaname, tablename
+select schemaname, elementname
+  from (
+SELECT schemaname as schemaName, 
+       tablename as elementName
   FROM pg_catalog.pg_tables
- WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema';
-";
+ WHERE schemaname != 'pg_catalog' AND schemaname != 'information_schema'
+
+union all
+
+select n.nspname as schemaName, 
+       t.typname as elementName
+  from pg_type as t 
+ inner join pg_catalog.pg_namespace n on n.oid = t.typnamespace
+ WHERE ( t.typrelid = 0
+                OR ( SELECT c.relkind = 'c'
+                        FROM pg_catalog.pg_class c
+                        WHERE c.oid = t.typrelid ) )
+            AND NOT EXISTS (
+                    SELECT 1
+                        FROM pg_catalog.pg_type el
+                        WHERE el.oid = t.typelem
+                        AND el.typarray = t.oid )
+            AND n.nspname <> 'pg_catalog'
+            AND n.nspname <> 'information_schema'
+            AND n.nspname !~ '^pg_toast'
+			and ( t.typcategory = 'C' or t.typcategory = 'E' ) ) as X
+order by schemaname, elementname";
 
 						using (var command = new NpgsqlCommand(query, connection))
 						{
@@ -226,9 +262,9 @@ SELECT schemaname, tablename
 				else if (server.DBType == DBServerType.MYSQL)
 				{
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};UID={server.Username};PWD={_password.Text};";
-					ConnectionString = connectionString;
 					_tableList.Items.Clear();
 
+					ConnectionString = connectionString;
 					using (var connection = new MySqlConnection(connectionString))
 					{
 						connection.Open();
@@ -270,6 +306,7 @@ SELECT TABLE_SCHEMA, TABLE_NAME FROM information_schema.tables
 						connectionString = $"Server={server.ServerName};Database={db};uid={server.Username};pwd={_password.Text};";
 
 					ConnectionString = connectionString;
+
 					_tableList.Items.Clear();
 
 					using (var connection = new SqlConnection(connectionString))
@@ -300,8 +337,7 @@ select s.name, t.name
 					}
 				}
 
-				if (_tableList.Items.Count > 0)
-					_tableList.SelectedIndex = 0;
+				_tableList.SelectedIndex = -1;
 			}
 			catch (Exception error)
 			{
@@ -309,8 +345,36 @@ select s.name, t.name
 			}
 		}
 
+		private string FindEntityModelsFolder(string folder)
+		{
+			if (string.Equals(Path.GetFileName(folder), "EntityModels", StringComparison.OrdinalIgnoreCase))
+				return folder;
+
+			foreach (var childfolder in Directory.GetDirectories(folder))
+			{
+				var result = FindEntityModelsFolder(childfolder);
+
+				if (!string.IsNullOrWhiteSpace(result))
+					return result;
+			}
+
+			return string.Empty;
+		}
+
+		private ElementType GetElementType(string Schema, string elementName, string connectionString)
+		{
+			var classFile = _entityClassList.FirstOrDefault(c => string.Equals(c.SchemaName, Schema, StringComparison.OrdinalIgnoreCase) && string.Equals(c.TableName, elementName, StringComparison.OrdinalIgnoreCase));
+
+			if (classFile != null)
+				return classFile.ElementType;
+
+			return DBHelper.GetElementType(Schema, elementName, connectionString);
+		}
+
 		private void OnSelectedTableChanged(object sender, EventArgs e)
 		{
+			_okButton.Enabled = true;
+
 			try
 			{
 				var server = (DBServer)_serverList.SelectedItem;
@@ -331,11 +395,21 @@ select s.name, t.name
 				{
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
 
-					using (var connection = new NpgsqlConnection(connectionString))
-					{
-						connection.Open();
+					var elementType = GetElementType(table.Schema, table.Table, connectionString);
 
-						var query = @"
+					switch (elementType)
+					{
+						case ElementType.Enum:
+							break;
+
+						case ElementType.Composite:
+							{
+								List<EntityClassFile> UnknownElementsList = new List<EntityClassFile>();
+								using (var connection = new NpgsqlConnection(connectionString))
+								{
+									connection.Open();
+
+									var query = @"
 select a.attname as columnname,
 	   t.typname as datatype,
 	   case when t.typname = 'varchar' then a.atttypmod-4
@@ -344,8 +418,27 @@ select a.attname as columnname,
 			when t.typname = '_bpchar' then a.atttypmod-4
 	        when a.atttypmod > -1 then a.atttypmod
 	        else a.attlen end as max_len,
+	   case atttypid
+            when 21 /*int2*/ then 16
+            when 23 /*int4*/ then 32
+            when 20 /*int8*/ then 64
+         	when 1700 /*numeric*/ then
+              	case when atttypmod = -1
+                     then 0
+                     else ((atttypmod - 4) >> 16) & 65535     -- calculate the precision
+                     end
+         	when 700 /*float4*/ then 24 /*FLT_MANT_DIG*/
+         	when 701 /*float8*/ then 53 /*DBL_MANT_DIG*/
+         	else 0
+  			end as numeric_precision,
+  		case when atttypid in (21, 23, 20) then 0
+    		 when atttypid in (1700) then            
+        		  case when atttypmod = -1 then 0       
+            		   else (atttypmod - 4) & 65535            -- calculate the scale  
+        			   end
+       		else 0
+  			end as numeric_scale,		
 	   not a.attnotnull as is_nullable,
-
 	   case when ( a.attgenerated = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
                  || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
                  || '''::regclass)')
@@ -360,7 +453,7 @@ select a.attname as columnname,
 	   case when (select indrelid from pg_index as ix where ix.indrelid = c.oid and a.attnum = ANY(ix.indkey)) = c.oid then true else false end as is_indexed,
 	   case when (select conrelid from pg_constraint as cx where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) = c.oid then true else false end as is_foreignkey,
        (  select cc.relname from pg_constraint as cx inner join pg_class as cc on cc.oid = cx.confrelid where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) as foeigntablename
-  from pg_class as c
+   from pg_class as c
   inner join pg_namespace as ns on ns.oid = c.relnamespace
   inner join pg_attribute as a on a.attrelid = c.oid and not a.attisdropped and attnum > 0
   inner join pg_type as t on t.oid = a.atttypid
@@ -370,34 +463,238 @@ select a.attname as columnname,
  order by a.attnum
 ";
 
-						using (var command = new NpgsqlCommand(query, connection))
-						{
-							command.Parameters.AddWithValue("@schema", table.Schema);
-							command.Parameters.AddWithValue("@tablename", table.Table);
-							using (var reader = command.ExecuteReader())
-							{
-								while (reader.Read())
-								{
-									var dbColumn = new DBColumn
+									using (var command = new NpgsqlCommand(query, connection))
 									{
-										ColumnName = reader.GetString(0),
-										DataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1)),
-										dbDataType = reader.GetString(1),
-										Length = Convert.ToInt64(reader.GetValue(2)),
-										IsNullable = Convert.ToBoolean(reader.GetValue(3)),
-										IsComputed = Convert.ToBoolean(reader.GetValue(4)),
-										IsIdentity = Convert.ToBoolean(reader.GetValue(5)),
-										IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6)),
-										IsIndexed = Convert.ToBoolean(reader.GetValue(7)),
-										IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-										ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-										ServerType = DBServerType.POSTGRESQL
-									};
+										command.Parameters.AddWithValue("@schema", table.Schema);
+										command.Parameters.AddWithValue("@tablename", table.Table);
 
-									DatabaseColumns.Add(dbColumn);
+										using (var reader = command.ExecuteReader())
+										{
+											while (reader.Read())
+											{
+												NpgsqlDbType dataType = NpgsqlDbType.Unknown;
+
+												try
+												{
+													dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
+												}
+												catch (InvalidCastException)
+												{
+													var unknownClass = _entityClassList.FirstOrDefault(c =>
+														string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
+														string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
+
+													if (unknownClass == null)
+													{
+														unknownClass = new EntityClassFile()
+														{
+															SchemaName = table.Schema,
+															ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
+															TableName = reader.GetString(1),
+														};
+
+														UnknownElementsList.Add(unknownClass);
+													}
+												}
+
+												var dbColumn = new DBColumn
+												{
+													ColumnName = reader.GetString(0),
+													DataType = dataType,
+													dbDataType = reader.GetString(1),
+													Length = Convert.ToInt64(reader.GetValue(2)),
+													NumericPrecision = Convert.ToInt32(reader.GetValue(3)),
+													NumericScale = Convert.ToInt32(reader.GetValue(4)),
+													IsNullable = Convert.ToBoolean(reader.GetValue(5)),
+													IsComputed = Convert.ToBoolean(reader.GetValue(6)),
+													IsIdentity = Convert.ToBoolean(reader.GetValue(7)),
+													IsPrimaryKey = Convert.ToBoolean(reader.GetValue(8)),
+													IsIndexed = Convert.ToBoolean(reader.GetValue(9)),
+													IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
+													ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
+													ServerType = DBServerType.POSTGRESQL
+												};
+
+												DatabaseColumns.Add(dbColumn);
+											}
+										}
+									}
+								}
+
+								foreach (var unknownClass in UnknownElementsList)
+								{
+									unknownClass.ElementType = GetElementType(unknownClass.SchemaName, unknownClass.TableName, connectionString);
+
+									if (unknownClass.ElementType == ElementType.Enum)
+									{
+										var answer = MessageBox.Show($"The composite {table.Table} uses an enum type of {unknownClass.TableName}.\r\n\r\nNo enum class corresponding to {unknownClass.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding enum definition for {unknownClass.TableName}.\r\n\r\nWould you like to generate the {unknownClass.TableName} enum as part of generating this class?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+										if (answer == DialogResult.No)
+											_okButton.Enabled = false;
+									}
+									else if (unknownClass.ElementType == ElementType.Composite)
+									{
+										var answer = MessageBox.Show($"The composite {table.Table} uses a composite type of {unknownClass.TableName}.\r\n\r\nNo composite class corresponding to {unknownClass.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding composite definition for {unknownClass.TableName}.\r\n\r\nWould you like to generate the {unknownClass.TableName} composite as part of generating this class?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+										if (answer == DialogResult.No)
+											_okButton.Enabled = false;
+									}
+								}
+
+								if (_okButton.Enabled)
+								{
+									var emitter = new Emitter();
+									emitter.GenerateComposites(UnknownElementsList, connectionString, replacementsDictionary["$rootnamespace$"], replacementsDictionary, _entityClassList);
 								}
 							}
-						}
+							break;
+
+						case ElementType.Table:
+							{
+								List<EntityClassFile> UnknownElementsList = new List<EntityClassFile>();
+								using (var connection = new NpgsqlConnection(connectionString))
+								{
+									connection.Open();
+
+									var query = @"
+select a.attname as columnname,
+	   t.typname as datatype,
+	   case when t.typname = 'varchar' then a.atttypmod-4
+	        when t.typname = 'bpchar' then a.atttypmod-4
+			when t.typname = '_varchar' then a.atttypmod-4
+			when t.typname = '_bpchar' then a.atttypmod-4
+	        when a.atttypmod > -1 then a.atttypmod
+	        else a.attlen end as max_len,
+	   case atttypid
+            when 21 /*int2*/ then 16
+            when 23 /*int4*/ then 32
+            when 20 /*int8*/ then 64
+         	when 1700 /*numeric*/ then
+              	case when atttypmod = -1
+                     then 0
+                     else ((atttypmod - 4) >> 16) & 65535     -- calculate the precision
+                     end
+         	when 700 /*float4*/ then 24 /*FLT_MANT_DIG*/
+         	when 701 /*float8*/ then 53 /*DBL_MANT_DIG*/
+         	else 0
+  			end as numeric_precision,
+  		case when atttypid in (21, 23, 20) then 0
+    		 when atttypid in (1700) then            
+        		  case when atttypmod = -1 then 0       
+            		   else (atttypmod - 4) & 65535            -- calculate the scale  
+        			   end
+       		else 0
+  			end as numeric_scale,		
+	   not a.attnotnull as is_nullable,
+	   case when ( a.attgenerated = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
+                 || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
+                 || '''::regclass)')
+	        then true else false end as is_computed,
+
+	   case when ( a.attidentity = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
+                 || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
+                 || '''::regclass)')
+	        then true else false end as is_identity,
+
+	   case when (select indrelid from pg_index as px where px.indisprimary = true and px.indrelid = c.oid and a.attnum = ANY(px.indkey)) = c.oid then true else false end as is_primary,
+	   case when (select indrelid from pg_index as ix where ix.indrelid = c.oid and a.attnum = ANY(ix.indkey)) = c.oid then true else false end as is_indexed,
+	   case when (select conrelid from pg_constraint as cx where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) = c.oid then true else false end as is_foreignkey,
+       (  select cc.relname from pg_constraint as cx inner join pg_class as cc on cc.oid = cx.confrelid where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) as foeigntablename
+   from pg_class as c
+  inner join pg_namespace as ns on ns.oid = c.relnamespace
+  inner join pg_attribute as a on a.attrelid = c.oid and not a.attisdropped and attnum > 0
+  inner join pg_type as t on t.oid = a.atttypid
+  left outer join pg_attrdef as ad on ad.adrelid = a.attrelid and ad.adnum = a.attnum 
+  where ns.nspname = @schema
+    and c.relname = @tablename
+ order by a.attnum
+";
+
+									using (var command = new NpgsqlCommand(query, connection))
+									{
+										command.Parameters.AddWithValue("@schema", table.Schema);
+										command.Parameters.AddWithValue("@tablename", table.Table);
+
+										using (var reader = command.ExecuteReader())
+										{
+											while (reader.Read())
+											{
+												NpgsqlDbType dataType = NpgsqlDbType.Unknown;
+
+												try
+												{
+													dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
+												}
+												catch (InvalidCastException)
+												{
+													var unknownClass = _entityClassList.FirstOrDefault(c =>
+														string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
+														string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
+
+													if (unknownClass == null)
+													{
+														unknownClass = new EntityClassFile()
+														{
+															SchemaName = table.Schema,
+															ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
+															TableName = reader.GetString(1),
+														};
+
+														UnknownElementsList.Add(unknownClass);
+													}
+												}
+
+												var dbColumn = new DBColumn
+												{
+													ColumnName = reader.GetString(0),
+													DataType = dataType,
+													dbDataType = reader.GetString(1),
+													Length = Convert.ToInt64(reader.GetValue(2)),
+													NumericPrecision = Convert.ToInt32(reader.GetValue(3)),
+													NumericScale = Convert.ToInt32(reader.GetValue(4)),
+													IsNullable = Convert.ToBoolean(reader.GetValue(5)),
+													IsComputed = Convert.ToBoolean(reader.GetValue(6)),
+													IsIdentity = Convert.ToBoolean(reader.GetValue(7)),
+													IsPrimaryKey = Convert.ToBoolean(reader.GetValue(8)),
+													IsIndexed = Convert.ToBoolean(reader.GetValue(9)),
+													IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
+													ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
+													ServerType = DBServerType.POSTGRESQL
+												};
+
+												DatabaseColumns.Add(dbColumn);
+											}
+										}
+									}
+
+									foreach (var unknownClass in UnknownElementsList)
+									{
+										unknownClass.ElementType = GetElementType(unknownClass.SchemaName, unknownClass.TableName, connectionString);
+
+										if (unknownClass.ElementType == ElementType.Enum)
+										{
+											var answer = MessageBox.Show($"The composite {table.Table} uses an enum type of {unknownClass.TableName}.\r\n\r\nNo enum class corresponding to {unknownClass.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding enum definition for {unknownClass.TableName}.\r\n\r\nWould you like to generate the {unknownClass.TableName} enum as part of generating this class?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+											if (answer == DialogResult.No)
+												_okButton.Enabled = false;
+										}
+										else if (unknownClass.ElementType == ElementType.Composite)
+										{
+											var answer = MessageBox.Show($"The composite {table.Table} uses a composite type of {unknownClass.TableName}.\r\n\r\nNo composite class corresponding to {unknownClass.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding composite definition for {unknownClass.TableName}.\r\n\r\nWould you like to generate the {unknownClass.TableName} composite as part of generating this class?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+											if (answer == DialogResult.No)
+												_okButton.Enabled = false;
+										}
+									}
+								}
+
+								if (_okButton.Enabled)
+								{
+									var emitter = new Emitter();
+									emitter.GenerateComposites(UnknownElementsList, connectionString, replacementsDictionary["$rootnamespace$"], replacementsDictionary, _entityClassList);
+								}
+							}
+							break;
 					}
 				}
 				else if (server.DBType == DBServerType.MYSQL)
@@ -413,7 +710,7 @@ SELECT c.COLUMN_NAME as 'columnName',
        c.COLUMN_TYPE as 'datatype',
        case when c.CHARACTER_MAXIMUM_LENGTH is null then -1 else c.CHARACTER_MAXIMUM_LENGTH end as 'max_len',
        case when c.NUMERIC_PRECISION is null then 0 else c.NUMERIC_PRECISION end as 'precision',
-        case when c.NUMERIC_SCALE is null then 0 else c.NUMERIC_SCALE end as 'scale',       
+       case when c.NUMERIC_SCALE is null then 0 else c.NUMERIC_SCALE end as 'scale',       
 	   case when c.GENERATION_EXPRESSION != '' then 1 else 0 end as 'is_computed',
        case when c.EXTRA = 'auto_increment' then 1 else 0 end as 'is_identity',
        case when c.COLUMN_KEY = 'PRI' then 1 else 0 end as 'is_primary',
@@ -430,7 +727,6 @@ left outer join information_schema.KEY_COLUMN_USAGE as cu on cu.CONSTRAINT_SCHEM
   AND c.TABLE_NAME=@tablename
 ORDER BY c.ORDINAL_POSITION;
 ";
-
 
 						using (var command = new MySqlCommand(query, connection))
 						{
@@ -461,7 +757,6 @@ ORDER BY c.ORDINAL_POSITION;
 									};
 
 									DatabaseColumns.Add(dbColumn);
-
 								}
 							}
 						}
@@ -541,14 +836,14 @@ select c.name as column_name,
 									if (string.Equals(dbColumn.dbDataType, "geometry", StringComparison.OrdinalIgnoreCase))
 									{
 										_tableList.SelectedIndex = -1;
-										MessageBox.Show("COFRS does not support the SQL Server geometry data type. You cannot create an entity model from this table.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+										MessageBox.Show(".NET Core does not support the SQL Server geometry data type. You cannot create an entity model from this table.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 										return;
 									}
 
 									if (string.Equals(dbColumn.dbDataType, "geography", StringComparison.OrdinalIgnoreCase))
 									{
 										_tableList.SelectedIndex = -1;
-										MessageBox.Show("COFRS does not support the SQL Server geography data type. You cannot create an entity model from this table.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+										MessageBox.Show(".NET Core does not support the SQL Server geography data type. You cannot create an entity model from this table.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
 										return;
 									}
 
@@ -632,6 +927,36 @@ select c.name as column_name,
 				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
 			}
 		}
+
+		private void OnPortNumberChanged(object sender, EventArgs e)
+		{
+			try
+			{
+				if (!Populating)
+				{
+					_dbList.Items.Clear();
+					_tableList.Items.Clear();
+					var server = (DBServer)_serverList.SelectedItem;
+
+					if (server != null)
+					{
+						server.PortNumber = Convert.ToInt32(_portNumber.Value);
+
+						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
+
+						Save();
+
+						if (TestConnection(server))
+							PopulateDatabases();
+					}
+				}
+			}
+			catch (Exception error)
+			{
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+			}
+		}
+
 
 		private void OnSavePasswordChanged(object sender, EventArgs e)
 		{
@@ -948,156 +1273,175 @@ select c.name as column_name,
 		{
 			var server = (DBServer)_serverList.SelectedItem;
 
-			switch (server.DBType)
+			if (server.DBType == DBServerType.POSTGRESQL)
 			{
-				case DBServerType.MYSQL:
-					PopulateMySql(server);
-					break;
+				if (string.IsNullOrWhiteSpace(_password.Text))
+					return;
 
-				case DBServerType.POSTGRESQL:
-					PopulatePostgresql(server);
-					break;
+				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database=postgres;User ID={server.Username};Password={_password.Text};";
 
-				case DBServerType.SQLSERVER:
-					PopulateSqlServer(server);
-					break;
+				_dbList.Items.Clear();
+				_tableList.Items.Clear();
+				int selectedItem = -1;
 
-				default:
-					MessageBox.Show("Unrecognized Database Type\r\nPlease select a database that is either MySQL, Postgresql, or SQL Server.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-					break;
-			}
-		}
-
-		private void PopulateSqlServer(DBServer server)
-		{
-			string connectionString;
-
-			if (server.DBAuth == DBAuthentication.SQLSERVERAUTH && string.IsNullOrWhiteSpace(_password.Text))
-				return;
-
-			if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
-				connectionString = $"Server={server.ServerName};Database=master;Trusted_Connection=True;";
-			else
-				connectionString = $"Server={server.ServerName};Database=master;uid={server.Username};pwd={_password.Text};";
-
-			_dbList.Items.Clear();
-			_tableList.Items.Clear();
-
-			try
-			{
-				using (var connection = new SqlConnection(connectionString))
+				try
 				{
-					connection.Open();
-
-					var query = @"
-select name
-  from sys.databases with(nolock)
- where name not in ( 'master', 'model', 'msdb', 'tempdb' )
- order by name";
-
-					using (var command = new SqlCommand(query, connection))
+					using (var connection = new NpgsqlConnection(connectionString))
 					{
-						using (var reader = command.ExecuteReader())
-						{
-							while (reader.Read())
-							{
-								_dbList.Items.Add(reader.GetString(0));
-							}
-						}
-					}
-				}
+						connection.Open();
 
-				if (_dbList.Items.Count > 0)
-					_dbList.SelectedIndex = 0;
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void PopulateMySql(DBServer server)
-		{
-			if (string.IsNullOrWhiteSpace(_password.Text))
-				return;
-
-			string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database=mysql;UID={server.Username};PWD={_password.Text};";
-
-			_dbList.Items.Clear();
-			_tableList.Items.Clear();
-
-			try
-			{
-				using (var connection = new MySqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = @"
-select SCHEMA_NAME from information_schema.SCHEMATA
- where SCHEMA_NAME not in ( 'information_schema', 'performance_schema', 'sys', 'mysql');";
-
-					using (var command = new MySqlCommand(query, connection))
-					{
-						using (var reader = command.ExecuteReader())
-						{
-							while (reader.Read())
-							{
-								_dbList.Items.Add(reader.GetString(0));
-							}
-						}
-					}
-				}
-
-				if (_dbList.Items.Count > 0)
-					_dbList.SelectedIndex = 0;
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void PopulatePostgresql(DBServer server)
-		{
-			if (string.IsNullOrWhiteSpace(_password.Text))
-				return;
-
-			string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database=postgres;User ID={server.Username};Password={_password.Text};";
-
-			_dbList.Items.Clear();
-			_tableList.Items.Clear();
-
-			try
-			{
-				using (var connection = new NpgsqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = @"
+						var query = @"
 SELECT datname 
   FROM pg_database
  WHERE datistemplate = false
    AND datname != 'postgres'
  ORDER BY datname";
 
-					using (var command = new NpgsqlCommand(query, connection))
-					{
-						using (var reader = command.ExecuteReader())
+						using (var command = new NpgsqlCommand(query, connection))
 						{
-							while (reader.Read())
+							using (var reader = command.ExecuteReader())
 							{
-								_dbList.Items.Add(reader.GetString(0));
+								int itemindex = 0;
+
+								while (reader.Read())
+								{
+									var databaseName = reader.GetString(0);
+
+									_dbList.Items.Add(databaseName);
+
+									string cs = $"Server={server.ServerName};Port={server.PortNumber};Database={databaseName};User ID={server.Username};Password={_password.Text};";
+
+									if (string.Equals(cs, DefaultConnectionString, StringComparison.OrdinalIgnoreCase))
+										selectedItem = itemindex;
+
+									itemindex++;
+								}
 							}
 						}
 					}
-				}
 
-				if (_dbList.Items.Count > 0)
-					_dbList.SelectedIndex = 0;
+					if (_dbList.Items.Count > 0)
+						_dbList.SelectedIndex = selectedItem;
+				}
+				catch (Exception error)
+				{
+					MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
 			}
-			catch (Exception error)
+			else if (server.DBType == DBServerType.MYSQL)
 			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				if (string.IsNullOrWhiteSpace(_password.Text))
+					return;
+
+				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database=mysql;UID={server.Username};PWD={_password.Text};";
+
+				_dbList.Items.Clear();
+				_tableList.Items.Clear();
+				int selectedItem = -1;
+
+				try
+				{
+					using (var connection = new MySqlConnection(connectionString))
+					{
+						connection.Open();
+
+						var query = @"
+select SCHEMA_NAME from information_schema.SCHEMATA
+ where SCHEMA_NAME not in ( 'information_schema', 'performance_schema', 'sys', 'mysql');";
+
+						using (var command = new MySqlCommand(query, connection))
+						{
+							using (var reader = command.ExecuteReader())
+							{
+								int itemindex = 0;
+
+								while (reader.Read())
+								{
+									var databaseName = reader.GetString(0);
+
+									_dbList.Items.Add(databaseName);
+
+									string cs = $"Server={server.ServerName};Port={server.PortNumber};Database={databaseName};UID={server.Username};PWD={_password.Text};";
+
+									if (string.Equals(cs, DefaultConnectionString, StringComparison.OrdinalIgnoreCase))
+										selectedItem = itemindex;
+
+									itemindex++;
+								}
+							}
+						}
+					}
+
+					if (_dbList.Items.Count > 0)
+						_dbList.SelectedIndex = selectedItem;
+				}
+				catch (Exception error)
+				{
+					MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
+			}
+			else
+			{
+				string connectionString;
+
+				if (server.DBAuth == DBAuthentication.SQLSERVERAUTH && string.IsNullOrWhiteSpace(_password.Text))
+					return;
+
+				if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
+					connectionString = $"Server={server.ServerName};Database=master;Trusted_Connection=True;";
+				else
+					connectionString = $"Server={server.ServerName};Database=master;uid={server.Username};pwd={_password.Text};";
+
+				_dbList.Items.Clear();
+				_tableList.Items.Clear();
+				int selectedItem = -1;
+
+				try
+				{
+					using (var connection = new SqlConnection(connectionString))
+					{
+						connection.Open();
+
+						var query = @"
+select name
+  from sys.databases with(nolock)
+ where name not in ( 'master', 'model', 'msdb', 'tempdb' )
+ order by name";
+
+						using (var command = new SqlCommand(query, connection))
+						{
+							using (var reader = command.ExecuteReader())
+							{
+								int itemindex = 0;
+
+								while (reader.Read())
+								{
+									var databaseName = reader.GetString(0);
+
+									_dbList.Items.Add(databaseName);
+									string cs;
+
+									if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
+										cs = $"Server={server.ServerName};Database={databaseName};Trusted_Connection=True;";
+									else
+										cs = $"Server={server.ServerName};Database={databaseName};uid={server.Username};pwd={_password.Text};";
+
+									if (string.Equals(cs, DefaultConnectionString, StringComparison.OrdinalIgnoreCase))
+										selectedItem = itemindex;
+
+									itemindex++;
+								}
+							}
+						}
+					}
+
+					if (_dbList.Items.Count > 0)
+						_dbList.SelectedIndex = selectedItem;
+				}
+				catch (Exception error)
+				{
+					MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				}
 			}
 		}
 
@@ -1226,10 +1570,38 @@ SELECT datname
 			//	the windows controls.
 			if (_serverConfig.Servers.Count() > 0)
 			{
+				int LastServerUsed = _serverConfig.LastServerUsed;
 				//	When we populate the windows controls, ensure that the last server that
 				//	the user used is in the visible list, and make sure it is the one
 				//	selected.
-				var dbServer = _serverConfig.Servers.ToList()[_serverConfig.LastServerUsed];
+				for (int candidate = 0; candidate < _serverConfig.Servers.ToList().Count(); candidate++)
+				{
+					var candidateServer = _serverConfig.Servers.ToList()[candidate];
+					var candidateConnectionString = string.Empty;
+
+					switch (candidateServer.DBType)
+					{
+						case DBServerType.MYSQL:
+							candidateConnectionString = $"Server={candidateServer.ServerName};Port={candidateServer.PortNumber}";
+							break;
+
+						case DBServerType.POSTGRESQL:
+							candidateConnectionString = $"Server={candidateServer.ServerName};Port={candidateServer.PortNumber}";
+							break;
+
+						case DBServerType.SQLSERVER:
+							candidateConnectionString = $"Server={candidateServer.ServerName}";
+							break;
+					}
+
+					if (DefaultConnectionString.StartsWith(candidateConnectionString))
+					{
+						LastServerUsed = candidate;
+						break;
+					}
+				}
+
+				var dbServer = _serverConfig.Servers.ToList()[LastServerUsed];
 				DBServerType selectedType = dbServer.DBType;
 
 				switch (dbServer.DBType)
@@ -1358,35 +1730,40 @@ SELECT datname
 			//	We're done. Turn off the populating flag.
 			Populating = false;
 		}
-        #endregion
+		private void LoadAppSettings()
+		{
+			LoadAppSettings(SolutionFolder);
+		}
 
-        private void OnPortNumberChanged(object sender, EventArgs e)
-        {
-			try
+		private bool LoadAppSettings(string folder)
+		{
+			var files = Directory.GetFiles(folder, "appSettings.Local.json");
+
+			foreach (var file in files)
 			{
-				if (!Populating)
+				using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
 				{
-					_dbList.Items.Clear();
-					_tableList.Items.Clear();
-					var server = (DBServer)_serverList.SelectedItem;
-
-					if (server != null)
+					using (var reader = new StreamReader(stream))
 					{
-						server.PortNumber = Convert.ToInt32(_portNumber.Value);
-
-						var otherServer = _serverConfig.Servers.FirstOrDefault(s => string.Equals(s.ServerName, server.ServerName, StringComparison.OrdinalIgnoreCase));
-
-						Save();
-
-						if (TestConnection(server))
-							PopulateDatabases();
+						string content = reader.ReadToEnd();
+						var settings = JObject.Parse(content);
+						var connectionStrings = settings["ConnectionStrings"].Value<JObject>();
+						DefaultConnectionString = connectionStrings["DefaultConnection"].Value<string>();
+						return true;
 					}
 				}
 			}
-			catch (Exception error)
+
+			var childFolders = Directory.GetDirectories(folder);
+
+			foreach (var childFolder in childFolders)
 			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+				if (LoadAppSettings(childFolder))
+					return true;
 			}
+
+			return false;
 		}
+		#endregion
 	}
 }

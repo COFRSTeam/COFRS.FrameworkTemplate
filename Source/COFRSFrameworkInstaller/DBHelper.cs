@@ -1,12 +1,19 @@
 ﻿using MySql.Data.MySqlClient;
+using Npgsql;
 using NpgsqlTypes;
 using System;
 using System.Data;
+using System.IO;
+using System.Runtime.Caching;
+using System.Text.RegularExpressions;
 
 namespace COFRSFrameworkInstaller
 {
 	public static class DBHelper
 	{
+		public static MemoryCache _cache = new MemoryCache("ClassCache");
+
+
 		/// <summary>
 		/// Convers a Postgresql data type into its corresponding standard SQL data type
 		/// </summary>
@@ -30,6 +37,46 @@ namespace COFRSFrameworkInstaller
 				return NpgsqlDbType.Integer;
 			else if (string.Equals(dataType, "_int4", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Array | NpgsqlDbType.Integer;
+			else if (string.Equals(dataType, "oid", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Oid;
+			else if (string.Equals(dataType, "_oid", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Oid;
+			else if (string.Equals(dataType, "xid", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Xid;
+			else if (string.Equals(dataType, "_xid", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Xid;
+			else if (string.Equals(dataType, "cid", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Cid;
+			else if (string.Equals(dataType, "_cid", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Cid;
+			else if (string.Equals(dataType, "point", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Point;
+			else if (string.Equals(dataType, "_point", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Point;
+			else if (string.Equals(dataType, "lseg", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.LSeg;
+			else if (string.Equals(dataType, "_lseg", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.LSeg;
+			else if (string.Equals(dataType, "line", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Line;
+			else if (string.Equals(dataType, "_line", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Line;
+			else if (string.Equals(dataType, "circle", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Circle;
+			else if (string.Equals(dataType, "_circle", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Circle;
+			else if (string.Equals(dataType, "path", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Path;
+			else if (string.Equals(dataType, "_path", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Path;
+			else if (string.Equals(dataType, "polygon", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Polygon;
+			else if (string.Equals(dataType, "_polygon", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Polygon;
+			else if (string.Equals(dataType, "box", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Box;
+			else if (string.Equals(dataType, "_box", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Box;
 			else if (string.Equals(dataType, "int8", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Bigint;
 			else if (string.Equals(dataType, "_int8", StringComparison.OrdinalIgnoreCase))
@@ -42,10 +89,16 @@ namespace COFRSFrameworkInstaller
 				return NpgsqlDbType.Text;
 			else if (string.Equals(dataType, "_text", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Array | NpgsqlDbType.Text;
+			else if (string.Equals(dataType, "citext", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Citext;
+			else if (string.Equals(dataType, "_citext", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.Citext;
 			else if (string.Equals(dataType, "name", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Name;
+			else if (string.Equals(dataType, "_name", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Name;
 			else if (string.Equals(dataType, "bit", StringComparison.OrdinalIgnoreCase))
-				return NpgsqlDbType.Bit;
+				return NpgsqlDbType.Array | NpgsqlDbType.Bit;
 			else if (string.Equals(dataType, "_bit", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Array | NpgsqlDbType.Bit;
 			else if (string.Equals(dataType, "varbit", StringComparison.OrdinalIgnoreCase))
@@ -112,6 +165,10 @@ namespace COFRSFrameworkInstaller
 				return NpgsqlDbType.Jsonb;
 			else if (string.Equals(dataType, "_jsonb", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Array | NpgsqlDbType.Jsonb;
+			else if (string.Equals(dataType, "jsonpath", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.JsonPath;
+			else if (string.Equals(dataType, "_jsonpath", StringComparison.OrdinalIgnoreCase))
+				return NpgsqlDbType.Array | NpgsqlDbType.JsonPath;
 			else if (string.Equals(dataType, "xml", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Xml;
 			else if (string.Equals(dataType, "_xml", StringComparison.OrdinalIgnoreCase))
@@ -133,8 +190,9 @@ namespace COFRSFrameworkInstaller
 			else if (string.Equals(dataType, "_macaddr8", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Array | NpgsqlDbType.MacAddr8;
 
-			throw new Exception($"Unrecognized data type: {dataType}");
+			throw new InvalidCastException($"Unrecognized data type: {dataType}");
 		}
+
 		public static MySqlDbType ConvertMySqlDataType(string dataType)
 		{
 			if (string.Equals(dataType, "tinyint", StringComparison.OrdinalIgnoreCase))
@@ -210,6 +268,7 @@ namespace COFRSFrameworkInstaller
 
 			throw new Exception($"Unrecognized data type: {dataType}");
 		}
+
 		public static SqlDbType ConvertSqlServerDataType(string dataType)
 		{
 			if (string.Equals(dataType, "image", StringComparison.OrdinalIgnoreCase))
@@ -283,6 +342,7 @@ namespace COFRSFrameworkInstaller
 
 			throw new Exception($"Unrecognized data type: {dataType}");
 		}
+
 		public static string GetNonNullableSqlServerDataType(DBColumn column)
 		{
 			switch ((SqlDbType)column.DataType)
@@ -336,12 +396,12 @@ namespace COFRSFrameworkInstaller
 						return "string";
 
 				case SqlDbType.Binary:
-					return $"byte[]";
+					return $"IEnumerable<byte>";
 
 				case SqlDbType.VarBinary:
 				case SqlDbType.Image:
 				case SqlDbType.Timestamp:
-					return "byte[]";
+					return $"IEnumerable<byte>";
 
 				case SqlDbType.Time:
 					return "TimeSpan";
@@ -355,6 +415,7 @@ namespace COFRSFrameworkInstaller
 
 			return "Unknown";
 		}
+
 		public static string GetNonNullablePostgresqlDataType(DBColumn column)
 		{
 			switch ((NpgsqlDbType)column.DataType)
@@ -393,11 +454,12 @@ namespace COFRSFrameworkInstaller
 						return "string";
 
 				case NpgsqlDbType.Bytea:
-					return $"byte[]";
+					return $"IEnumerable<byte>";
 			}
 
 			return "Unknown";
 		}
+
 		public static string GetNonNullableMySqlDataType(DBColumn column)
 		{
 			switch ((MySqlDbType)column.DataType)
@@ -460,7 +522,7 @@ namespace COFRSFrameworkInstaller
 
 				case MySqlDbType.Binary:
 				case MySqlDbType.VarBinary:
-					return "byte[]";
+					return $"IEnumerable<byte>";
 
 				case MySqlDbType.Time:
 					return "TimeSpan";
@@ -471,6 +533,7 @@ namespace COFRSFrameworkInstaller
 
 			return "Unknown";
 		}
+
 		public static string GetSQLServerDataType(DBColumn column)
 		{
 			switch ((SqlDbType)column.DataType)
@@ -548,7 +611,7 @@ namespace COFRSFrameworkInstaller
 				case SqlDbType.Binary:
 				case SqlDbType.VarBinary:
 				case SqlDbType.Timestamp:
-					return "byte[]";
+					return $"IEnumerable<byte>";
 
 				case SqlDbType.Time:
 					if (column.IsNullable)
@@ -581,7 +644,8 @@ namespace COFRSFrameworkInstaller
 
 			return "Unknown";
 		}
-		public static string GetPostgresDataType(DBColumn column)
+
+		public static string GetPostgresDataType(string schema, DBColumn column, string connectionString, string SolutionFolder)
 		{
 			switch ((NpgsqlDbType)column.DataType)
 			{
@@ -595,6 +659,7 @@ namespace COFRSFrameworkInstaller
 					return "BitArray";
 
 				case NpgsqlDbType.Bit:
+				case NpgsqlDbType.Varbit:
 					if (column.Length == 1)
 					{
 						if (column.IsNullable)
@@ -603,21 +668,30 @@ namespace COFRSFrameworkInstaller
 							return "bool";
 					}
 					else
-					{
 						return "BitArray";
-					}
-
-				case NpgsqlDbType.Varbit:
-					return "BitArray";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Varbit:
-					return "BitArray[]";
-
 				case NpgsqlDbType.Array | NpgsqlDbType.Bit:
-					if (column.Length == 1)
-						return "BitArray";
+					if (string.Equals(column.dbDataType, "_bit", StringComparison.OrdinalIgnoreCase) ||
+						string.Equals(column.dbDataType, "_varbit", StringComparison.OrdinalIgnoreCase))
+					{
+						if (column.Length == 1)
+							return "BitArray";
+						else
+							return "IEnumerable<BitArray>";
+					}
 					else
-						return "BitArray[]";
+					{
+						if (column.Length == 1)
+						{
+							if (column.IsNullable)
+								return "bool?";
+							else
+								return "bool";
+						}
+						else
+							return "BitArray";
+					}
 
 				case NpgsqlDbType.Smallint:
 					if (column.IsNullable)
@@ -626,7 +700,7 @@ namespace COFRSFrameworkInstaller
 						return "short";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Smallint:
-					return "short[]";
+					return "IEnumerable<short>";
 
 				case NpgsqlDbType.Integer:
 					if (column.IsNullable)
@@ -635,7 +709,7 @@ namespace COFRSFrameworkInstaller
 						return "int";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Integer:
-					return "int[]";
+					return "IEnumerable<int>";
 
 				case NpgsqlDbType.Bigint:
 					if (column.IsNullable)
@@ -644,19 +718,98 @@ namespace COFRSFrameworkInstaller
 						return "long";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Bigint:
-					return "long[]";
+					return "IEnumerable<long>";
+
+				case NpgsqlDbType.Oid:
+				case NpgsqlDbType.Xid:
+				case NpgsqlDbType.Cid:
+					if (column.IsNullable)
+						return "uint?";
+					else
+						return "uint";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Oid:
+				case NpgsqlDbType.Array | NpgsqlDbType.Xid:
+				case NpgsqlDbType.Array | NpgsqlDbType.Cid:
+					return "IEnumerable<uint>";
+
+				case NpgsqlDbType.Point:
+					if (column.IsNullable)
+						return "NpgsqlPoint?";
+					else
+						return "NpgsqlPoint";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Point:
+					return "IEnumerable<NpgsqlPoint>";
+
+				case NpgsqlDbType.LSeg:
+					if (column.IsNullable)
+						return "NpgsqlLSeg?";
+					else
+						return "NpgsqlLSeg";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.LSeg:
+					return "IEnumerable<NpgsqlLSeg>";
+
+				case NpgsqlDbType.Line:
+					if (column.IsNullable)
+						return "NpgsqlLine?";
+					else
+						return "NpgsqlLine";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Line:
+					return "IEnumerable<NpgsqlLine>";
+
+				case NpgsqlDbType.Circle:
+					if (column.IsNullable)
+						return "NpgsqlCircle?";
+					else
+						return "NpgsqlCircle";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Circle:
+					return "IEnumerable<NpgsqlCircle>";
+
+				case NpgsqlDbType.Box:
+					if (column.IsNullable)
+						return "NpgsqlBox?";
+					else
+						return "NpgsqlBox";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Box:
+					return "IEnumerable<NpgsqlBox>";
+
+				case NpgsqlDbType.Path:
+					return "IEnumerable<NpgsqlPoint>";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Path:
+					return "IEnumerable<IEnumerable<NpgsqlPoint>>";
+
+				case NpgsqlDbType.Polygon:
+					return "IEnumerable<NpgsqlPoint>";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Polygon:
+					return "IEnumerable<IEnumerable<NpgsqlPoint>>";
 
 				case NpgsqlDbType.Bytea:
-					return "byte[]";
+					return "IEnumerable<byte>";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Bytea:
-					return "byte[][]";
+					return "IEnumerable<IEnumerable<byte>>";
 
 				case NpgsqlDbType.Text:
+				case NpgsqlDbType.Citext:
 					return "string";
 
+				case NpgsqlDbType.Name:
+					if (string.Equals(column.dbDataType, "_name", StringComparison.OrdinalIgnoreCase))
+						return "IEnumerable<string>";
+					else
+						return "string";
+
 				case NpgsqlDbType.Array | NpgsqlDbType.Text:
-					return "string[]";
+				case NpgsqlDbType.Array | NpgsqlDbType.Name:
+				case NpgsqlDbType.Array | NpgsqlDbType.Citext:
+					return "IEnumerable<string>";
 
 				case NpgsqlDbType.Varchar:
 				case NpgsqlDbType.Json:
@@ -664,7 +817,7 @@ namespace COFRSFrameworkInstaller
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Varchar:
 				case NpgsqlDbType.Array | NpgsqlDbType.Json:
-					return "string[]";
+					return "IEnumerable<string>";
 
 				case NpgsqlDbType.Char:
 					if (column.Length == 1)
@@ -677,10 +830,10 @@ namespace COFRSFrameworkInstaller
 					else if (string.Equals(column.dbDataType, "bpchar", StringComparison.OrdinalIgnoreCase))
 						return "string";
 					else
-						return "char[]";
+						return "IEnumerable<char>";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Char:
-					return "string[]";
+					return "IEnumerable<string>";
 
 				case NpgsqlDbType.Uuid:
 					if (column.IsNullable)
@@ -689,7 +842,7 @@ namespace COFRSFrameworkInstaller
 						return "Guid";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Uuid:
-					return "Guid[]";
+					return "IEnumerable<Guid>";
 
 				case NpgsqlDbType.Date:
 					if (column.IsNullable)
@@ -698,7 +851,7 @@ namespace COFRSFrameworkInstaller
 						return "DateTime";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Date:
-					return "DateTime[]";
+					return "IEnumerable<DateTime>";
 
 				case NpgsqlDbType.TimeTz:
 					if (column.IsNullable)
@@ -707,7 +860,7 @@ namespace COFRSFrameworkInstaller
 						return "DateTimeOffset";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.TimeTz:
-					return "DateTimeOffset[]";
+					return "IEnumerable<DateTimeOffset>";
 
 				case NpgsqlDbType.Time:
 					if (column.IsNullable)
@@ -716,7 +869,7 @@ namespace COFRSFrameworkInstaller
 						return "TimeSpan";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Time:
-					return "TimeSpan[]";
+					return "IEnumerable<TimeSpan>";
 
 				case NpgsqlDbType.Interval:
 					if (column.IsNullable)
@@ -725,7 +878,7 @@ namespace COFRSFrameworkInstaller
 						return "TimeSpan";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Interval:
-					return "TimeSpan[]";
+					return "IEnumerable<TimeSpan>";
 
 				case NpgsqlDbType.Timestamp:
 					if (column.IsNullable)
@@ -734,7 +887,7 @@ namespace COFRSFrameworkInstaller
 						return "DateTime";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Timestamp:
-					return "DateTime[]";
+					return "IEnumerable<DateTime>";
 
 				case NpgsqlDbType.TimestampTz:
 					if (column.IsNullable)
@@ -743,7 +896,7 @@ namespace COFRSFrameworkInstaller
 						return "DateTime";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.TimestampTz:
-					return "DateTime[]";
+					return "IEnumerable<DateTime>";
 
 				case NpgsqlDbType.Double:
 					if (column.IsNullable)
@@ -752,7 +905,7 @@ namespace COFRSFrameworkInstaller
 						return "double";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Double:
-					return "double[]";
+					return "IEnumerable<double>";
 
 				case NpgsqlDbType.Real:
 					if (column.IsNullable)
@@ -761,7 +914,7 @@ namespace COFRSFrameworkInstaller
 						return "float";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Real:
-					return "float[]";
+					return "IEnumerable<float>";
 
 				case NpgsqlDbType.Numeric:
 				case NpgsqlDbType.Money:
@@ -772,39 +925,72 @@ namespace COFRSFrameworkInstaller
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Numeric:
 				case NpgsqlDbType.Array | NpgsqlDbType.Money:
-					return "decimal[]";
+					return "IEnumerable<decimal>";
 
 				case NpgsqlDbType.Xml:
 					return "string";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Xml:
-					return "string[]";
+					return "IEnumerable<string>";
 
 				case NpgsqlDbType.Jsonb:
 					return "string";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Jsonb:
-					return "string[]";
+					return "IEnumerable<string>";
+
+				case NpgsqlDbType.JsonPath:
+					return "string";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.JsonPath:
+					return "IEnumerable<string>";
 
 				case NpgsqlDbType.Inet:
 					return "IPAddress";
 
 				case NpgsqlDbType.Cidr:
-					return "IPEndPoint";
+					return "ValueTuple<IPAddress, int>";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Inet:
-					return "IPAddress[]";
+					return "IEnumerable<IPAddress>";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Cidr:
-					return "IPEndPoint[]";
+					return "IEnumerable<ValueTuple<IPAddress, int>>";
 
 				case NpgsqlDbType.MacAddr:
 				case NpgsqlDbType.MacAddr8:
 					return "PhysicalAddress";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.MacAddr:
+				case NpgsqlDbType.Array | NpgsqlDbType.MacAddr8:
+					return "IEnumerable<PhysicalAddress>";
+
+				case NpgsqlDbType.Unknown:
+					{
+						var etype = GetElementType(schema, column.dbDataType, connectionString);
+
+						if (etype == ElementType.Enum)
+						{
+							var entityFile = SearchForEnum(schema, column.dbDataType, SolutionFolder);
+
+							if (entityFile != null)
+								return entityFile.ClassName;
+						}
+
+						else if (etype == ElementType.Composite)
+						{
+							var entityFile = SearchForComposite(schema, column.dbDataType, SolutionFolder);
+
+							if (entityFile != null)
+								return entityFile.ClassName;
+						}
+					}
+					break;
 			}
 
 			return "Unknown";
 		}
+
 		public static string GetMySqlDataType(DBColumn column)
 		{
 			switch ((MySqlDbType)column.DataType)
@@ -926,7 +1112,7 @@ namespace COFRSFrameworkInstaller
 				case MySqlDbType.Blob:
 				case MySqlDbType.MediumBlob:
 				case MySqlDbType.LongBlob:
-					return "byte[]";
+					return "IEnumerable<byte>";
 
 				case MySqlDbType.Time:
 					if (column.IsNullable)
@@ -948,7 +1134,8 @@ namespace COFRSFrameworkInstaller
 
 			return "Unknown";
 		}
-		public static string GetPostgresqlResourceDataType(DBColumn column)
+
+		public static string GetPostgresqlResourceDataType(DBColumn column, string connectionString, string schema, string SolutionFolder)
 		{
 			switch ((NpgsqlDbType)column.DataType)
 			{
@@ -962,6 +1149,7 @@ namespace COFRSFrameworkInstaller
 					return "BitArray";
 
 				case NpgsqlDbType.Bit:
+				case NpgsqlDbType.Varbit:
 					if (column.Length == 1)
 					{
 						if (column.IsNullable)
@@ -970,21 +1158,30 @@ namespace COFRSFrameworkInstaller
 							return "bool";
 					}
 					else
-					{
 						return "BitArray";
-					}
-
-				case NpgsqlDbType.Varbit:
-					return "BitArray";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Varbit:
-					return "BitArray[]";
-
 				case NpgsqlDbType.Array | NpgsqlDbType.Bit:
-					if (column.Length == 1)
-						return "BitArray";
+					if (string.Equals(column.dbDataType, "_bit", StringComparison.OrdinalIgnoreCase) ||
+						string.Equals(column.dbDataType, "_varbit", StringComparison.OrdinalIgnoreCase))
+					{
+						if (column.Length == 1)
+							return "BitArray";
+						else
+							return "IEnumerable<BitArray>";
+					}
 					else
-						return "BitArray[]";
+					{
+						if (column.Length == 1)
+						{
+							if (column.IsNullable)
+								return "bool?";
+							else
+								return "bool";
+						}
+						else
+							return "BitArray";
+					}
 
 				case NpgsqlDbType.Smallint:
 					if (column.IsNullable)
@@ -993,7 +1190,7 @@ namespace COFRSFrameworkInstaller
 						return "short";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Smallint:
-					return "short[]";
+					return "IEnumerable<short>";
 
 				case NpgsqlDbType.Integer:
 					if (column.IsNullable)
@@ -1002,7 +1199,7 @@ namespace COFRSFrameworkInstaller
 						return "int";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Integer:
-					return "int[]";
+					return "IEnumerable<int>";
 
 				case NpgsqlDbType.Bigint:
 					if (column.IsNullable)
@@ -1011,16 +1208,106 @@ namespace COFRSFrameworkInstaller
 						return "long";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Bigint:
-					return "long[]";
+					return "IEnumerable<long>";
+
+				case NpgsqlDbType.Oid:
+				case NpgsqlDbType.Xid:
+				case NpgsqlDbType.Cid:
+					if (column.IsNullable)
+						return "uint?";
+					else
+						return "uint";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Oid:
+				case NpgsqlDbType.Array | NpgsqlDbType.Xid:
+				case NpgsqlDbType.Array | NpgsqlDbType.Cid:
+					return "IEnumerable<uint>";
+
+				case NpgsqlDbType.Point:
+					if (column.IsNullable)
+						return "NpgsqlPoint?";
+					else
+						return "NpgsqlPoint";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Point:
+					return "IEnumerable<NpgsqlPoint>";
+
+				case NpgsqlDbType.LSeg:
+					if (column.IsNullable)
+						return "NpgsqlLSeg?";
+					else
+						return "NpgsqlLSeg";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.LSeg:
+					return "IEnumerable<NpgsqlLSeg>";
+
+				case NpgsqlDbType.Line:
+					if (column.IsNullable)
+						return "NpgsqlLine?";
+					else
+						return "NpgsqlLine";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Line:
+					return "IEnumerable<NpgsqlLine>";
+
+				case NpgsqlDbType.Circle:
+					if (column.IsNullable)
+						return "NpgsqlCircle?";
+					else
+						return "NpgsqlCircle";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Circle:
+					return "IEnumerable<NpgsqlCircle>";
+
+				case NpgsqlDbType.Box:
+					if (column.IsNullable)
+						return "NpgsqlBox?";
+					else
+						return "NpgsqlBox";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Box:
+					return "IEnumerable<NpgsqlBox>";
+
+				case NpgsqlDbType.Path:
+					return "IEnumerable<NpgsqlPoint>";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Path:
+					return "IEnumerable<IEnumerable<NpgsqlPoint>>";
+
+				case NpgsqlDbType.Polygon:
+					return "IEnumerable<NpgsqlPoint>";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Polygon:
+					return "IEnumerable<IEnumerable<NpgsqlPoint>>";
+
+				case NpgsqlDbType.Bytea:
+					return "IEnumerable<byte>";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Bytea:
+					return "IEnumerable<IEnumerable<byte>>";
 
 				case NpgsqlDbType.Text:
-				case NpgsqlDbType.Varchar:
+				case NpgsqlDbType.Citext:
 					return "string";
 
+				case NpgsqlDbType.Name:
+					if (string.Equals(column.dbDataType, "_name", StringComparison.OrdinalIgnoreCase))
+						return "IEnumerable<string>";
+					else
+						return "string";
+
 				case NpgsqlDbType.Array | NpgsqlDbType.Text:
+				case NpgsqlDbType.Array | NpgsqlDbType.Name:
+				case NpgsqlDbType.Array | NpgsqlDbType.Citext:
+					return "IEnumerable<string>";
+
+				case NpgsqlDbType.Varchar:
+				case NpgsqlDbType.Json:
+					return "string";
+
 				case NpgsqlDbType.Array | NpgsqlDbType.Varchar:
-				case NpgsqlDbType.Array | NpgsqlDbType.Char:
-					return "string[]";
+				case NpgsqlDbType.Array | NpgsqlDbType.Json:
+					return "IEnumerable<string>";
 
 				case NpgsqlDbType.Char:
 					if (column.Length == 1)
@@ -1030,14 +1317,23 @@ namespace COFRSFrameworkInstaller
 						else
 							return "char";
 					}
-					else
+					else if (string.Equals(column.dbDataType, "bpchar", StringComparison.OrdinalIgnoreCase))
 						return "string";
+					else
+						return "IEnumerable<char>";
 
-				case NpgsqlDbType.Bytea:
-					return "byte[]";
 
-				case NpgsqlDbType.Array | NpgsqlDbType.Bytea:
-					return "byte[][]";
+				case NpgsqlDbType.Array | NpgsqlDbType.Char:
+					return "IEnumerable<string>";
+
+				case NpgsqlDbType.Uuid:
+					if (column.IsNullable)
+						return "Guid?";
+					else
+						return "Guid";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Uuid:
+					return "IEnumerable<Guid>";
 
 				case NpgsqlDbType.Date:
 					if (column.IsNullable)
@@ -1046,25 +1342,7 @@ namespace COFRSFrameworkInstaller
 						return "DateTime";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Date:
-					return "DateTime[]";
-
-				case NpgsqlDbType.Time:
-					if (column.IsNullable)
-						return "TimeSpan?";
-					else
-						return "TimeSpan";
-
-				case NpgsqlDbType.Array | NpgsqlDbType.Time:
-					return "TimeSpan[]";
-
-				case NpgsqlDbType.Interval:
-					if (column.IsNullable)
-						return "TimeSpan?";
-					else
-						return "TimeSpan";
-
-				case NpgsqlDbType.Array | NpgsqlDbType.Interval:
-					return "TimeSpan[]";
+					return "IEnumerable<DateTime>";
 
 				case NpgsqlDbType.TimeTz:
 					if (column.IsNullable)
@@ -1073,7 +1351,25 @@ namespace COFRSFrameworkInstaller
 						return "DateTimeOffset";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.TimeTz:
-					return "DateTimeOffset[]";
+					return "IEnumerable<DateTimeOffset>";
+
+				case NpgsqlDbType.Time:
+					if (column.IsNullable)
+						return "TimeSpan?";
+					else
+						return "TimeSpan";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Time:
+					return "IEnumerable<TimeSpan>";
+
+				case NpgsqlDbType.Interval:
+					if (column.IsNullable)
+						return "TimeSpan?";
+					else
+						return "TimeSpan";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Interval:
+					return "IEnumerable<TimeSpan>";
 
 				case NpgsqlDbType.Timestamp:
 					if (column.IsNullable)
@@ -1082,7 +1378,7 @@ namespace COFRSFrameworkInstaller
 						return "DateTime";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Timestamp:
-					return "DateTime[]";
+					return "IEnumerable<DateTime>";
 
 				case NpgsqlDbType.TimestampTz:
 					if (column.IsNullable)
@@ -1091,7 +1387,7 @@ namespace COFRSFrameworkInstaller
 						return "DateTime";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.TimestampTz:
-					return "DateTime[]";
+					return "IEnumerable<DateTime>";
 
 				case NpgsqlDbType.Double:
 					if (column.IsNullable)
@@ -1100,7 +1396,7 @@ namespace COFRSFrameworkInstaller
 						return "double";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Double:
-					return "double[]";
+					return "IEnumerable<double>";
 
 				case NpgsqlDbType.Real:
 					if (column.IsNullable)
@@ -1109,7 +1405,7 @@ namespace COFRSFrameworkInstaller
 						return "float";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Real:
-					return "float[]";
+					return "IEnumerable<float>";
 
 				case NpgsqlDbType.Numeric:
 				case NpgsqlDbType.Money:
@@ -1120,46 +1416,72 @@ namespace COFRSFrameworkInstaller
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Numeric:
 				case NpgsqlDbType.Array | NpgsqlDbType.Money:
-					return "decimal[]";
+					return "IEnumerable<decimal>";
 
-				case NpgsqlDbType.Uuid:
-					if (column.IsNullable)
-						return "Guid?";
-					else
-						return "Guid";
-
-				case NpgsqlDbType.Array | NpgsqlDbType.Uuid:
-					return "Guid[]";
-
-				case NpgsqlDbType.Jsonb:
-				case NpgsqlDbType.Json:
 				case NpgsqlDbType.Xml:
 					return "string";
 
-				case NpgsqlDbType.Array | NpgsqlDbType.Jsonb:
-				case NpgsqlDbType.Array | NpgsqlDbType.Json:
 				case NpgsqlDbType.Array | NpgsqlDbType.Xml:
-					return "string[]";
+					return "IEnumerable<string>";
+
+				case NpgsqlDbType.Jsonb:
+					return "string";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.Jsonb:
+					return "IEnumerable<string>";
+
+				case NpgsqlDbType.JsonPath:
+					return "string";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.JsonPath:
+					return "IEnumerable<string>";
 
 				case NpgsqlDbType.Inet:
 					return "IPAddress";
 
 				case NpgsqlDbType.Cidr:
-					return "IPEndPoint";
+					return "ValueTuple<IPAddress, int>";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Inet:
-					return "IPAddress[]";
+					return "IEnumerable<IPAddress>";
 
 				case NpgsqlDbType.Array | NpgsqlDbType.Cidr:
-					return "IPEndPoint[]";
+					return "IEnumerable<ValueTuple<IPAddress, int>>";
 
 				case NpgsqlDbType.MacAddr:
 				case NpgsqlDbType.MacAddr8:
 					return "PhysicalAddress";
+
+				case NpgsqlDbType.Array | NpgsqlDbType.MacAddr:
+				case NpgsqlDbType.Array | NpgsqlDbType.MacAddr8:
+					return "IEnumerable<PhysicalAddress>";
+
+				case NpgsqlDbType.Unknown:
+					{
+						var etype = GetElementType(schema, column.dbDataType, connectionString);
+
+						if (etype == ElementType.Enum)
+						{
+							var entityFile = SearchForEnum(schema, column.dbDataType, SolutionFolder);
+
+							if (entityFile != null)
+								return entityFile.ClassName;
+						}
+
+						else if (etype == ElementType.Composite)
+						{
+							var entityFile = SearchForComposite(schema, column.dbDataType, SolutionFolder);
+
+							if (entityFile != null)
+								return entityFile.ClassName;
+						}
+					}
+					break;
 			}
 
 			return "Unknown";
 		}
+
 		public static string GetMySqlResourceDataType(DBColumn column)
 		{
 			switch ((MySqlDbType)column.DataType)
@@ -1281,7 +1603,7 @@ namespace COFRSFrameworkInstaller
 				case MySqlDbType.Blob:
 				case MySqlDbType.MediumBlob:
 				case MySqlDbType.LongBlob:
-					return "byte[]";
+					return "IEnumerable<byte>";
 
 				case MySqlDbType.Time:
 					if (column.IsNullable)
@@ -1303,6 +1625,7 @@ namespace COFRSFrameworkInstaller
 
 			return "Unknown";
 		}
+
 		public static string GetSqlServerResourceDataType(DBColumn column)
 		{
 			switch ((SqlDbType)column.DataType)
@@ -1380,7 +1703,7 @@ namespace COFRSFrameworkInstaller
 				case SqlDbType.Binary:
 				case SqlDbType.VarBinary:
 				case SqlDbType.Timestamp:
-					return "byte[]";
+					return "IEnumerable<byte>";
 
 				case SqlDbType.Time:
 					if (column.IsNullable)
@@ -1413,5 +1736,204 @@ namespace COFRSFrameworkInstaller
 
 			return "Unknown";
 		}
+
+		#region Postgrsql Helper Functions
+		public static ElementType GetElementType(string schema, string datatype, string connectionString)
+		{
+			string query = @"
+select t.typtype
+  from pg_type as t 
+ inner join pg_catalog.pg_namespace n on n.oid = t.typnamespace
+ WHERE ( t.typrelid = 0 OR ( SELECT c.relkind = 'c' FROM pg_catalog.pg_class c WHERE c.oid = t.typrelid ) )
+   AND NOT EXISTS ( SELECT 1 FROM pg_catalog.pg_type el WHERE el.oid = t.typelem AND el.typarray = t.oid )
+   and ( t.typcategory = 'C' or t.typcategory = 'E' ) 
+   and n.nspname = @schema
+   and t.typname = @element
+";
+
+			using (var connection = new NpgsqlConnection(connectionString))
+			{
+				connection.Open();
+				using (var command = new NpgsqlCommand(query, connection))
+				{
+					command.Parameters.AddWithValue("@schema", schema);
+					command.Parameters.AddWithValue("@element", datatype);
+
+					using (var reader = command.ExecuteReader())
+					{
+						if (reader.Read())
+						{
+							var theType = reader.GetChar(0);
+
+							if (theType == 'c')
+								return ElementType.Composite;
+
+							else if (theType == 'e')
+								return ElementType.Enum;
+						}
+					}
+				}
+			}
+
+			return ElementType.Table;
+		}
+
+		public static EntityClassFile SearchForEnum(string schema, string datatype, string folder)
+		{
+			var className = string.Empty;
+			var entityName = string.Empty;
+			var schemaName = string.Empty;
+			var theNamespace = string.Empty;
+			EntityClassFile entityClassFile = (EntityClassFile) _cache.Get($"{schema}.{datatype}");
+
+			if ( entityClassFile != null )
+				return entityClassFile;
+
+			foreach (var file in Directory.GetFiles(folder))
+			{
+				var content = File.ReadAllText(file);
+
+				if (content.Contains("PgEnum"))
+				{
+					var lines = content.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+					foreach (var line in lines)
+					{
+						var match = Regex.Match(line, "enum[ \t]+(?<classname>[a-zA-Z_][a-zA-Z0-9_]+)");
+
+						if (match.Success)
+						{
+							className = match.Groups["classname"].Value;
+
+							if (!string.IsNullOrWhiteSpace(entityName) &&
+								!string.IsNullOrWhiteSpace(schemaName) &&
+								string.Equals(entityName, datatype, StringComparison.OrdinalIgnoreCase))
+							{
+								entityClassFile = new EntityClassFile()
+								{
+									ClassName = className,
+									FileName = file,
+									TableName = entityName,
+									SchemaName = schemaName,
+									ClassNameSpace = theNamespace
+								};
+
+
+								_cache.Add($"{schemaName}.{entityName}", entityClassFile, new CacheItemPolicy 
+									{
+										AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(10)
+									});
+
+								return entityClassFile;
+							}
+						}
+
+						match = Regex.Match(line, "\\[PgEnum[ \t]*\\([ \t]*\"(?<enumName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\)[ \t]*\\]");
+
+						if (match.Success)
+						{
+							entityName = match.Groups["enumName"].Value;
+							schemaName = match.Groups["schemaName"].Value;
+						}
+
+						match = Regex.Match(line, "namespace[ \t]+(?<namespace>[a-zA-Z_][a-zA-Z0-9_\\.]+)");
+
+						if (match.Success)
+						{
+							theNamespace = match.Groups["namespace"].Value;
+						}
+					}
+				}
+			}
+
+			foreach (var subfolder in Directory.GetDirectories(folder))
+			{
+				var theFile = SearchForEnum(schema, datatype, subfolder);
+
+				if (theFile != null)
+					return theFile;
+			}
+
+			return null;
+		}
+
+		public static EntityClassFile SearchForComposite(string schema, string datatype, string folder)
+		{
+			var className = string.Empty;
+			var entityName = string.Empty;
+			var schemaName = string.Empty;
+			var theNamespace = string.Empty;
+			EntityClassFile entityClassFile = (EntityClassFile)_cache.Get($"{schema}.{datatype}");
+
+			if (entityClassFile != null)
+				return entityClassFile;
+
+			foreach (var file in Directory.GetFiles(folder))
+			{
+				var content = File.ReadAllText(file);
+
+				if (content.Contains("PgComposite"))
+				{
+					var lines = content.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+
+					foreach (var line in lines)
+					{
+						var match = Regex.Match(line, "class[ \t]+(?<classname>[a-zA-Z_][a-zA-Z0-9_]+)");
+
+						if (match.Success)
+						{
+							className = match.Groups["classname"].Value;
+
+							if (!string.IsNullOrWhiteSpace(entityName) &&
+								!string.IsNullOrWhiteSpace(schemaName) &&
+								string.Equals(entityName, datatype, StringComparison.OrdinalIgnoreCase))
+							{
+								entityClassFile = new EntityClassFile()
+								{
+									ClassName = className,
+									FileName = file,
+									TableName = entityName,
+									SchemaName = schemaName,
+									ClassNameSpace = theNamespace
+								};
+
+								_cache.Add($"{schemaName}.{entityName}", entityClassFile, new CacheItemPolicy
+								{
+									AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(10)
+								});
+
+								return entityClassFile;
+							}
+						}
+
+						match = Regex.Match(line, "\\[PgComposite[ \t]*\\([ \t]*\"(?<enumName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\)[ \t]*\\]");
+
+						if (match.Success)
+						{
+							entityName = match.Groups["enumName"].Value;
+							schemaName = match.Groups["schemaName"].Value;
+						}
+
+						match = Regex.Match(line, "namespace[ \t]+(?<namespace>[a-zA-Z_][a-zA-Z0-9_\\.]+)");
+
+						if (match.Success)
+						{
+							theNamespace = match.Groups["namespace"].Value;
+						}
+					}
+				}
+			}
+
+			foreach (var subfolder in Directory.GetDirectories(folder))
+			{
+				var theFile = SearchForComposite(schema, datatype, subfolder);
+
+				if (theFile != null)
+					return theFile;
+			}
+
+			return null;
+		}
+		#endregion
 	}
 }

@@ -15,6 +15,7 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -22,54 +23,64 @@ namespace COFRSFrameworkInstaller
 {
     public partial class UserInputFullStack : Form
     {
-        #region Variables
-        private ServerConfig _serverConfig;
-        private bool Populating = false;
-        public DBTable DatabaseTable { get; set; }
-        public List<DBColumn> DatabaseColumns { get; set; }
-        public string SolutionFolder { get; set; }
+		#region Variables
+		private ServerConfig _serverConfig;
+		private bool Populating = false;
+		public DBTable DatabaseTable { get; set; }
+		public List<DBColumn> DatabaseColumns { get; set; }
+		public string SolutionFolder { get; set; }
+		public string RootNamespace { get; set; }
+		public string SingularResourceName { get; set; }
+		public string PluralResourceName { get; set; }
+		public string ConnectionString { get; set; }
+		public string DefaultConnectionString { get; set; }
+		public JObject Examples { get; set; }
+		public List<EntityClassFile> _entityClasses { get; set; }
+		public List<EntityDetailClassFile> classList { get; set; }
+		public Dictionary<string, string> replacementsDictionary { get; set; }
+		List<EntityClassFile> _undefinedElements = new List<EntityClassFile>();
 
-        public string SingularResourceName { get; set; }
-        public string PluralResourceName { get; set; }
-        public string ConnectionString { get; set; }
-        public string DefaultConnectionString { get; set; }
-        public JObject Examples { get; set; }
-		public string Policy { 
-			get {
-				if ( policyCombo.Items.Count > 0  )
-                {
+		public string Policy
+		{
+			get
+			{
+				if (policyCombo.Items.Count > 0)
+				{
 					return policyCombo.SelectedItem.ToString();
-                }
-                else
-                {
+				}
+				else
+				{
 					return string.Empty;
-                }
+				}
 			}
 		}
 
-        #endregion
+		#endregion
 
-        #region Utility functions
-        public UserInputFullStack()
-        {
-            InitializeComponent();
-        }
+		#region Utility functions
+		public UserInputFullStack()
+		{
+			InitializeComponent();
+		}
 
-        private void OnLoad(object sender, EventArgs e)
-        {
-            _portNumber.Location = new Point(93, 60);
-            DatabaseColumns = new List<DBColumn>();
+		private void OnLoad(object sender, EventArgs e)
+		{
+			_portNumber.Location = new Point(103, 70);
+			DatabaseColumns = new List<DBColumn>();
 
-            SingularName.Text = SingularResourceName;
-            PluralName.Text = PluralResourceName;
+			SingularName.Text = SingularResourceName;
+			PluralName.Text = PluralResourceName;
 
-            LoadAppSettings();
-            ReadServerList();
+			LoadAppSettings();
+			ReadServerList();
+
+			_entityClasses = Utilities.LoadEntityClassList(SolutionFolder);
+
 
 			var policies = Utilities.LoadPolicies(SolutionFolder);
 
-			if ( policies != null )
-            {
+			if (policies != null)
+			{
 				policyCombo.Visible = true;
 				policyLabel.Visible = true;
 				policyCombo.Items.Add("Anonymous");
@@ -78,13 +89,13 @@ namespace COFRSFrameworkInstaller
 					policyCombo.Items.Add(policy);
 
 				policyCombo.SelectedIndex = 0;
-            }
+			}
 			else
-            {
+			{
 				policyLabel.Visible = false;
 				policyCombo.Visible = false;
-            }
-        }
+			}
+		}
 		#endregion
 
 		#region user interactions
@@ -598,6 +609,203 @@ select s.name, t.name
 			}
 		}
 
+		private bool CheckEnumType(string datatype, NpgsqlConnection connection)
+		{
+			string query = @"
+select typtype
+  from pg_type
+ where ""typname"" = @typname";
+
+			using (var command = new NpgsqlCommand(query, connection))
+			{
+				command.Parameters.AddWithValue("@typname", datatype);
+
+				using (var reader = command.ExecuteReader())
+				{
+					if (reader.Read())
+					{
+						var theType = reader.GetChar(0);
+
+						if (theType == 'e' || theType == 'E')
+							return true;
+					}
+				}
+			}
+
+			return false;
+		}
+
+		private EntityClassFile SearchForEnum(string datatype, string folder)
+		{
+			var className = string.Empty;
+			var entityName = string.Empty;
+			var schemaName = string.Empty;
+			var theNamespace = string.Empty;
+
+			foreach (var file in Directory.GetFiles(folder, "*.cs"))
+			{
+				using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+				{
+					using (var reader = new StreamReader(stream))
+					{
+						while (!reader.EndOfStream)
+						{
+							var line = reader.ReadLine();
+
+							var match = Regex.Match(line, "enum[ \t]+(?<classname>[a-zA-Z_][a-zA-Z0-9_]+)");
+
+							if (match.Success)
+							{
+								className = match.Groups["classname"].Value;
+
+								if (!string.IsNullOrWhiteSpace(entityName) &&
+									!string.IsNullOrWhiteSpace(schemaName) &&
+									string.Equals(entityName, datatype, StringComparison.OrdinalIgnoreCase))
+								{
+									var entityClassFile = new EntityClassFile()
+									{
+										ClassName = className,
+										FileName = file,
+										TableName = entityName,
+										SchemaName = schemaName,
+										ClassNameSpace = theNamespace
+									};
+
+									return entityClassFile;
+								}
+							}
+							else
+							{
+								match = Regex.Match(line, "\\[PgEnum[ \t]*\\([ \t]*\"(?<enumName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\)[ \t]*\\]");
+
+								if (match.Success)
+								{
+									entityName = match.Groups["enumName"].Value;
+									schemaName = match.Groups["schemaName"].Value;
+								}
+								else
+								{
+									match = Regex.Match(line, "namespace[ \t]+(?<namespace>[a-zA-Z_][a-zA-Z0-9_\\.]+)");
+
+									if (match.Success)
+									{
+										theNamespace = match.Groups["namespace"].Value;
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			foreach (var subfolder in Directory.GetDirectories(folder))
+			{
+				var theFile = SearchForEnum(datatype, subfolder);
+
+				if (theFile != null)
+					return theFile;
+			}
+
+			return null;
+		}
+
+		private string FindEntityModelsFolder(string folder)
+		{
+			if (string.Equals(Path.GetFileName(folder), "EntityModels", StringComparison.OrdinalIgnoreCase))
+				return folder;
+
+			foreach (var childfolder in Directory.GetDirectories(folder))
+			{
+				var result = FindEntityModelsFolder(childfolder);
+
+				if (!string.IsNullOrWhiteSpace(result))
+					return result;
+			}
+
+			return string.Empty;
+		}
+
+		private void GenerateEnumFromDatabase(string schema, string dataType, NpgsqlConnection connection)
+		{
+			var className = Utilities.NormalizeClassName(dataType);
+
+			var nn = new NameNormalizer(className);
+
+			var builder = new StringBuilder();
+			var destinationPath = FindEntityModelsFolder(SolutionFolder);
+			var fileName = Path.Combine(destinationPath, $"E{className}.cs");
+
+			builder.Clear();
+			builder.AppendLine("using COFRS;");
+			builder.AppendLine("using NpgsqlTypes;");
+			builder.AppendLine();
+			builder.AppendLine($"namespace {RootNamespace}");
+			builder.AppendLine("{");
+			builder.AppendLine("\t///\t<summary>");
+			builder.AppendLine($"\t///\tEnumerates a list of {nn.PluralForm}");
+			builder.AppendLine("\t///\t</summary>");
+
+			if (string.IsNullOrWhiteSpace(schema))
+				builder.AppendLine($"\t[PgEnum(\"{dataType}\")]");
+			else
+				builder.AppendLine($"\t[PgEnum(\"{dataType}\", Schema = \"{schema}\")]");
+
+			builder.AppendLine($"\tpublic enum E{className}");
+			builder.AppendLine("\t{");
+
+			string query = @"
+select e.enumlabel as enum_value
+from pg_type t 
+   join pg_enum e on t.oid = e.enumtypid  
+   join pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+where t.typname = @dataType
+  and n.nspname = @schema";
+
+			using (var command = new NpgsqlCommand(query, connection))
+			{
+				command.Parameters.AddWithValue("@dataType", dataType);
+				command.Parameters.AddWithValue("@schema", schema);
+
+				bool firstUse = true;
+
+				using (var reader = command.ExecuteReader())
+				{
+					while (reader.Read())
+					{
+						if (firstUse)
+							firstUse = false;
+						else
+						{
+							builder.AppendLine(",");
+							builder.AppendLine();
+						}
+
+						var element = reader.GetString(0);
+
+						builder.AppendLine("\t\t///\t<summary>");
+						builder.AppendLine($"\t\t///\t{element}");
+						builder.AppendLine("\t\t///\t</summary>");
+						builder.AppendLine($"\t\t[PgName(\"{element}\")]");
+
+						var elementName = Utilities.NormalizeClassName(element);
+						builder.Append($"\t\t{elementName}");
+					}
+				}
+			}
+
+			builder.AppendLine();
+			builder.AppendLine("\t}");
+			builder.AppendLine("}");
+
+			using (var stream = new FileStream(fileName, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite))
+			{
+				var buffer = Encoding.UTF8.GetBytes(builder.ToString());
+				stream.Write(buffer, 0, buffer.Length);
+			}
+
+			OnTableChanged(this, new EventArgs());
+		}
+
 		private void OnTableChanged(object sender, EventArgs e)
 		{
 			try
@@ -618,6 +826,7 @@ select s.name, t.name
 
 				if (server.DBType == DBServerType.POSTGRESQL)
 				{
+					_undefinedElements.Clear();
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
 
 					using (var connection = new NpgsqlConnection(connectionString))
@@ -682,15 +891,41 @@ select a.attname as columnname,
 						{
 							command.Parameters.AddWithValue("@schema", table.Schema);
 							command.Parameters.AddWithValue("@tablename", table.Table);
+
 							using (var reader = command.ExecuteReader())
 							{
 								while (reader.Read())
 								{
+									NpgsqlDbType dataType = NpgsqlDbType.Unknown;
+
+									try
+									{
+										dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
+									}
+									catch (InvalidCastException)
+									{
+										var unknownClass = _entityClasses.FirstOrDefault(c =>
+											string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
+											string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
+
+										if (unknownClass == null)
+										{
+											unknownClass = new EntityClassFile()
+											{
+												SchemaName = table.Schema,
+												ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
+												TableName = reader.GetString(1),
+											};
+
+											_undefinedElements.Add(unknownClass);
+										}
+									}
+
 									var dbColumn = new DBColumn
 									{
 										ColumnName = reader.GetString(0),
-										DataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1)),
 										dbDataType = reader.GetString(1),
+										DataType = dataType,
 										Length = Convert.ToInt64(reader.GetValue(2)),
 										NumericPrecision = Convert.ToInt32(reader.GetValue(3)),
 										NumericScale = Convert.ToInt32(reader.GetValue(4)),
@@ -892,7 +1127,23 @@ select c.name as column_name,
 			PluralResourceName = PluralName.Text;
 
 			Save();
+
+			var server = (DBServer)_serverList.SelectedItem;
+			var db = (string)_dbList.SelectedItem;
 			DatabaseTable = (DBTable)_tableList.SelectedItem;
+
+			if (server.DBType == DBServerType.POSTGRESQL)
+			{
+				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
+
+				foreach (var unknownClass in _undefinedElements)
+				{
+					unknownClass.ElementType = GetElementType(unknownClass.SchemaName, unknownClass.TableName, connectionString);
+				}
+
+				var emitter = new Emitter();
+				emitter.GenerateComposites(_undefinedElements, connectionString, replacementsDictionary["$rootnamespace$"], replacementsDictionary, _entityClasses);
+			}
 
 			Examples = ConstructExample();
 
@@ -1594,13 +1845,14 @@ select name
 			//	-----------------------------------------------------------------
 			else if (server.DBType == DBServerType.POSTGRESQL)
 			{
-				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
+				ConnectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
+				classList = Utilities.LoadDetailEntityClassList(SolutionFolder, ConnectionString);
 
-				using (var connection = new NpgsqlConnection(connectionString))
+				using (var connection = new NpgsqlConnection(ConnectionString))
 				{
 					connection.Open();
 
-					var query = GeneratePostgresqlQuery(table);
+					var query = GeneratePostgresqlQuery(table, classList);
 
 					using (var command = new NpgsqlCommand(query, connection))
 					{
@@ -1608,36 +1860,112 @@ select name
 						{
 							if (reader.Read())
 							{
+								var ordinal = 0;
+
 								foreach (var column in DatabaseColumns)
 								{
 									var columnName = column.ColumnName;
 
-									if (reader.IsDBNull(reader.GetOrdinal(column.ColumnName)))
+									if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
+									{
+										var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
+
+										if (cl.ElementType == ElementType.Enum)
+										{
+											if (reader.IsDBNull(ordinal))
+											{
+												values.Add(columnName, null);
+												ordinal++;
+											}
+											else
+											{
+												var value = reader.GetValue(ordinal);
+												values.Add(columnName, JToken.FromObject(value));
+												ordinal++;
+											}
+										}
+										else
+										{
+											var jObject = new JObject();
+											ordinal = ReadComposite(reader, column, ordinal, classList, jObject);
+											values.Add(columnName, jObject);
+										}
+									}
+									else if (reader.IsDBNull(ordinal))
 									{
 										values.Add(columnName, null);
+										ordinal++;
 									}
 									else
 									{
-										var value = reader.GetValue(reader.GetOrdinal(columnName));
-
+										var value = reader.GetValue(ordinal);
 
 										if (value.GetType() == typeof(IPAddress))
 										{
 											var ipAddress = (IPAddress)value;
-											values.Add(columnName, JToken.FromObject(ipAddress.ToString()));
+											values.Add(columnName, ipAddress.ToString());
+										}
+										else if (value.GetType() == typeof(IPAddress[]))
+										{
+											var theValue = (IPAddress[])value;
+											var json = new JArray();
+
+											foreach (var val in theValue)
+											{
+												json.Add(val.ToString());
+											}
+											values.Add(columnName, json);
 										}
 										else if (value.GetType() == typeof(ValueTuple<IPAddress, int>))
 										{
 											var ipAddress = ((ValueTuple<IPAddress, int>)value).Item1;
-											int port = ((ValueTuple<IPAddress, int>)value).Item2;
+											int filter = ((ValueTuple<IPAddress, int>)value).Item2;
 
-											var ipEndPoint = new IPEndPoint(ipAddress, port);
-											values.Add(columnName, JToken.FromObject(ipEndPoint.ToString()));
+											var theValue = new JObject
+											{
+												{ "IPAddress", ipAddress.ToString() },
+												{ "Filter", filter }
+											};
+
+											values.Add(columnName, theValue);
+										}
+										else if (value.GetType() == typeof(ValueTuple<IPAddress, int>[]))
+										{
+											var theValue = (ValueTuple<IPAddress, int>[])value;
+											var json = new JArray();
+
+											foreach (var val in theValue)
+											{
+												var ipAddress = val.Item1;
+												int filter = val.Item2;
+
+												var aValue = new JObject
+												{
+													{ "IPAddress", ipAddress.ToString() },
+													{ "Filter", filter }
+												};
+
+												json.Add(aValue);
+											}
+
+											values.Add(columnName, json);
 										}
 										else if (value.GetType() == typeof(PhysicalAddress))
 										{
 											var physicalAddress = (PhysicalAddress)value;
-											values.Add(columnName, JToken.FromObject(physicalAddress.ToString()));
+											values.Add(columnName, physicalAddress.ToString());
+										}
+										else if (value.GetType() == typeof(PhysicalAddress[]))
+										{
+											var result = new JArray();
+											var theValue = (PhysicalAddress[])value;
+
+											foreach (var addr in theValue)
+											{
+												result.Add(addr.ToString());
+											}
+
+											values.Add(columnName, result);
 										}
 										else if (value.GetType() == typeof(BitArray))
 										{
@@ -1654,6 +1982,7 @@ select name
 										{
 											values.Add(columnName, JToken.FromObject(value));
 										}
+										ordinal++;
 									}
 								}
 
@@ -2507,6 +2836,213 @@ select name
 			query.Append($" FROM `{table.Table}` LIMIT 1;");
 			return query.ToString();
 		}
+
+		private ElementType GetElementType(string Schema, string elementName, string connectionString)
+		{
+			var classFile = _entityClasses.FirstOrDefault(c => string.Equals(c.SchemaName, Schema, StringComparison.OrdinalIgnoreCase) && string.Equals(c.TableName, elementName, StringComparison.OrdinalIgnoreCase));
+
+			if (classFile != null)
+				return classFile.ElementType;
+
+			return DBHelper.GetElementType(Schema, elementName, connectionString);
+		}
+
+		private string GeneratePostgresqlQuery(DBTable table, List<EntityDetailClassFile> classList)
+		{
+			var query = new StringBuilder("SELECT ");
+
+			bool firstColumn = true;
+
+			foreach (var column in DatabaseColumns)
+			{
+				if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
+				{
+					var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
+
+					if (cl == null || cl.ElementType == ElementType.Enum)
+					{
+						firstColumn = AppendComma(query, firstColumn);
+						query.Append($"\"{column.ColumnName}\"");
+					}
+					else
+					{
+						var parent = $"\"{column.ColumnName}\"";
+						firstColumn = DeconstructComposite(parent, column, classList, query, firstColumn);
+					}
+				}
+				else
+				{
+					firstColumn = AppendComma(query, firstColumn);
+					query.Append($"\"{column.ColumnName}\"");
+				}
+			}
+
+			query.Append($" FROM \"{table.Schema}\".\"{table.Table}\" LIMIT 1");
+			return query.ToString();
+		}
+
+		private bool DeconstructComposite(string parent, DBColumn column, List<EntityDetailClassFile> classList, StringBuilder query, bool firstColumn)
+		{
+			var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
+
+			if (cl != null)
+			{
+				foreach (var childmember in cl.Columns)
+				{
+					if ((NpgsqlDbType)childmember.DataType == NpgsqlDbType.Unknown)
+					{
+						var ch = classList.FirstOrDefault(c => string.Equals(c.ClassName, childmember.dbDataType, StringComparison.OrdinalIgnoreCase));
+
+						if (ch.ElementType == ElementType.Enum)
+						{
+							firstColumn = AppendComma(query, firstColumn);
+							query.Append($"({parent}).\"{childmember.EntityName}\"");
+						}
+						else
+						{
+							var newparent = $"({parent}).\"{childmember.EntityName}\"";
+							firstColumn = DeconstructComposite(newparent, childmember, classList, query, firstColumn);
+						}
+					}
+					else
+					{
+						firstColumn = AppendComma(query, firstColumn);
+						query.Append($"({parent}).\"{childmember.EntityName}\"");
+					}
+				}
+			}
+
+			return firstColumn;
+		}
+
+		private static bool AppendComma(StringBuilder query, bool firstColumn)
+		{
+			if (firstColumn)
+				firstColumn = false;
+			else
+				query.Append(", ");
+
+			return firstColumn;
+		}
+
+		private int ReadComposite(NpgsqlDataReader reader, DBColumn column, int ordinal, List<EntityDetailClassFile> classList, JObject values)
+		{
+			var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
+
+			foreach (var member in cl.Columns)
+			{
+				if ((NpgsqlDbType)member.DataType == NpgsqlDbType.Unknown)
+				{
+					var ch = classList.FirstOrDefault(c => string.Equals(c.ClassName, member.dbDataType, StringComparison.OrdinalIgnoreCase));
+
+					if (ch.ElementType == ElementType.Enum)
+					{
+						var value = reader.GetValue(ordinal);
+						values.Add(member.ColumnName, JToken.FromObject(value));
+						ordinal++;
+					}
+					else
+					{
+						var jObject = new JObject();
+
+						ordinal = ReadComposite(reader, member, ordinal, classList, jObject);
+
+						values.Add(member.ColumnName, jObject);
+					}
+				}
+				else
+				{
+					var value = reader.GetValue(ordinal);
+
+					if (value.GetType() == typeof(IPAddress))
+					{
+						var ipAddress = (IPAddress)value;
+						values.Add(member.ColumnName, ipAddress.ToString());
+					}
+					else if (value.GetType() == typeof(IPAddress[]))
+					{
+						var theValue = (IPAddress[])value;
+						var json = new JArray();
+
+						foreach (var val in theValue)
+						{
+							json.Add(val.ToString());
+						}
+						values.Add(member.ColumnName, json);
+					}
+					else if (value.GetType() == typeof(ValueTuple<IPAddress, int>))
+					{
+						var ipAddress = ((ValueTuple<IPAddress, int>)value).Item1;
+						int filter = ((ValueTuple<IPAddress, int>)value).Item2;
+
+						var theValue = new JObject
+											{
+												{ "IPAddress", ipAddress.ToString() },
+												{ "Filter", filter }
+											};
+
+						values.Add(member.ColumnName, theValue);
+					}
+					else if (value.GetType() == typeof(ValueTuple<IPAddress, int>[]))
+					{
+						var theValue = (ValueTuple<IPAddress, int>[])value;
+						var json = new JArray();
+
+						foreach (var val in theValue)
+						{
+							var ipAddress = val.Item1;
+							int filter = val.Item2;
+
+							var aValue = new JObject
+												{
+													{ "IPAddress", ipAddress.ToString() },
+													{ "Filter", filter }
+												};
+
+							json.Add(aValue);
+						}
+
+						values.Add(member.ColumnName, json);
+					}
+					else if (value.GetType() == typeof(PhysicalAddress))
+					{
+						var physicalAddress = (PhysicalAddress)value;
+						values.Add(member.ColumnName, physicalAddress.ToString());
+					}
+					else if (value.GetType() == typeof(PhysicalAddress[]))
+					{
+						var result = new JArray();
+						var theValue = (PhysicalAddress[])value;
+
+						foreach (var addr in theValue)
+						{
+							result.Add(addr.ToString());
+						}
+
+						values.Add(member.ColumnName, result);
+					}
+					else if (value.GetType() == typeof(BitArray))
+					{
+						var answer = new StringBuilder();
+
+						foreach (bool val in (BitArray)value)
+						{
+							var strVal = val ? "1" : "0";
+							answer.Append(strVal);
+						}
+						values.Add(member.ColumnName, JToken.FromObject(answer.ToString()));
+					}
+					else
+					{
+						values.Add(member.ColumnName, JToken.FromObject(value));
+					}
+					ordinal++;
+				}
+			}
+
+			return ordinal;
+		}
+
 		#endregion
 	}
 }

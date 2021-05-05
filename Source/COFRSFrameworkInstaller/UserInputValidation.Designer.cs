@@ -44,10 +44,8 @@ namespace COFRSFrameworkInstaller
             this._removeServerButton = new System.Windows.Forms.Button();
             this.label6 = new System.Windows.Forms.Label();
             this.label7 = new System.Windows.Forms.Label();
-            this.label8 = new System.Windows.Forms.Label();
             this._entityModelList = new System.Windows.Forms.ComboBox();
             this._resourceModelList = new System.Windows.Forms.ComboBox();
-            this._profileModelList = new System.Windows.Forms.ComboBox();
             this.label5 = new System.Windows.Forms.Label();
             this._dbList = new System.Windows.Forms.ListBox();
             this.label9 = new System.Windows.Forms.Label();
@@ -213,15 +211,6 @@ namespace COFRSFrameworkInstaller
             this.label7.TabIndex = 14;
             this.label7.Text = "Resource Model";
             // 
-            // label8
-            // 
-            this.label8.AutoSize = true;
-            this.label8.Location = new System.Drawing.Point(12, 274);
-            this.label8.Name = "label8";
-            this.label8.Size = new System.Drawing.Size(36, 13);
-            this.label8.TabIndex = 15;
-            this.label8.Text = "Profile";
-            // 
             // _entityModelList
             // 
             this._entityModelList.FormattingEnabled = true;
@@ -240,19 +229,10 @@ namespace COFRSFrameworkInstaller
             this._resourceModelList.TabIndex = 17;
             this._resourceModelList.SelectedIndexChanged += new System.EventHandler(this.OnResourceModelChanged);
             // 
-            // _profileModelList
-            // 
-            this._profileModelList.FormattingEnabled = true;
-            this._profileModelList.Location = new System.Drawing.Point(103, 271);
-            this._profileModelList.Name = "_profileModelList";
-            this._profileModelList.Size = new System.Drawing.Size(317, 21);
-            this._profileModelList.TabIndex = 18;
-            this._profileModelList.SelectedIndexChanged += new System.EventHandler(this.OnProfileChanged);
-            // 
             // label5
             // 
             this.label5.AutoSize = true;
-            this.label5.Location = new System.Drawing.Point(9, 299);
+            this.label5.Location = new System.Drawing.Point(9, 276);
             this.label5.Name = "label5";
             this.label5.Size = new System.Drawing.Size(58, 13);
             this.label5.TabIndex = 19;
@@ -261,16 +241,16 @@ namespace COFRSFrameworkInstaller
             // _dbList
             // 
             this._dbList.FormattingEnabled = true;
-            this._dbList.Location = new System.Drawing.Point(12, 315);
+            this._dbList.Location = new System.Drawing.Point(12, 292);
             this._dbList.Name = "_dbList";
-            this._dbList.Size = new System.Drawing.Size(402, 160);
+            this._dbList.Size = new System.Drawing.Size(402, 186);
             this._dbList.TabIndex = 20;
             this._dbList.SelectedIndexChanged += new System.EventHandler(this.OnSelectedDatabaseChanged);
             // 
             // label9
             // 
             this.label9.AutoSize = true;
-            this.label9.Location = new System.Drawing.Point(434, 299);
+            this.label9.Location = new System.Drawing.Point(434, 276);
             this.label9.Name = "label9";
             this.label9.Size = new System.Drawing.Size(39, 13);
             this.label9.TabIndex = 21;
@@ -279,9 +259,9 @@ namespace COFRSFrameworkInstaller
             // _tableList
             // 
             this._tableList.FormattingEnabled = true;
-            this._tableList.Location = new System.Drawing.Point(437, 315);
+            this._tableList.Location = new System.Drawing.Point(437, 292);
             this._tableList.Name = "_tableList";
-            this._tableList.Size = new System.Drawing.Size(393, 160);
+            this._tableList.Size = new System.Drawing.Size(393, 186);
             this._tableList.TabIndex = 22;
             this._tableList.SelectedIndexChanged += new System.EventHandler(this.OnSelectedTableChanged);
             // 
@@ -379,10 +359,8 @@ namespace COFRSFrameworkInstaller
             this.Controls.Add(this.label9);
             this.Controls.Add(this._dbList);
             this.Controls.Add(this.label5);
-            this.Controls.Add(this._profileModelList);
             this.Controls.Add(this._resourceModelList);
             this.Controls.Add(this._entityModelList);
-            this.Controls.Add(this.label8);
             this.Controls.Add(this.label7);
             this.Controls.Add(this.label6);
             this.Controls.Add(this._removeServerButton);
@@ -427,7 +405,6 @@ namespace COFRSFrameworkInstaller
         private System.Windows.Forms.Button _removeServerButton;
         private System.Windows.Forms.Label label6;
         private System.Windows.Forms.Label label7;
-        private System.Windows.Forms.Label label8;
         private System.Windows.Forms.Label label5;
         private System.Windows.Forms.ListBox _dbList;
         private System.Windows.Forms.Label label9;
@@ -441,6 +418,5 @@ namespace COFRSFrameworkInstaller
         private System.Windows.Forms.NumericUpDown _portNumber;
         public System.Windows.Forms.ComboBox _entityModelList;
         public System.Windows.Forms.ComboBox _resourceModelList;
-        public System.Windows.Forms.ComboBox _profileModelList;
     }
 }

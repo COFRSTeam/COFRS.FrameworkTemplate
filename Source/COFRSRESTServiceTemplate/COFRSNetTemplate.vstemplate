@@ -17,10 +17,11 @@
   </TemplateData>
   <TemplateContent>
     <Project File="ProjectTemplate.csproj" ReplaceParameters="true">
-      <ProjectItem ReplaceParameters="true" OpenInEditor="true">Startup.cs</ProjectItem>
+      <ProjectItem OpenInEditor="true">ReadMe.txt</ProjectItem>
+      <ProjectItem ReplaceParameters="true">Startup.cs</ProjectItem>
       <ProjectItem ReplaceParameters="true">Web.config</ProjectItem>
-      <ProjectItem ReplaceParameters="true">Web.Debug.config</ProjectItem>
-      <ProjectItem ReplaceParameters="true">Web.Release.config</ProjectItem>
+      <ProjectItem>Web.Debug.config</ProjectItem>
+      <ProjectItem>Web.Release.config</ProjectItem>
       <ProjectItem ReplaceParameters="true">appSettings.json</ProjectItem>
       <ProjectItem ReplaceParameters="true">appSettings.Local.json</ProjectItem>
       <ProjectItem ReplaceParameters="true">appSettings.Development.json</ProjectItem>
@@ -28,8 +29,8 @@
       <ProjectItem ReplaceParameters="true">appSettings.Staging.json</ProjectItem>
       <ProjectItem ReplaceParameters="true">appSettings.Production.json</ProjectItem>
       <ProjectItem ReplaceParameters="true" TargetFileName="$safeprojectname$.xml">ProjectTemplate.xml</ProjectItem>
-      <ProjectItem ReplaceParameters="true">COFRS.xml</ProjectItem>
-      <ProjectItem ReplaceParameters="true">COFRS.Common.xml</ProjectItem>
+      <ProjectItem ReplaceParameters="false">COFRS.xml</ProjectItem>
+      <ProjectItem ReplaceParameters="false">COFRS.Common.xml</ProjectItem>
       <ProjectItem ReplaceParameters="true">packages.config</ProjectItem>
       <Folder Name="App_Start">
         <ProjectItem ReplaceParameters="true">FilterConfig.cs</ProjectItem>
@@ -64,7 +65,7 @@
         <ProjectItem ReplaceParameters="true">IServiceRepository.cs</ProjectItem>
         <ProjectItem ReplaceParameters="true">ServiceRepository.cs</ProjectItem>
       </Folder>
-      <Folder Name="Validation" />
+      <Folder Name="Validation" />  
     </Project>
   </TemplateContent>
   <WizardExtension>

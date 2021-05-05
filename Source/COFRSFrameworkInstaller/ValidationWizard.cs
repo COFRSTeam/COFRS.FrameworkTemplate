@@ -88,12 +88,11 @@ namespace COFRSFrameworkInstaller
 
 					var entityClassFile = (EntityClassFile)form._entityModelList.SelectedItem;
 					var resourceClassFile = (ResourceClassFile)form._resourceModelList.SelectedItem;
-					var profileClassFile = (ProfileClassFile)form._profileModelList.SelectedItem;
 
 					Utilities.LoadClassList(SolutionFolder, resourceClassFile.ClassName, ref Orchestrator, ref ValidatorClass, ref ExampleClass, ref CollectionExampleClass);
 
 					var emitter = new Emitter();
-					var model = emitter.EmitValidationModel(entityClassFile.ClassName, resourceClassFile.ClassName, replacementsDictionary["$safeitemname$"]);
+					var model = emitter.EmitValidationModel(resourceClassFile.ClassName, replacementsDictionary["$safeitemname$"]);
 
 					replacementsDictionary.Add("$orchestrationnamespace$", Orchestrator.ClassNamespace);
 					replacementsDictionary.Add("$model$", model);
@@ -103,8 +102,6 @@ namespace COFRSFrameworkInstaller
 					Proceed = emitter.UpdateServices(solutionDirectory, replacementsDictionary["$safeitemname$"],
 														entityClassFile.ClassNameSpace, resourceClassFile.ClassNamespace,
 														rootNamespace);
-
-					UpdateServices(resourceClassFile, replacementsDictionary);
 				}
 				else
 					Proceed = false;
@@ -123,7 +120,7 @@ namespace COFRSFrameworkInstaller
 			return Proceed;
 		}
 
-		private bool UpdateServices(ResourceClassFile resourceClassFile, Dictionary<string, string> replacementsDictionary)
+		private bool UpdateServices(ResourceClassFile domainClassFile, Dictionary<string, string> replacementsDictionary)
 		{
 			var servicesFile = FindServices(replacementsDictionary["$solutiondirectory$"]);
 
@@ -212,7 +209,7 @@ namespace COFRSFrameworkInstaller
 
 											state += line.CountOf('{') - line.CountOf('}');
 
-											if (line.Contains("services.InitializeFactories();"))
+											if (line.Contains("return ApiOptions;"))
 												state--;
 
 											if (state == 3)
@@ -252,7 +249,7 @@ namespace COFRSFrameworkInstaller
 
 		private string FindServices(string folder)
 		{
-			string filePath = Path.Combine(folder, "ServicesConfig.cs");
+			string filePath = Path.Combine(folder, "ServiceConfig.cs");
 
 			if (File.Exists(filePath))
 				return filePath;
@@ -267,7 +264,6 @@ namespace COFRSFrameworkInstaller
 
 			return string.Empty;
 		}
-
 
 	}
 }

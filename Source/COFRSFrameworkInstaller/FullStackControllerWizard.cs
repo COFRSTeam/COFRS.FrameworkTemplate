@@ -94,86 +94,103 @@ namespace COFRSFrameworkInstaller
 				{
 					SolutionFolder = replacementsDictionary["$solutiondirectory$"],
 					SingularResourceName = resourceName.SingleForm,
-					PluralResourceName = resourceName.PluralForm
+					PluralResourceName = resourceName.PluralForm,
+					RootNamespace = rootNamespace,
+					replacementsDictionary = replacementsDictionary
 				};
 
 				if (form.ShowDialog() == DialogResult.OK)
 				{
+					//	Replace the ConnectionString
 					var connectionString = form.ConnectionString;
 					ReplaceConnectionString(connectionString, replacementsDictionary);
 
-                    var entityClassName = $"E{form.SingularResourceName}";
-                    var resourceClassName = form.SingularResourceName;
-                    var mappingClassName = $"{form.PluralResourceName}Profile";
-                    var exampleClassName = $"{form.PluralResourceName}Example";
-                    var exampleCollectionClassName = $"Collection{form.PluralResourceName}Example";
-                    var validationClassName = $"{form.PluralResourceName}Validator";
-                    var controllerClassName = $"{form.PluralResourceName}Controller";
+					var entityClassName = $"E{form.SingularResourceName}";
+					var resourceClassName = form.SingularResourceName;
+					var mappingClassName = $"{form.PluralResourceName}Profile";
+					var exampleClassName = $"{form.PluralResourceName}Example";
+					var exampleCollectionClassName = $"Collection{form.PluralResourceName}Example";
+					var validationClassName = $"{form.PluralResourceName}Validator";
+					var controllerClassName = $"{form.PluralResourceName}Controller";
 
-                    replacementsDictionary["$entityClass$"] = entityClassName;
-                    replacementsDictionary["$resourceClass$"] = resourceClassName;
-                    replacementsDictionary["$swaggerClass$"] = exampleClassName;
-                    replacementsDictionary["$swaggerCollectionClass$"] = exampleCollectionClassName;
-                    replacementsDictionary["$mapClass$"] = mappingClassName;
-                    replacementsDictionary["$validatorClass$"] = validationClassName;
-                    replacementsDictionary["$controllerClass$"] = controllerClassName;
+					replacementsDictionary["$entityClass$"] = entityClassName;
+					replacementsDictionary["$resourceClass$"] = resourceClassName;
+					replacementsDictionary["$swaggerClass$"] = exampleClassName;
+					replacementsDictionary["$swaggerCollectionClass$"] = exampleCollectionClassName;
+					replacementsDictionary["$mapClass$"] = mappingClassName;
+					replacementsDictionary["$validatorClass$"] = validationClassName;
+					replacementsDictionary["$controllerClass$"] = controllerClassName;
 
-                    var moniker = LoadMoniker(SolutionFolder);
+					var moniker = LoadMoniker(SolutionFolder);
 					var policy = form.Policy;
 
-                    replacementsDictionary.Add("$companymoniker$", string.IsNullOrWhiteSpace(moniker) ? "acme" : moniker);
-                    replacementsDictionary.Add("$securitymodel$", string.IsNullOrWhiteSpace(policy) ? "none" : "OAuth");
-                    replacementsDictionary.Add("$policy$", string.IsNullOrWhiteSpace(policy) ? "none" : "using");
+					replacementsDictionary.Add("$companymoniker$", string.IsNullOrWhiteSpace(moniker) ? "acme" : moniker);
+					replacementsDictionary.Add("$securitymodel$", string.IsNullOrWhiteSpace(policy) ? "none" : "OAuth");
+					replacementsDictionary.Add("$policy$", string.IsNullOrWhiteSpace(policy) ? "none" : "using");
 
-                    var emitter = new Emitter();
-                    var entityModel = emitter.EmitEntityModel(form.DatabaseTable, entityClassName, form.DatabaseColumns, replacementsDictionary);
-                    replacementsDictionary.Add("$entityModel$", entityModel);
+					var emitter = new Emitter();
 
-                    List<ClassMember> classMembers = LoadClassMembers(form.DatabaseTable, form.DatabaseColumns);
+					//	Emit Entity Model
+					var entityModel = emitter.EmitEntityModel(form.DatabaseTable, entityClassName, form.DatabaseColumns, replacementsDictionary, connectionString);
+					replacementsDictionary.Add("$entityModel$", entityModel);
 
-                    var resourceModel = emitter.EmitResourceModel(classMembers, resourceClassName, entityClassName, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary);
-                    replacementsDictionary.Add("$resourceModel$", resourceModel);
+					List<ClassMember> classMembers = LoadClassMembers(form.DatabaseTable, form.DatabaseColumns, connectionString);
 
-                    var mappingModel = emitter.EmitMappingModel(classMembers, resourceClassName, entityClassName, mappingClassName, form.DatabaseColumns, replacementsDictionary);
-                    replacementsDictionary.Add("$mappingModel$", mappingModel);
+					//	Emit Resource Model
+					var resourceModel = emitter.EmitResourceModel(classMembers, resourceClassName, entityClassName, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary, connectionString);
+					replacementsDictionary.Add("$resourceModel$", resourceModel);
 
-                    var exampleModel = emitter.EmitExampleModel(replacementsDictionary["$targetframeworkversion$"],
-                                            classMembers,
-                                            entityClassName,
-                                            resourceClassName,
-                                            exampleClassName,
-                                            form.DatabaseColumns, form.Examples, replacementsDictionary);
-                    replacementsDictionary.Add("$exampleModel$", exampleModel);
+					//	Emit Mapping Model
+					var mappingModel = emitter.EmitMappingModel(classMembers, resourceClassName, entityClassName, mappingClassName, form.DatabaseColumns, replacementsDictionary);
+					replacementsDictionary.Add("$mappingModel$", mappingModel);
 
-                    var exampleCollectionModel = emitter.EmitExampleCollectionModel(replacementsDictionary["$targetframeworkversion$"],
-                        classMembers,
-                        entityClassName,
-                        resourceClassName,
-                        exampleCollectionClassName,
-                        form.DatabaseColumns, form.Examples, replacementsDictionary);
-                    replacementsDictionary.Add("$exampleCollectionModel$", exampleCollectionModel);
-
-                    var validationModel = emitter.EmitValidationModel(entityClassName, resourceClassName, validationClassName);
-                    replacementsDictionary.Add("$validationModel$", validationModel);
-
-                    Proceed = emitter.UpdateServices(solutionDirectory, validationClassName,
-                                    replacementsDictionary["$entitynamespace$"], replacementsDictionary["$resourcenamespace$"],
-                                    replacementsDictionary["$validatornamespace$"]);
+					//	Emit Example Model
+					var exampleModel = emitter.EmitExampleModel(
+											form.DatabaseTable.Schema,
+											connectionString,
+											classMembers,
+											entityClassName,
+											resourceClassName,
+											exampleClassName,
+											form.DatabaseColumns, form.Examples, replacementsDictionary,
+											form.classList);
+					replacementsDictionary.Add("$exampleModel$", exampleModel);
 
 
-                    var controllerModel = emitter.EmitController(classMembers,
-                                   true,
-                                   moniker,
-                                   resourceClassName,
-                                   controllerClassName,
-                                   validationClassName,
-                                   exampleClassName,
-                                   exampleCollectionClassName,
-                                   policy);
-                    replacementsDictionary.Add("$controllerModel$", controllerModel);
+					var exampleCollectionModel = emitter.EmitExampleCollectionModel(
+						form.DatabaseTable.Schema,
+						connectionString,
+						classMembers,
+						entityClassName,
+						resourceClassName,
+						exampleCollectionClassName,
+						form.DatabaseColumns, form.Examples, replacementsDictionary,
+						form.classList);
+					replacementsDictionary.Add("$exampleCollectionModel$", exampleCollectionModel);
+
+					//	Emit Validation Model
+					var validationModel = emitter.EmitValidationModel(resourceClassName, validationClassName);
+					replacementsDictionary.Add("$validationModel$", validationModel);
+
+					//	Register the validation model
+					Proceed = emitter.UpdateServices(solutionDirectory, validationClassName,
+									replacementsDictionary["$entitynamespace$"], replacementsDictionary["$resourcenamespace$"],
+									replacementsDictionary["$validatornamespace$"]);
+
+					//	Emit Controller
+					var controllerModel = emitter.EmitController(classMembers,
+								   true,
+								   moniker,
+								   resourceClassName,
+								   controllerClassName,
+								   validationClassName,
+								   exampleClassName,
+								   exampleCollectionClassName,
+								   policy);
+					replacementsDictionary.Add("$controllerModel$", controllerModel);
 
 
-                    Proceed = true;
+					Proceed = true;
 				}
 				else
 					Proceed = false;
@@ -192,7 +209,7 @@ namespace COFRSFrameworkInstaller
 			return Proceed;
 		}
 
-		private List<ClassMember> LoadClassMembers(DBTable table, List<DBColumn> columns)
+		private List<ClassMember> LoadClassMembers(DBTable table, List<DBColumn> columns, string connectionString)
 		{
 			var members = new List<ClassMember>();
 
@@ -329,7 +346,7 @@ namespace COFRSFrameworkInstaller
 				}
 
 				if (column.ServerType == DBServerType.POSTGRESQL)
-					column.EntityType = DBHelper.GetPostgresDataType(column);
+					column.EntityType = DBHelper.GetPostgresDataType(table.Schema, column, connectionString, SolutionFolder);
 				else if (column.ServerType == DBServerType.MYSQL)
 					column.EntityType = DBHelper.GetMySqlDataType(column);
 				else if (column.ServerType == DBServerType.SQLSERVER)
@@ -379,6 +396,7 @@ namespace COFRSFrameworkInstaller
 
 			return members;
 		}
+
 		private string LoadPolicy(string folder)
 		{
 			try
@@ -461,10 +479,10 @@ namespace COFRSFrameworkInstaller
 			}
 		}
 
-		private void ReplaceConnectionString(string connectionString, Dictionary<string, string> replacementsDictionary)
+		public static void ReplaceConnectionString(string connectionString, Dictionary<string, string> replacementsDictionary)
 		{
 			//	The first thing we need to do, is we need to load the appSettings.local.json file
-			var fileName = GetLocalFileName(replacementsDictionary["$solutiondirectory$"]);
+			var fileName = GetLocalFileName("appsettings.local.json", replacementsDictionary["$solutiondirectory$"]);
 			string content;
 
 			using (var stream = new FileStream(fileName, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
@@ -493,13 +511,13 @@ namespace COFRSFrameworkInstaller
 			}
 		}
 
-		private string GetLocalFileName(string rootFolder)
+		private static string GetLocalFileName(string fileName, string rootFolder)
 		{
 			var files = Directory.GetFiles(rootFolder);
 
 			foreach (var file in files)
 			{
-				if (file.ToLower().Contains("appsettings.local.json"))
+				if (file.ToLower().Contains(fileName))
 					return file;
 			}
 
@@ -507,7 +525,7 @@ namespace COFRSFrameworkInstaller
 
 			foreach (var childFolder in childFolders)
 			{
-				var theFile = GetLocalFileName(childFolder);
+				var theFile = GetLocalFileName(fileName, childFolder);
 
 				if (!string.IsNullOrWhiteSpace(theFile))
 					return theFile;
