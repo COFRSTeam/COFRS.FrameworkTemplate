@@ -22,7 +22,7 @@ namespace COFRSFrameworkInstaller
 		public DBTable DatabaseTable { get; set; }
 		public List<DBColumn> DatabaseColumns { get; set; }
 		public string ConnectionString { get; set; }
-		public List<EntityClassFile> _entityClasses { get; set; }
+		public List<EntityDetailClassFile> _entityClasses { get; set; }
 		#endregion
 
 		#region Utility functions
@@ -449,11 +449,12 @@ select a.attname as columnname,
 
 									if (entityFile == null)
 									{
-										entityFile = new EntityClassFile()
+										entityFile = new EntityDetailClassFile()
 										{
 											SchemaName = table.Schema,
 											TableName = reader.GetString(1),
-											ClassName = Utilities.NormalizeClassName(reader.GetString(1))
+											ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
+											FileName = Path.Combine(Utilities.LoadBaseFolder(SolutionFolder), $"Models\\EntityModels\\{Utilities.NormalizeClassName(reader.GetString(1))}.cs"),
 										};
 
 										_undefinedElements.Add(entityFile);

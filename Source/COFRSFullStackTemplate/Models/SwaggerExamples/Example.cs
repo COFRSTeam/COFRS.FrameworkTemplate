@@ -1,13 +1,14 @@
-﻿using System;
-$if$ ($examplebarray$ == true)using System.Collections;
-$endif$using System.Collections.Generic;
-$if$ ($exampleimage$ == true)using System.Drawing;
+﻿using $entitynamespace$;
+using $resourcenamespace$;
+using Swashbuckle.Examples;
+using System;
+using System.Collections.Generic;
+$if$ ($usenpgtypes$ == true)using NpgsqlTypes;
+$endif$$if$ ($examplebarray$ == true)using System.Collections;
+$endif$$if$ ($exampleimage$ == true)using System.Drawing;
 $endif$$if$ ($examplenet$ == true)using System.Net;
 $endif$$if$ ($examplenetinfo$ == true)using System.Net.NetworkInformation;
-$endif$using Swashbuckle.Examples;
-using $resourcenamespace$;
-using $entitynamespace$;
-using COFRS;
+$endif$using COFRS;
 
 namespace $rootnamespace$
 {

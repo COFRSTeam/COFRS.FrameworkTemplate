@@ -1,4 +1,6 @@
 ﻿using EnvDTE;
+using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TemplateWizard;
 using Newtonsoft.Json.Linq;
 using System;
@@ -9,6 +11,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using VSLangProj;
 
 namespace COFRSFrameworkInstaller
 {
@@ -43,11 +46,42 @@ namespace COFRSFrameworkInstaller
 			Dictionary<string, string> replacementsDictionary,
 			WizardRunKind runKind, object[] customParams)
 		{
+
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			try
 			{
+				DTE2 _appObject = Package.GetGlobalService(typeof(DTE)) as DTE2;
+				var parent = new WindowClass((IntPtr) _appObject.ActiveWindow.HWnd);
+
+				var progressDialog = new ProgressDialog("Loading classes and preparing project...");
+				progressDialog.Show(parent);
+				progressDialog.Focus();
+
+				HandleMessages();
+
+				_appObject.StatusBar.Animate(true, vsStatusAnimation.vsStatusAnimationGeneral);
+				_appObject.StatusBar.Text = "Preparing project...";
+
+
+				var entityModelsFolder = Utilities.FindEntityModelsFolder(_appObject.Solution);
 				var solutionDirectory = replacementsDictionary["$solutiondirectory$"];
 				var rootNamespace = replacementsDictionary["$rootnamespace$"];
 				var computedRootNamespace = Utilities.GetRootNamespace(solutionDirectory);
+
+				var classList = new List<EntityDetailClassFile>();
+
+				HandleMessages();
+
+
+				foreach (Project project in _appObject.Solution.Projects)
+				{
+					if (project.Kind == PrjKind.prjKindCSharpProject)
+                    {
+						classList.AddRange(ScanProject(project.ProjectItems));
+                    }
+					HandleMessages();
+				}
 
 				if (!string.Equals(rootNamespace, computedRootNamespace, StringComparison.OrdinalIgnoreCase))
 				{
@@ -81,6 +115,8 @@ namespace COFRSFrameworkInstaller
 				if (!Directory.Exists(filePath))
 					Directory.CreateDirectory(filePath);
 
+				HandleMessages();
+
 				replacementsDictionary["$entitynamespace$"] = $"{rootNamespace}.Models.EntityModels";
 				replacementsDictionary["$resourcenamespace$"] = $"{rootNamespace}.Models.ResourceModels";
 				replacementsDictionary["$orchestrationnamespace$"] = $"{rootNamespace}.Orchestration";
@@ -96,14 +132,26 @@ namespace COFRSFrameworkInstaller
 					SingularResourceName = resourceName.SingleForm,
 					PluralResourceName = resourceName.PluralForm,
 					RootNamespace = rootNamespace,
-					replacementsDictionary = replacementsDictionary
+					ReplacementsDictionary = replacementsDictionary,
+					ClassList = classList,
+					EntityModelsFolder = entityModelsFolder
 				};
+
+				HandleMessages();
+
+				progressDialog.Close();
 
 				if (form.ShowDialog() == DialogResult.OK)
 				{
+					progressDialog = new ProgressDialog("Building classes...");
+					progressDialog.Show(parent);
+					progressDialog.Focus();
+
+					HandleMessages();
 					//	Replace the ConnectionString
 					var connectionString = form.ConnectionString;
-					ReplaceConnectionString(connectionString, replacementsDictionary);
+					Utilities.ReplaceConnectionString(_appObject.Solution, connectionString);
+					HandleMessages();
 
 					var entityClassName = $"E{form.SingularResourceName}";
 					var resourceClassName = form.SingularResourceName;
@@ -121,28 +169,47 @@ namespace COFRSFrameworkInstaller
 					replacementsDictionary["$validatorClass$"] = validationClassName;
 					replacementsDictionary["$controllerClass$"] = controllerClassName;
 
-					var moniker = LoadMoniker(SolutionFolder);
+					var moniker = Utilities.LoadMoniker(_appObject.Solution);
 					var policy = form.Policy;
+					HandleMessages();
 
 					replacementsDictionary.Add("$companymoniker$", string.IsNullOrWhiteSpace(moniker) ? "acme" : moniker);
 					replacementsDictionary.Add("$securitymodel$", string.IsNullOrWhiteSpace(policy) ? "none" : "OAuth");
 					replacementsDictionary.Add("$policy$", string.IsNullOrWhiteSpace(policy) ? "none" : "using");
 
+					List<EntityDetailClassFile> composits = form.UndefinedClassList;
+
 					var emitter = new Emitter();
+					emitter.GenerateComposites(composits, connectionString, replacementsDictionary, form.ClassList);
+					HandleMessages();
+
+					foreach ( var composite in composits)
+                    {
+						var pj = (VSProject)_appObject.Solution.Projects.Item(1).Object;
+						pj.Project.ProjectItems.AddFromFile(composite.FileName);
+
+						Utilities.RegisterComposite(_appObject.Solution, composite);
+					}
 
 					//	Emit Entity Model
 					var entityModel = emitter.EmitEntityModel(form.DatabaseTable, entityClassName, form.DatabaseColumns, replacementsDictionary, connectionString);
 					replacementsDictionary.Add("$entityModel$", entityModel);
+					HandleMessages();
 
 					List<ClassMember> classMembers = LoadClassMembers(form.DatabaseTable, form.DatabaseColumns, connectionString);
+
+					var ClassList = Utilities.LoadDetailEntityClassList(SolutionFolder, connectionString);
+					HandleMessages();
 
 					//	Emit Resource Model
 					var resourceModel = emitter.EmitResourceModel(classMembers, resourceClassName, entityClassName, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary, connectionString);
 					replacementsDictionary.Add("$resourceModel$", resourceModel);
+					HandleMessages();
 
 					//	Emit Mapping Model
 					var mappingModel = emitter.EmitMappingModel(classMembers, resourceClassName, entityClassName, mappingClassName, form.DatabaseColumns, replacementsDictionary);
 					replacementsDictionary.Add("$mappingModel$", mappingModel);
+					HandleMessages();
 
 					//	Emit Example Model
 					var exampleModel = emitter.EmitExampleModel(
@@ -153,8 +220,9 @@ namespace COFRSFrameworkInstaller
 											resourceClassName,
 											exampleClassName,
 											form.DatabaseColumns, form.Examples, replacementsDictionary,
-											form.classList);
+											ClassList);
 					replacementsDictionary.Add("$exampleModel$", exampleModel);
+					HandleMessages();
 
 
 					var exampleCollectionModel = emitter.EmitExampleCollectionModel(
@@ -165,17 +233,20 @@ namespace COFRSFrameworkInstaller
 						resourceClassName,
 						exampleCollectionClassName,
 						form.DatabaseColumns, form.Examples, replacementsDictionary,
-						form.classList);
+						ClassList);
 					replacementsDictionary.Add("$exampleCollectionModel$", exampleCollectionModel);
+					HandleMessages();
 
 					//	Emit Validation Model
 					var validationModel = emitter.EmitValidationModel(resourceClassName, validationClassName);
 					replacementsDictionary.Add("$validationModel$", validationModel);
+					HandleMessages();
 
 					//	Register the validation model
-					Proceed = emitter.UpdateServices(solutionDirectory, validationClassName,
-									replacementsDictionary["$entitynamespace$"], replacementsDictionary["$resourcenamespace$"],
-									replacementsDictionary["$validatornamespace$"]);
+
+					Utilities.RegisterValidationModel(_appObject.Solution, 
+						                              validationClassName,
+													  replacementsDictionary["$validatornamespace$"]);
 
 					//	Emit Controller
 					var controllerModel = emitter.EmitController(classMembers,
@@ -188,12 +259,17 @@ namespace COFRSFrameworkInstaller
 								   exampleCollectionClassName,
 								   policy);
 					replacementsDictionary.Add("$controllerModel$", controllerModel);
+					HandleMessages();
 
+					progressDialog.Close();
 
 					Proceed = true;
 				}
 				else
 					Proceed = false;
+
+				_appObject.StatusBar.Animate(false, vsStatusAnimation.vsStatusAnimationGeneral);
+				_appObject.StatusBar.Text = "Ready";
 			}
 			catch (Exception ex)
 			{
@@ -202,9 +278,84 @@ namespace COFRSFrameworkInstaller
 			}
 		}
 
-		// This method is only called for item templates,
-		// not for project templates.
-		public bool ShouldAddProjectItem(string filePath)
+        private List<EntityDetailClassFile> ScanProject(ProjectItems projectItems)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+			var results = new List<EntityDetailClassFile>();
+
+            foreach (ProjectItem item in projectItems)
+            {
+                if (item.FileCodeModel != null)
+                {
+                    int buildAction = 0;
+
+                    foreach (Property property in item.Properties)
+                    {
+                        if (property.Name == "BuildAction")
+                            buildAction = Convert.ToInt32(property.Value);
+                    }
+
+                    if (item.Name.Contains(".cs") && buildAction == 1)
+                    {
+						var wasOpen = item.IsOpen[Constants.vsViewKindAny];
+
+						if (!wasOpen)
+							item.Open(Constants.vsViewKindCode);
+
+						var doc = item.Document;
+						var sel = (TextSelection)doc.Selection;
+
+						var anchorPoint = sel.AnchorPoint;
+						var activePoint = sel.ActivePoint;
+
+						bool isComposite = false;
+						bool isEnum = false;
+						bool isEntity = false;
+
+						sel.StartOfDocument();
+						isComposite = sel.FindText("[PgComposite");
+
+						if (!isComposite)
+						{
+							sel.StartOfDocument();
+							isEnum = sel.FindText("[PgEnum");
+
+							if (!isEnum)
+							{
+								sel.StartOfDocument();
+								isEntity = sel.FindText("[Table");
+							}
+						}
+
+						if (!wasOpen)
+							doc.Close();
+						else
+                        {
+							sel.MoveToPoint(anchorPoint);
+							sel.SwapAnchor();
+							sel.MoveToPoint(activePoint);
+                        }
+
+						if (isComposite || isEnum || isEntity)
+						{
+							var entity = Utilities.LoadEntityClass(item.FileNames[0]); 
+
+							results.Add(entity);
+						}
+                    }
+                }
+				else
+                {
+					results.AddRange(ScanProject(item.ProjectItems));
+                }
+            }
+
+			return results;
+        }
+
+        // This method is only called for item templates,
+        // not for project templates.
+        public bool ShouldAddProjectItem(string filePath)
 		{
 			return Proceed;
 		}
@@ -397,142 +548,14 @@ namespace COFRSFrameworkInstaller
 			return members;
 		}
 
-		private string LoadPolicy(string folder)
-		{
-			try
-			{
-				foreach (var file in Directory.GetFiles(folder, "appSettings.json"))
-				{
-					using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
-					{
-						using (var reader = new StreamReader(stream))
-						{
-							while (!reader.EndOfStream)
-							{
-								var line = reader.ReadLine();
+		private void HandleMessages()
+        {
+			WinNative.NativeMessage msg;
 
-								var match = Regex.Match(line, "[ \t]*\\\"Policy\\\"\\:[ \t]\\\"(?<policy>[^\\\"]+)\\\"");
-								if (match.Success)
-									return match.Groups["policy"].Value;
-							}
-						}
-					}
-
-					return string.Empty;
-				}
-
-				foreach (var subfolder in Directory.GetDirectories(folder))
-				{
-					string policy = LoadPolicy(subfolder);
-
-					if (!string.IsNullOrWhiteSpace(policy))
-						return policy;
-				}
-
-				return string.Empty;
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-				return string.Empty;
-			}
-		}
-
-		private string LoadMoniker(string folder)
-		{
-			try
-			{
-				foreach (var file in Directory.GetFiles(folder, "appSettings.json"))
-				{
-					using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None))
-					{
-						using (var reader = new StreamReader(stream))
-						{
-							while (!reader.EndOfStream)
-							{
-								var line = reader.ReadLine();
-
-								var match = Regex.Match(line, "[ \t]*\\\"CompanyName\\\"\\:[ \t]\\\"(?<moniker>[^\\\"]+)\\\"");
-								if (match.Success)
-									return match.Groups["moniker"].Value;
-							}
-						}
-					}
-
-					return string.Empty;
-				}
-
-				foreach (var subfolder in Directory.GetDirectories(folder))
-				{
-					string moniker = LoadMoniker(subfolder);
-
-					if (!string.IsNullOrWhiteSpace(moniker))
-						return moniker;
-				}
-
-				return string.Empty;
-			}
-			catch (Exception error)
-			{
-				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-				return string.Empty;
-			}
-		}
-
-		public static void ReplaceConnectionString(string connectionString, Dictionary<string, string> replacementsDictionary)
-		{
-			//	The first thing we need to do, is we need to load the appSettings.local.json file
-			var fileName = GetLocalFileName("appsettings.local.json", replacementsDictionary["$solutiondirectory$"]);
-			string content;
-
-			using (var stream = new FileStream(fileName, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
-			{
-				using (var reader = new StreamReader(stream))
-				{
-					content = reader.ReadToEnd();
-				}
-			}
-
-			var appSettings = JObject.Parse(content);
-			var connectionStrings = appSettings.Value<JObject>("ConnectionStrings");
-
-			if (string.Equals(connectionStrings.Value<string>("DefaultConnection"), "Server=developmentdb;Database=master;Trusted_Connection=True;", StringComparison.OrdinalIgnoreCase))
-			{
-				connectionStrings["DefaultConnection"] = connectionString;
-
-				using (var stream = new FileStream(fileName, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
-				{
-					using (var writer = new StreamWriter(stream))
-					{
-						writer.Write(appSettings.ToString());
-						writer.Flush();
-					}
-				}
-			}
-		}
-
-		private static string GetLocalFileName(string fileName, string rootFolder)
-		{
-			var files = Directory.GetFiles(rootFolder);
-
-			foreach (var file in files)
-			{
-				if (file.ToLower().Contains(fileName))
-					return file;
-			}
-
-			var childFolders = Directory.GetDirectories(rootFolder);
-
-			foreach (var childFolder in childFolders)
-			{
-				var theFile = GetLocalFileName(fileName, childFolder);
-
-				if (!string.IsNullOrWhiteSpace(theFile))
-					return theFile;
-			}
-
-
-			return string.Empty;
-		}
+			while ( WinNative.PeekMessage(out msg, IntPtr.Zero, 0, (uint) 0xFFFFFFFF, 1) != 0)
+            {
+				WinNative.SendMessage(msg.handle, msg.msg, msg.wParam, msg.lParam);
+            }
+        }
 	}
 }

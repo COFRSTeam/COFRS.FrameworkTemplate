@@ -1,4 +1,6 @@
 ﻿using EnvDTE;
+using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TemplateWizard;
 using MySql.Data.MySqlClient;
 using NpgsqlTypes;
@@ -46,8 +48,11 @@ namespace COFRSFrameworkInstaller
 			Dictionary<string, string> replacementsDictionary,
 			WizardRunKind runKind, object[] customParams)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			try
 			{
+				DTE2 _appObject = Package.GetGlobalService(typeof(DTE)) as DTE2;
 				var solutionDirectory = replacementsDictionary["$solutiondirectory$"];
 				var rootNamespace = replacementsDictionary["$rootnamespace$"];
 
@@ -99,9 +104,9 @@ namespace COFRSFrameworkInstaller
 					replacementsDictionary.Add("$entitynamespace$", entityClassFile.ClassNameSpace);
 					replacementsDictionary.Add("$resourcenamespace$", resourceClassFile.ClassNamespace);
 
-					Proceed = emitter.UpdateServices(solutionDirectory, replacementsDictionary["$safeitemname$"],
-														entityClassFile.ClassNameSpace, resourceClassFile.ClassNamespace,
-														rootNamespace);
+				    Utilities.RegisterValidationModel(_appObject.Solution,
+													  replacementsDictionary["$safeitemname$"],
+													  rootNamespace);
 				}
 				else
 					Proceed = false;
