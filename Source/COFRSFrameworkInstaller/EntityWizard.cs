@@ -1,4 +1,6 @@
 ﻿using EnvDTE;
+using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TemplateWizard;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json.Linq;
@@ -34,8 +36,13 @@ namespace COFRSFrameworkInstaller
 
 		public void RunStarted(object automationObject, Dictionary<string, string> replacementsDictionary, WizardRunKind runKind, object[] customParams)
 		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
 			try
 			{
+				DTE2 _appObject = Package.GetGlobalService(typeof(DTE)) as DTE2;
+
+				var entityModelsFolder = Utilities.FindEntityModelsFolder(_appObject.Solution);
 				var solutionDirectory = replacementsDictionary["$solutiondirectory$"];
 				var rootNamespace = replacementsDictionary["$rootnamespace$"];
 
@@ -63,14 +70,15 @@ namespace COFRSFrameworkInstaller
 				{
 					SolutionFolder = replacementsDictionary["$solutiondirectory$"],
 					RootNamespace = rootNamespace,
-					replacementsDictionary = replacementsDictionary
+					replacementsDictionary = replacementsDictionary,
+					EntityModelsFolder = entityModelsFolder
 				};
 
-				if (form.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+				if (form.ShowDialog() == DialogResult.OK)
 				{
 					Proceed = true;
 					var connectionString = form.ConnectionString;
-					Utilities.ReplaceConnectionString(connectionString, replacementsDictionary);
+					Utilities.ReplaceConnectionString(_appObject.Solution, connectionString);
 					var className = replacementsDictionary["$safeitemname$"];
 					replacementsDictionary["$entityClass$"] = className;
 
@@ -84,31 +92,33 @@ namespace COFRSFrameworkInstaller
 						entityModel = emitter.EmitEnum(form.DatabaseTable.Schema, form.DatabaseTable.Table, replacementsDictionary["$safeitemname$"], connectionString);
 						replacementsDictionary["$npgsqltypes$"] = "true";
 
-						var entityclassFile = new EntityClassFile()
+						var entityclassFile = new EntityDetailClassFile()
 						{
 							ClassName = replacementsDictionary["$safeitemname$"],
 							SchemaName = form.DatabaseTable.Schema,
 							TableName = form.DatabaseTable.Table,
-							ClassNameSpace = rootNamespace
+							ClassNameSpace = rootNamespace,
+							ElementType = ElementType.Enum
 						};
 
-						Utilities.RegisterEnum(solutionDirectory, entityclassFile);
+						Utilities.RegisterComposite(_appObject.Solution, entityclassFile);
 					}
 					else if (etype == ElementType.Composite)
 					{
-						var undefinedElements = new List<EntityClassFile>();
+						var undefinedElements = new List<EntityDetailClassFile>();
 						entityModel = emitter.EmitComposite(form.DatabaseTable.Schema, form.DatabaseTable.Table, replacementsDictionary["$safeitemname$"], connectionString, replacementsDictionary, form._entityClassList, undefinedElements);
 						replacementsDictionary["$npgsqltypes$"] = "true";
 
-						var classFile = new EntityClassFile()
+						var classFile = new EntityDetailClassFile()
 						{
 							ClassName = replacementsDictionary["$safeitemname$"],
 							SchemaName = form.DatabaseTable.Schema,
 							TableName = form.DatabaseTable.Table,
-							ClassNameSpace = rootNamespace
+							ClassNameSpace = rootNamespace,
+							ElementType = ElementType.Composite
 						};
 
-						Utilities.RegisterComposite(solutionDirectory, classFile);
+						Utilities.RegisterComposite(_appObject.Solution, classFile);
 					}
 					else
 					{

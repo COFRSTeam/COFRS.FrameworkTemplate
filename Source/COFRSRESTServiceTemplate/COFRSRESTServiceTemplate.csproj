@@ -83,6 +83,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Resource.cs" />
     <Content Include="COFRS.ico" />
     <Content Include="Models\SwaggerExamples\HeartbeatExample.cs" />
     <Content Include="ReadMe.txt" />

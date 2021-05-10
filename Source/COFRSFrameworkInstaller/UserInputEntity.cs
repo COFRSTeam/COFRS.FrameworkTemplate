@@ -24,8 +24,10 @@ namespace COFRSFrameworkInstaller
 		public string SolutionFolder { get; set; }
 		public string RootNamespace { get; set; }
 		public string ConnectionString { get; set; }
+
+		public ProjectFolder EntityModelsFolder { get; set; }
 		public string DefaultConnectionString { get; set; }
-		public List<EntityClassFile> _entityClassList { get; set; }
+		public List<EntityDetailClassFile> _entityClassList { get; set; }
 		public Dictionary<string, string> replacementsDictionary { get; set; }
 		#endregion
 
@@ -404,7 +406,7 @@ select s.name, t.name
 
 						case ElementType.Composite:
 							{
-								List<EntityClassFile> UnknownElementsList = new List<EntityClassFile>();
+								List<EntityDetailClassFile> UnknownElementsList = new List<EntityDetailClassFile>();
 								using (var connection = new NpgsqlConnection(connectionString))
 								{
 									connection.Open();
@@ -486,11 +488,13 @@ select a.attname as columnname,
 
 													if (unknownClass == null)
 													{
-														unknownClass = new EntityClassFile()
+														unknownClass = new EntityDetailClassFile()
 														{
 															SchemaName = table.Schema,
 															ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
 															TableName = reader.GetString(1),
+															FileName = Path.Combine(EntityModelsFolder.Folder, Utilities.NormalizeClassName(reader.GetString(1))),
+															ClassNameSpace = EntityModelsFolder.Namespace
 														};
 
 														UnknownElementsList.Add(unknownClass);
@@ -544,14 +548,14 @@ select a.attname as columnname,
 								if (_okButton.Enabled)
 								{
 									var emitter = new Emitter();
-									emitter.GenerateComposites(UnknownElementsList, connectionString, replacementsDictionary["$rootnamespace$"], replacementsDictionary, _entityClassList);
+									emitter.GenerateComposites(UnknownElementsList, connectionString, replacementsDictionary, _entityClassList);
 								}
 							}
 							break;
 
 						case ElementType.Table:
 							{
-								List<EntityClassFile> UnknownElementsList = new List<EntityClassFile>();
+								List<EntityDetailClassFile> UnknownElementsList = new List<EntityDetailClassFile>();
 								using (var connection = new NpgsqlConnection(connectionString))
 								{
 									connection.Open();
@@ -633,7 +637,7 @@ select a.attname as columnname,
 
 													if (unknownClass == null)
 													{
-														unknownClass = new EntityClassFile()
+														unknownClass = new EntityDetailClassFile()
 														{
 															SchemaName = table.Schema,
 															ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
@@ -691,7 +695,7 @@ select a.attname as columnname,
 								if (_okButton.Enabled)
 								{
 									var emitter = new Emitter();
-									emitter.GenerateComposites(UnknownElementsList, connectionString, replacementsDictionary["$rootnamespace$"], replacementsDictionary, _entityClassList);
+									emitter.GenerateComposites(UnknownElementsList, connectionString, replacementsDictionary, _entityClassList);
 								}
 							}
 							break;

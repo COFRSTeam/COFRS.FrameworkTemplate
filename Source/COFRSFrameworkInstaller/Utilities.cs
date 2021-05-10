@@ -1,4 +1,6 @@
-﻿using MySql.Data.MySqlClient;
+﻿using EnvDTE;
+using Microsoft.VisualStudio.Shell;
+using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
@@ -8,6 +10,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Runtime.Caching;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
@@ -16,37 +19,419 @@ namespace COFRSFrameworkInstaller
 {
 	public static class Utilities
 	{
-		public static void ReplaceConnectionString(string connectionString, Dictionary<string, string> replacementsDictionary)
-		{
-			//	The first thing we need to do, is we need to load the appSettings.local.json file
-			var fileName = GetLocalFileName("appsettings.local.json", replacementsDictionary["$solutiondirectory$"]);
-			string content;
+		public static ProjectFolder FindEntityModelsFolder(Solution solution)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var entityModelsFolder = FindProjectFolder(solution, "EntityModels");
 
-			using (var stream = new FileStream(fileName, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+			if (entityModelsFolder != null)
+				return entityModelsFolder;
+
+			var modelsFolder = FindProjectItem(solution, "Models");
+
+			if ( modelsFolder != null )
+            {
+				modelsFolder.ProjectItems.AddFolder("EntityModels");
+				return FindProjectFolder(solution, "EntityModels");
+            }
+
+			Project project = solution.Projects.Item(0);
+
+			modelsFolder = project.ProjectItems.AddFolder("Models");
+			modelsFolder.ProjectItems.AddFolder("EntityModels");
+			return FindProjectFolder(solution, "EntityModels");
+		}
+
+		public static ProjectItem FindProjectItem(Solution solution, string itemName)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach (Project project in solution.Projects)
 			{
-				using (var reader = new StreamReader(stream))
+				foreach (ProjectItem projectItem in project.ProjectItems)
 				{
-					content = reader.ReadToEnd();
+					if (string.Equals(projectItem.Name, itemName, StringComparison.OrdinalIgnoreCase))
+					{
+						return projectItem;
+					}
+
+					var candidate = FindProjectItem(projectItem, itemName);
+
+					if (candidate != null)
+						return candidate;
+				}
+			}
+			return null;
+		}
+
+		public static ProjectItem FindProjectItem(ProjectItem parent, string itemName)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach (ProjectItem projectItem in parent.ProjectItems)
+			{
+				if (string.Equals(projectItem.Name, itemName, StringComparison.OrdinalIgnoreCase))
+				{
+					return projectItem;
+				}
+
+				var candidate = FindProjectItem(projectItem, itemName);
+
+				if (candidate != null)
+					return candidate;
+			}
+
+			return null;
+		}
+
+		public static ProjectFolder FindProjectFolder(Solution solution, string folderName)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach (Project project in solution.Projects)
+			{
+				var projectNamespace = string.Empty;
+
+				foreach ( Property property in project.Properties )
+                {
+					try
+					{
+						if (string.Equals(property.Name, "RootNamespace", StringComparison.OrdinalIgnoreCase))
+							projectNamespace = property.Value.ToString();
+					}
+					catch (Exception) { } 
+                }
+
+				foreach (ProjectItem projectItem in project.ProjectItems)
+				{
+					var folderNamespace = $"{projectNamespace}.{projectItem.Name}";
+
+					if (string.Equals(projectItem.Name, folderName, StringComparison.OrdinalIgnoreCase))
+					{
+						var folder = new ProjectFolder { Namespace = folderNamespace, Folder = projectItem.FileNames[0] };
+						return folder;
+					}
+
+					var candidate = FindProjectFolder(folderNamespace, projectItem, folderName);
+
+					if (candidate != null )
+						return candidate;
+				}
+			}
+			return null;
+		}
+
+		private static ProjectFolder FindProjectFolder(string projectNamespace, ProjectItem projectItem, string folderName)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach (ProjectItem child in projectItem.ProjectItems)
+			{
+				var folderNamespace = $"{projectNamespace}.{projectItem.Name}";
+
+				if (string.Equals(child.Name, folderName, StringComparison.OrdinalIgnoreCase))
+				{
+					var folder = new ProjectFolder { Namespace = folderNamespace, Folder = projectItem.FileNames[0] };
+					return folder;
+				}
+
+				var candidate = FindProjectFolder(folderNamespace, child, folderName);
+
+				if (candidate != null)
+					return candidate;
+			}
+
+			return null;
+		}
+
+		public static string LoadPolicy(Solution solution)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			//	The first thing we need to do, is we need to load the appSettings.local.json file
+			ProjectItem settingsFile = GetProjectItem(solution, "appSettings.json");
+
+			var wasOpen = settingsFile.IsOpen[Constants.vsViewKindAny];
+
+			if (!wasOpen)
+				settingsFile.Open(Constants.vsViewKindTextView);
+
+			Document doc = settingsFile.Document;
+			TextSelection sel = (TextSelection)doc.Selection;
+
+			sel.SelectAll();
+
+			var lines = sel.Text.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+
+			foreach ( var line in lines)
+            {
+				var match = Regex.Match(line, "[ \t]*\\\"Policy\\\"\\:[ \t]\\\"(?<policy>[^\\\"]+)\\\"");
+				if (match.Success)
+					return match.Groups["policy"].Value;
+			}
+
+			if (!wasOpen)
+				doc.Close(vsSaveChanges.vsSaveChangesYes);
+
+			return string.Empty;
+		}
+
+		public static string LoadMoniker(Solution solution)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			//	The first thing we need to do, is we need to load the appSettings.local.json file
+			ProjectItem settingsFile = GetProjectItem(solution, "appSettings.json");
+
+			var wasOpen = settingsFile.IsOpen[Constants.vsViewKindAny];
+
+			if (!wasOpen)
+				settingsFile.Open(Constants.vsViewKindTextView);
+
+			Document doc = settingsFile.Document;
+			TextSelection sel = (TextSelection)doc.Selection;
+			string moniker = string.Empty;
+
+			sel.StartOfDocument();
+			if (sel.FindText("CompanyName"))
+			{
+				sel.SelectLine();
+
+				var match = Regex.Match(sel.Text, "[ \t]*\\\"CompanyName\\\"\\:[ \t]\\\"(?<moniker>[^\\\"]+)\\\"");
+
+				if (match.Success)
+					moniker = match.Groups["moniker"].Value;
+			}
+
+			if (!wasOpen)
+				doc.Close(vsSaveChanges.vsSaveChangesYes);
+
+			return moniker;
+		}
+
+		public static void ReplaceConnectionString(Solution solution, string connectionString)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			//	The first thing we need to do, is we need to load the appSettings.local.json file
+			ProjectItem settingsFile = GetProjectItem(solution, "appsettings.local.json");
+
+			var wasOpen = settingsFile.IsOpen[Constants.vsViewKindAny];
+
+			if (!wasOpen)
+				settingsFile.Open(Constants.vsViewKindTextView);
+
+			Document doc = settingsFile.Document;
+			TextSelection sel = (TextSelection)doc.Selection;
+
+			sel.StartOfDocument();
+			if ( sel.FindText("Server=developmentdb;Database=master;Trusted_Connection=True;"))
+            {
+				sel.SelectLine();
+				sel.Text = $"\t\t\"DefaultConnection\": \"{connectionString}\"";
+            }
+
+			if (!wasOpen)
+				doc.Close(vsSaveChanges.vsSaveChangesYes);
+		}
+
+		public static void RegisterValidationModel(Solution solution, string validationClass, string validationNamespace)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+			ProjectItem serviceConfig = GetProjectItem(solution, "ServicesConfig.cs");
+
+			var wasOpen = serviceConfig.IsOpen[Constants.vsViewKindAny];
+
+			if (!wasOpen)
+				 serviceConfig.Open(Constants.vsViewKindCode);
+
+			Document doc = serviceConfig.Document;
+			TextSelection sel = (TextSelection) doc.Selection;
+
+			sel.StartOfDocument();
+			var hasValidationUsing = sel.FindText($"using {validationNamespace}");
+
+			if ( !hasValidationUsing )
+            {
+				sel.StartOfDocument();
+				sel.FindText("namespace");
+				sel.LineUp();
+				sel.LineUp();
+				sel.EndOfLine();
+
+				sel.NewLine();
+				sel.Insert($"using {validationNamespace};");
+			}
+
+			if (!sel.FindText($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>();", (int)vsFindOptions.vsFindOptionsFromStart))
+			{
+				sel.StartOfDocument();
+				sel.FindText("services.InitializeFactories();");
+				sel.LineUp();
+				sel.LineUp();
+
+				sel.SelectLine();
+
+				if (sel.Text.Contains("services.AddTransientWithParameters<IServiceOrchestrator"))
+				{
+					sel.EndOfLine();
+					sel.NewLine();
+					sel.Insert($"//\tRegister Validators");
+					sel.NewLine();
+					sel.Insert($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>();");
+					sel.NewLine();
+				}
+				else
+				{
+					sel.EndOfLine();
+					sel.Insert($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>();");
+					sel.NewLine();
 				}
 			}
 
-			var appSettings = JObject.Parse(content);
-			var connectionStrings = appSettings.Value<JObject>("ConnectionStrings");
+			if (!wasOpen)
+				doc.Close(vsSaveChanges.vsSaveChangesYes);
+        }
 
-			if (string.Equals(connectionStrings.Value<string>("DefaultConnection"), "Server=developmentdb;Database=master;Trusted_Connection=True;", StringComparison.OrdinalIgnoreCase))
+		public static void RegisterComposite(Solution solution, EntityDetailClassFile classFile)
+		{
+			Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+
+			if (classFile.ElementType == ElementType.Undefined || classFile.ElementType == ElementType.Table)
+				return;
+
+			ProjectItem serviceConfig = GetProjectItem(solution, "ServicesConfig.cs");
+
+			var wasOpen = serviceConfig.IsOpen[Constants.vsViewKindAny];
+
+			if (!wasOpen)
+				serviceConfig.Open(Constants.vsViewKindCode);
+
+			Document doc = serviceConfig.Document;
+			TextSelection sel = (TextSelection)doc.Selection;
+
+			sel.StartOfDocument();
+			var hasNpgsql = sel.FindText($"using Npgsql;");
+
+			sel.StartOfDocument();
+			var hasClassNamespace = sel.FindText($"using {classFile.ClassNameSpace};");
+
+			if (!hasNpgsql || !hasClassNamespace)
 			{
-				connectionStrings["DefaultConnection"] = connectionString;
+				sel.StartOfDocument();
+				sel.FindText("namespace");
 
-				using (var stream = new FileStream(fileName, FileMode.Create, FileAccess.ReadWrite, FileShare.None))
+				sel.LineUp();
+				sel.LineUp();
+				sel.EndOfLine();
+
+				if (!hasNpgsql)
 				{
-					using (var writer = new StreamWriter(stream))
+					sel.NewLine();
+					sel.Insert($"using Npgsql;");
+				}
+
+				if (!hasClassNamespace)
+				{
+					sel.NewLine();
+					sel.Insert($"using {classFile.ClassNameSpace};");
+				}
+			}
+
+			if (!sel.FindText($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{classFile.ClassName}>(\"{classFile.TableName}\");", (int)vsFindOptions.vsFindOptionsFromStart))
+			{
+				sel.StartOfDocument();
+				sel.FindText("var myAssembly = Assembly.GetExecutingAssembly();");
+				sel.LineUp();
+				sel.LineUp();
+
+				sel.SelectLine();
+
+				if (sel.Text.Contains("services.AddSingleton<IRepositoryOptions>(RepositoryOptions);"))
+				{
+					sel.EndOfLine();
+					sel.NewLine();
+					sel.Insert($"//\tRegister Postgresql Composits and Enums");
+					sel.NewLine();
+					if ( classFile.ElementType == ElementType.Composite)
+						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapComposite<{classFile.ClassName}>(\"{classFile.TableName}\");");
+					else
+						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{classFile.ClassName}>(\"{classFile.TableName}\");");
+					sel.NewLine();
+				}
+				else
+				{
+					sel.EndOfLine();
+					if (classFile.ElementType == ElementType.Composite)
+						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapComposite<{classFile.ClassName}>(\"{classFile.TableName}\");");
+					else
+						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{classFile.ClassName}>(\"{classFile.TableName}\");");
+					sel.NewLine();
+				}
+			}
+
+			if (!wasOpen)
+				doc.Close(vsSaveChanges.vsSaveChangesYes);
+		}
+
+
+		public static ProjectItem GetProjectItem(Solution solution, string name)
+        {
+            Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+
+			var theItem = (ProjectItem) DBHelper._cache.Get($"ProjectItem_{name}");
+
+			if (theItem == null)
+			{
+				foreach (Project project in solution.Projects)
+				{
+					theItem = GetProjectItem(project.ProjectItems, name);
+
+					if (theItem != null)
 					{
-						writer.Write(appSettings.ToString());
-						writer.Flush();
+						DBHelper._cache.Set(new CacheItem($"ProjectItem_{name}", theItem), new CacheItemPolicy { AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(5) });
+						return theItem;
 					}
 				}
 			}
+
+			return theItem;
+        }
+
+		public static ProjectItem GetProjectItem(ProjectItems items, string name)
+        {
+			Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach ( ProjectItem projectItem in items)
+            {
+				if (string.Equals(projectItem.Name, name, StringComparison.OrdinalIgnoreCase))
+					return projectItem;
+
+				var theChildItem = GetProjectItem(projectItem.ProjectItems, name);
+
+				if (theChildItem != null)
+					return theChildItem;
+            }
+
+			return null;
 		}
+
+		public static string LoadBaseFolder(string folder)
+        {
+			var files = Directory.GetFiles(folder, "*.csproj");
+
+			if (files.Length > 0)
+				return folder;
+
+			foreach ( var childfolder in Directory.GetDirectories(folder))
+            {
+				if (!string.IsNullOrWhiteSpace(LoadBaseFolder(childfolder)))
+					return childfolder;
+            }
+
+			return string.Empty;
+        }
 
 		private static string GetLocalFileName(string fileName, string rootFolder)
 		{
@@ -852,89 +1237,6 @@ namespace COFRSFrameworkInstaller
 			return string.Empty;
 		}
 
-		public static void RegisterEnum(string solutionFolder, EntityClassFile classFile)
-		{
-			var fileName = FindFile(solutionFolder, "ServiceConfig.cs");
-			var content = File.ReadAllText(fileName, Encoding.UTF8);
-
-
-			if (!content.Contains($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{classFile.ClassName}>(\"{classFile.TableName}\");"))
-			{
-				var lines = content.Split(new string[] { "\r\n" }, StringSplitOptions.None);
-
-				using (var stream = new FileStream(fileName, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite))
-				{
-					using (var writer = new StreamWriter(stream))
-					{
-						if (!content.Contains("Npgsql"))
-							writer.WriteLine("using Npgsql;");
-
-						if (!content.Contains(classFile.ClassNameSpace))
-							writer.WriteLine($"using {classFile.ClassNameSpace};");
-
-						bool insertLines = false;
-
-						foreach (var line in lines)
-						{
-							if (line.Contains("AutoMapperFactory.CreateMapper();"))
-							{
-								insertLines = true;
-							}
-
-							writer.WriteLine(line);
-
-							if (insertLines)
-							{
-								writer.WriteLine($"\t\t\tNpgsqlConnection.GlobalTypeMapper.MapEnum<{classFile.ClassName}>(\"{classFile.TableName}\");");
-								insertLines = false;
-							}
-						}
-					}
-				}
-			}
-		}
-
-		public static void RegisterComposite(string solutionFolder, EntityClassFile classFile)
-		{
-			var fileName = FindFile(solutionFolder, "ServiceConfig.cs");
-			var content = File.ReadAllText(fileName, Encoding.UTF8);
-
-			if (!content.Contains($"NpgsqlConnection.GlobalTypeMapper.MapComposite<{classFile.ClassName}>(\"{classFile.TableName}\");"))
-			{
-				var lines = content.Split(new string[] { "\r\n" }, StringSplitOptions.None);
-
-				using (var stream = new FileStream(fileName, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite))
-				{
-					using (var writer = new StreamWriter(stream))
-					{
-						if (!content.Contains("Npgsql"))
-							writer.WriteLine("using Npgsql;");
-
-						if (!content.Contains(classFile.ClassNameSpace))
-							writer.WriteLine($"using {classFile.ClassNameSpace};");
-
-						bool insertLines = false;
-
-						foreach (var line in lines)
-						{
-							if (line.Contains("AutoMapperFactory.CreateMapper();"))
-							{
-								insertLines = true;
-							}
-
-							writer.WriteLine(line);
-
-							if (insertLines)
-							{
-								writer.WriteLine($"\t\t\tNpgsqlConnection.GlobalTypeMapper.MapComposite<{classFile.ClassName}>(\"{classFile.TableName}\");");
-								insertLines = false;
-							}
-						}
-					}
-				}
-			}
-		}
-
 		public static List<ResourceClassFile> LoadResourceClassList(string folder)
 		{
 			var theList = new List<ResourceClassFile>();
@@ -1009,9 +1311,9 @@ namespace COFRSFrameworkInstaller
 			return null;
 		}
 
-		public static List<EntityClassFile> LoadEntityClassList(string folder)
+		public static List<EntityDetailClassFile> LoadEntityClassList(string folder)
 		{
-			var theList = new List<EntityClassFile>();
+			var theList = new List<EntityDetailClassFile>();
 
 			foreach (var file in Directory.GetFiles(folder, "*.cs"))
 			{
@@ -1028,6 +1330,50 @@ namespace COFRSFrameworkInstaller
 
 			return theList;
 		}
+
+		public static List<EntityDetailClassFile> LoadDetailEntityClassList(List<EntityDetailClassFile> UndefinedClassList, List<EntityDetailClassFile> DefinedClassList, string solutionFolder, string connectionString)
+        {
+			List<EntityDetailClassFile> resultList = new List<EntityDetailClassFile>();
+
+			foreach (var classFile in UndefinedClassList)
+			{
+				var newClassFile = LoadDetailEntityClass(classFile, connectionString);
+				resultList.Add(newClassFile);
+
+				if (newClassFile.ElementType != ElementType.Enum)
+				{
+					foreach (var column in newClassFile.Columns)
+					{
+						if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
+						{
+							if (DefinedClassList.FirstOrDefault(c => string.Equals(c.TableName, column.EntityName, StringComparison.OrdinalIgnoreCase)) == null)
+							{
+								var aList = new List<EntityDetailClassFile>();
+								var bList = new List<EntityDetailClassFile>();
+
+								var aClassFile = new EntityDetailClassFile()
+								{
+									ClassName = NormalizeClassName(column.EntityName),
+									TableName = column.EntityName,
+									SchemaName = classFile.SchemaName,
+									FileName = Path.Combine(LoadBaseFolder(solutionFolder), $"Models\\EntityModels\\{NormalizeClassName(column.EntityName)}.cs"),
+									ClassNameSpace = classFile.ClassNameSpace,
+									ElementType = DBHelper.GetElementType(classFile.SchemaName, column.EntityName, connectionString)
+								};
+								aList.Add(aClassFile);
+								bList.AddRange(DefinedClassList);
+								bList.AddRange(UndefinedClassList);
+
+								resultList.AddRange(LoadDetailEntityClassList(aList, bList, solutionFolder, connectionString));
+							}
+						}
+					}
+				}
+			}
+
+			return resultList;
+		}
+
 		public static List<EntityDetailClassFile> LoadDetailEntityClassList(string folder, string connectionString)
 		{
 			var theList = new List<EntityDetailClassFile>();
@@ -1048,7 +1394,7 @@ namespace COFRSFrameworkInstaller
 			return theList;
 		}
 
-		private static EntityClassFile LoadEntityClass(string file)
+		public static EntityDetailClassFile LoadEntityClass(string file)
 		{
 			var content = File.ReadAllText(file);
 			var namespaceName = string.Empty;
@@ -1087,7 +1433,7 @@ namespace COFRSFrameworkInstaller
 
 						if (match.Success)
 						{
-							var classfile = new EntityClassFile
+							var classfile = new EntityDetailClassFile
 							{
 								ClassName = match.Groups["className"].Value,
 								FileName = file,
@@ -1134,7 +1480,7 @@ namespace COFRSFrameworkInstaller
 
 						if (match.Success)
 						{
-							var classfile = new EntityClassFile
+							var classfile = new EntityDetailClassFile
 							{
 								ClassName = match.Groups["className"].Value,
 								FileName = file,
@@ -1181,7 +1527,7 @@ namespace COFRSFrameworkInstaller
 
 						if (match.Success)
 						{
-							var classfile = new EntityClassFile
+							var classfile = new EntityDetailClassFile
 							{
 								ClassName = match.Groups["className"].Value,
 								FileName = file,
@@ -1198,6 +1544,18 @@ namespace COFRSFrameworkInstaller
 			}
 
 			return null;
+		}
+
+		private static EntityDetailClassFile LoadDetailEntityClass(EntityDetailClassFile classFile, string connectionString)
+        {
+			classFile.ElementType = DBHelper.GetElementType(classFile.SchemaName, classFile.TableName, connectionString);
+
+			if ( classFile.ElementType == ElementType.Enum)
+				LoadEnumColumns(connectionString, classFile);
+			else
+				LoadColumns(connectionString, classFile);
+
+			return classFile;
 		}
 
 		private static EntityDetailClassFile LoadDetailEntityClass(string file, string ConnectionString)
@@ -1440,68 +1798,115 @@ namespace COFRSFrameworkInstaller
 			}
 		}
 
-		private static void LoadColumns(string connectionString, EntityDetailClassFile classFile)
-		{
-			var contents = File.ReadAllText(classFile.FileName);
+		private static void LoadEnumColumns(string connectionString, EntityDetailClassFile classFile)
+        {
 			classFile.Columns = new List<DBColumn>();
+			string query = @"
+select e.enumlabel as enum_value
+from pg_type t 
+   join pg_enum e on t.oid = e.enumtypid  
+   join pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+where t.typname = @dataType
+  and n.nspname = @schema";
 
-			var lines = contents.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
-			var tableName = classFile.TableName;
-			var schema = classFile.SchemaName;
-			var entityName = string.Empty;
-
-			foreach (var line in lines)
+			using (var connection = new NpgsqlConnection(connectionString))
 			{
-				//	Is this a member annotation?
-				if (line.Trim().StartsWith("[PgName", StringComparison.OrdinalIgnoreCase))
+				connection.Open();
+				using (var command = new NpgsqlCommand(query, connection))
 				{
-					var match = Regex.Match(line, "\\[PgName[ \\t]*\\([ \\t]*\\\"(?<columnName>[a-zA-Z_][a-zA-Z0-9_]*)\\\"\\)\\]");
+					command.Parameters.AddWithValue("@dataType", classFile.TableName);
+					command.Parameters.AddWithValue("@schema", classFile.SchemaName);
 
-					//	If the entity specified a different column name than the member name, remember it.
-					if (match.Success)
-						entityName = match.Groups["columnName"].Value;
-				}
-
-				//	Is this a member?
-				else if (line.Trim().StartsWith("public", StringComparison.OrdinalIgnoreCase))
-				{
-					//	The following will recoginze these types of data types:
-					//	
-					//	Simple data types:  int, long, string, Guid, Datetime, etc.
-					//	Typed data types:  List<T>, IEnumerable<int>
-					//	Embedded Typed Data types: IEnumerable<ValueTuple<string, int>>
-
-					var whitespace = "[ \\t]*";
-					var space = "[ \\t]+";
-					var variableName = "[a-zA-Z_][a-zA-Z0-9_]*[\\?]?(\\[\\])?";
-					var singletype = $"\\<{whitespace}{variableName}({whitespace}\\,{whitespace}{variableName})*{whitespace}\\>";
-					var multitype = $"<{whitespace}{variableName}{whitespace}{singletype}{whitespace}\\>";
-					var typedecl = $"{variableName}(({singletype})|({multitype}))*";
-					var pattern = $"{whitespace}public{space}(?<datatype>{typedecl})[ \\t]+(?<columnname>{variableName})[ \\t]+{{{whitespace}get{whitespace}\\;{whitespace}set{whitespace}\\;{whitespace}\\}}";
-					var match2 = Regex.Match(line, pattern);
-
-					if (match2.Success)
+					using (var reader = command.ExecuteReader())
 					{
-						//	Okay, we got a column. Get the member name can call it the entityName.
-						var className = match2.Groups["columnname"].Value;
-
-						if (string.IsNullOrWhiteSpace(entityName))
-							entityName = className;
-
-						var entityColumn = new DBColumn()
+						while (reader.Read())
 						{
-							ColumnName = className,
-							EntityName = entityName,
-							EntityType = match2.Groups["datatype"].Value,
-							ServerType = DBServerType.POSTGRESQL
-						};
+							var element = reader.GetString(0);
+							var elementName = Utilities.NormalizeClassName(element);
 
-						classFile.Columns.Add(entityColumn);
+							var column = new DBColumn()
+							{
+								ColumnName = elementName,
+								EntityName = element,
+								ServerType = DBServerType.POSTGRESQL
+							};	
 
-						entityName = string.Empty;
+							classFile.Columns.Add(column);
+						}
 					}
 				}
 			}
+		}
+
+		private static void LoadColumns(string connectionString, EntityDetailClassFile classFile)
+		{
+			if (File.Exists(classFile.FileName))
+			{
+				var contents = File.ReadAllText(classFile.FileName);
+				classFile.Columns = new List<DBColumn>();
+
+				var lines = contents.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+				var tableName = classFile.TableName;
+				var schema = classFile.SchemaName;
+				var entityName = string.Empty;
+
+				foreach (var line in lines)
+				{
+					//	Is this a member annotation?
+					if (line.Trim().StartsWith("[PgName", StringComparison.OrdinalIgnoreCase))
+					{
+						var match = Regex.Match(line, "\\[PgName[ \\t]*\\([ \\t]*\\\"(?<columnName>[a-zA-Z_][a-zA-Z0-9_]*)\\\"\\)\\]");
+
+						//	If the entity specified a different column name than the member name, remember it.
+						if (match.Success)
+							entityName = match.Groups["columnName"].Value;
+					}
+
+					//	Is this a member?
+					else if (line.Trim().StartsWith("public", StringComparison.OrdinalIgnoreCase))
+					{
+						//	The following will recoginze these types of data types:
+						//	
+						//	Simple data types:  int, long, string, Guid, Datetime, etc.
+						//	Typed data types:  List<T>, IEnumerable<int>
+						//	Embedded Typed Data types: IEnumerable<ValueTuple<string, int>>
+
+						var whitespace = "[ \\t]*";
+						var space = "[ \\t]+";
+						var variableName = "[a-zA-Z_][a-zA-Z0-9_]*[\\?]?(\\[\\])?";
+						var singletype = $"\\<{whitespace}{variableName}({whitespace}\\,{whitespace}{variableName})*{whitespace}\\>";
+						var multitype = $"<{whitespace}{variableName}{whitespace}{singletype}{whitespace}\\>";
+						var typedecl = $"{variableName}(({singletype})|({multitype}))*";
+						var pattern = $"{whitespace}public{space}(?<datatype>{typedecl})[ \\t]+(?<columnname>{variableName})[ \\t]+{{{whitespace}get{whitespace}\\;{whitespace}set{whitespace}\\;{whitespace}\\}}";
+						var match2 = Regex.Match(line, pattern);
+
+						if (match2.Success)
+						{
+							//	Okay, we got a column. Get the member name can call it the entityName.
+							var className = match2.Groups["columnname"].Value;
+
+							if (string.IsNullOrWhiteSpace(entityName))
+								entityName = className;
+
+							var entityColumn = new DBColumn()
+							{
+								ColumnName = className,
+								EntityName = entityName,
+								EntityType = match2.Groups["datatype"].Value,
+								ServerType = DBServerType.POSTGRESQL
+							};
+
+							classFile.Columns.Add(entityColumn);
+
+							entityName = string.Empty;
+						}
+					}
+				}
+			}
+			else
+            {
+				classFile.Columns = new List<DBColumn>();
+            }
 
 			using (var connection = new NpgsqlConnection(connectionString))
 			{
@@ -1561,6 +1966,15 @@ select a.attname as columnname,
 							}
 
 							var dbColumn = classFile.Columns.FirstOrDefault(c => string.Equals(c.EntityName, reader.GetString(0), StringComparison.OrdinalIgnoreCase));
+							
+							if ( dbColumn == null )
+                            {
+								dbColumn = new DBColumn();
+								dbColumn.EntityName = reader.GetString(0);
+								dbColumn.ColumnName = Utilities.NormalizeClassName(reader.GetString(0));
+								classFile.Columns.Add(dbColumn);
+							}
+							
 							dbColumn.DataType = dataType;
 							dbColumn.dbDataType = reader.GetString(1);
 							dbColumn.Length = Convert.ToInt64(reader.GetValue(2));

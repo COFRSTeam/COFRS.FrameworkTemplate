@@ -31,7 +31,7 @@ namespace COFRSFrameworkInstaller
 		public JObject Examples { get; set; }
 		public string DefaultConnectionString { get; set; }
 		public string ConnectionString { get; set; }
-		public List<EntityClassFile> _entityClasses { get; set; }
+		public List<EntityDetailClassFile> _entityClasses { get; set; }
 		public List<EntityDetailClassFile> classList { get; set; }
 
 		#endregion
@@ -538,7 +538,7 @@ select a.attname as columnname,
 
 									if (entityFile == null)
 									{
-										entityFile = new EntityClassFile()
+										entityFile = new EntityDetailClassFile()
 										{
 											SchemaName = table.Schema,
 											TableName = reader.GetString(1),

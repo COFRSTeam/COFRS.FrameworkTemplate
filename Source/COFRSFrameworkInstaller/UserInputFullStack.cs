@@ -1,4 +1,7 @@
-﻿using MySql.Data.MySqlClient;
+﻿using EnvDTE;
+using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
+using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
@@ -18,6 +21,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using VSLangProj;
 
 namespace COFRSFrameworkInstaller
 {
@@ -29,16 +33,16 @@ namespace COFRSFrameworkInstaller
 		public DBTable DatabaseTable { get; set; }
 		public List<DBColumn> DatabaseColumns { get; set; }
 		public string SolutionFolder { get; set; }
+		public ProjectFolder EntityModelsFolder { get; set; }
 		public string RootNamespace { get; set; }
 		public string SingularResourceName { get; set; }
 		public string PluralResourceName { get; set; }
 		public string ConnectionString { get; set; }
 		public string DefaultConnectionString { get; set; }
 		public JObject Examples { get; set; }
-		public List<EntityClassFile> _entityClasses { get; set; }
-		public List<EntityDetailClassFile> classList { get; set; }
-		public Dictionary<string, string> replacementsDictionary { get; set; }
-		List<EntityClassFile> _undefinedElements = new List<EntityClassFile>();
+		public Dictionary<string, string> ReplacementsDictionary { get; set; }
+		public List<EntityDetailClassFile> ClassList { get; set; }
+		public List<EntityDetailClassFile> UndefinedClassList = new List<EntityDetailClassFile>();
 
 		public string Policy
 		{
@@ -73,9 +77,6 @@ namespace COFRSFrameworkInstaller
 
 			LoadAppSettings();
 			ReadServerList();
-
-			_entityClasses = Utilities.LoadEntityClassList(SolutionFolder);
-
 
 			var policies = Utilities.LoadPolicies(SolutionFolder);
 
@@ -725,87 +726,6 @@ select typtype
 			return string.Empty;
 		}
 
-		private void GenerateEnumFromDatabase(string schema, string dataType, NpgsqlConnection connection)
-		{
-			var className = Utilities.NormalizeClassName(dataType);
-
-			var nn = new NameNormalizer(className);
-
-			var builder = new StringBuilder();
-			var destinationPath = FindEntityModelsFolder(SolutionFolder);
-			var fileName = Path.Combine(destinationPath, $"E{className}.cs");
-
-			builder.Clear();
-			builder.AppendLine("using COFRS;");
-			builder.AppendLine("using NpgsqlTypes;");
-			builder.AppendLine();
-			builder.AppendLine($"namespace {RootNamespace}");
-			builder.AppendLine("{");
-			builder.AppendLine("\t///\t<summary>");
-			builder.AppendLine($"\t///\tEnumerates a list of {nn.PluralForm}");
-			builder.AppendLine("\t///\t</summary>");
-
-			if (string.IsNullOrWhiteSpace(schema))
-				builder.AppendLine($"\t[PgEnum(\"{dataType}\")]");
-			else
-				builder.AppendLine($"\t[PgEnum(\"{dataType}\", Schema = \"{schema}\")]");
-
-			builder.AppendLine($"\tpublic enum E{className}");
-			builder.AppendLine("\t{");
-
-			string query = @"
-select e.enumlabel as enum_value
-from pg_type t 
-   join pg_enum e on t.oid = e.enumtypid  
-   join pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-where t.typname = @dataType
-  and n.nspname = @schema";
-
-			using (var command = new NpgsqlCommand(query, connection))
-			{
-				command.Parameters.AddWithValue("@dataType", dataType);
-				command.Parameters.AddWithValue("@schema", schema);
-
-				bool firstUse = true;
-
-				using (var reader = command.ExecuteReader())
-				{
-					while (reader.Read())
-					{
-						if (firstUse)
-							firstUse = false;
-						else
-						{
-							builder.AppendLine(",");
-							builder.AppendLine();
-						}
-
-						var element = reader.GetString(0);
-
-						builder.AppendLine("\t\t///\t<summary>");
-						builder.AppendLine($"\t\t///\t{element}");
-						builder.AppendLine("\t\t///\t</summary>");
-						builder.AppendLine($"\t\t[PgName(\"{element}\")]");
-
-						var elementName = Utilities.NormalizeClassName(element);
-						builder.Append($"\t\t{elementName}");
-					}
-				}
-			}
-
-			builder.AppendLine();
-			builder.AppendLine("\t}");
-			builder.AppendLine("}");
-
-			using (var stream = new FileStream(fileName, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite))
-			{
-				var buffer = Encoding.UTF8.GetBytes(builder.ToString());
-				stream.Write(buffer, 0, buffer.Length);
-			}
-
-			OnTableChanged(this, new EventArgs());
-		}
-
 		private void OnTableChanged(object sender, EventArgs e)
 		{
 			try
@@ -826,7 +746,8 @@ where t.typname = @dataType
 
 				if (server.DBType == DBServerType.POSTGRESQL)
 				{
-					_undefinedElements.Clear();
+					UndefinedClassList.Clear();
+
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
 
 					using (var connection = new NpgsqlConnection(connectionString))
@@ -904,20 +825,22 @@ select a.attname as columnname,
 									}
 									catch (InvalidCastException)
 									{
-										var unknownClass = _entityClasses.FirstOrDefault(c =>
+										EntityDetailClassFile unknownClass = ClassList.FirstOrDefault(c =>
 											string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
 											string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
 
 										if (unknownClass == null)
 										{
-											unknownClass = new EntityClassFile()
+											unknownClass = new EntityDetailClassFile()
 											{
 												SchemaName = table.Schema,
-												ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
 												TableName = reader.GetString(1),
+												ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
+												ClassNameSpace = EntityModelsFolder.Namespace,
+												FileName = Path.Combine(EntityModelsFolder.Folder, $"{Utilities.NormalizeClassName(reader.GetString(1))}.cs")
 											};
 
-											_undefinedElements.Add(unknownClass);
+											UndefinedClassList.Add(unknownClass);
 										}
 									}
 
@@ -1131,21 +1054,20 @@ select c.name as column_name,
 			var server = (DBServer)_serverList.SelectedItem;
 			var db = (string)_dbList.SelectedItem;
 			DatabaseTable = (DBTable)_tableList.SelectedItem;
+			string baseFolder = Utilities.LoadBaseFolder(SolutionFolder);
 
 			if (server.DBType == DBServerType.POSTGRESQL)
 			{
 				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
 
-				foreach (var unknownClass in _undefinedElements)
-				{
-					unknownClass.ElementType = GetElementType(unknownClass.SchemaName, unknownClass.TableName, connectionString);
-				}
-
-				var emitter = new Emitter();
-				emitter.GenerateComposites(_undefinedElements, connectionString, replacementsDictionary["$rootnamespace$"], replacementsDictionary, _entityClasses);
+				UndefinedClassList = Utilities.LoadDetailEntityClassList(UndefinedClassList, ClassList, SolutionFolder, connectionString);
 			}
 
-			Examples = ConstructExample();
+			List<EntityDetailClassFile> theClassList = new List<EntityDetailClassFile>();
+			theClassList.AddRange(ClassList);
+			theClassList.AddRange(UndefinedClassList);
+
+			Examples = ConstructExample(theClassList);
 
 			DialogResult = DialogResult.OK;
 			Close();
@@ -1790,7 +1712,7 @@ select name
 
 			return false;
 		}
-		private JObject ConstructExample()
+		private JObject ConstructExample(List<EntityDetailClassFile> classList)
 		{
 			var server = (DBServer)_serverList.SelectedItem;
 			var table = (DBTable)_tableList.SelectedItem;
@@ -1846,7 +1768,6 @@ select name
 			else if (server.DBType == DBServerType.POSTGRESQL)
 			{
 				ConnectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
-				classList = Utilities.LoadDetailEntityClassList(SolutionFolder, ConnectionString);
 
 				using (var connection = new NpgsqlConnection(ConnectionString))
 				{
@@ -2839,7 +2760,7 @@ select name
 
 		private ElementType GetElementType(string Schema, string elementName, string connectionString)
 		{
-			var classFile = _entityClasses.FirstOrDefault(c => string.Equals(c.SchemaName, Schema, StringComparison.OrdinalIgnoreCase) && string.Equals(c.TableName, elementName, StringComparison.OrdinalIgnoreCase));
+			var classFile = ClassList.FirstOrDefault(c => string.Equals(c.SchemaName, Schema, StringComparison.OrdinalIgnoreCase) && string.Equals(c.TableName, elementName, StringComparison.OrdinalIgnoreCase));
 
 			if (classFile != null)
 				return classFile.ElementType;

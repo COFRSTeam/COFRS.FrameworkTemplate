@@ -63,29 +63,29 @@ namespace COFRSFrameworkInstaller
 			if (!string.IsNullOrWhiteSpace(policy))
 				results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
 
-			results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.OK, Type = typeof(RqlCollection<{resourceClassName}>))]");
+			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof(RqlCollection<{resourceClassName}>))]");
 
 			if (!string.IsNullOrWhiteSpace(exampleCollectionClassName))
-				results.AppendLine($"\t\t[SwaggerResponseExample((int)HttpStatusCode.OK, typeof({exampleCollectionClassName}))]");
+				results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.OK, typeof({exampleCollectionClassName}))]");
 
 			results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 			results.AppendLine("\t\t[SupportRQL]");
-			results.AppendLine($"\t\tpublic async Task<IActionResult> Get{nn.PluralForm}Async()");
+			results.AppendLine($"\t\tpublic async Task<IHttpActionResult> Get{nn.PluralForm}Async()");
 			results.AppendLine("\t\t{");
-			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.Path}\");");
-			results.AppendLine("\t\t\tvar node = RqlNode.Parse(Request.QueryString.Value);");
+			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
+			results.AppendLine("\t\t\tvar node = RqlNode.Parse(Request.RequestUri.Query);");
 			results.AppendLine();
 
 			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<I{validationClassName}>(User);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{validationClassName}>(User);");
 				results.AppendLine("\t\t\tawait validator.ValidateForGetAsync(node).ConfigureAwait(false);");
 				results.AppendLine();
 			}
 
-			results.AppendLine($"\t\t\tusing (var service = HttpContext.RequestServices.Get<IServiceOrchestrator>(User))");
+			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 			results.AppendLine($"\t\t\t{{");
-			results.AppendLine($"\t\t\t\tvar collection = await service.GetCollectionAsync<{resourceClassName}>(Request.QueryString.Value, node).ConfigureAwait(false);");
+			results.AppendLine($"\t\t\t\tvar collection = await service.GetCollectionAsync<{resourceClassName}>(Request.RequestUri.Query, node).ConfigureAwait(false);");
 			results.AppendLine($"\t\t\t\treturn Ok(collection);");
 			results.AppendLine($"\t\t\t}}");
 			results.AppendLine("\t\t}");
@@ -109,31 +109,31 @@ namespace COFRSFrameworkInstaller
 				if (!string.IsNullOrWhiteSpace(policy))
 					results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
 
-				results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.OK, Type = typeof({resourceClassName}))]");
+				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof({resourceClassName}))]");
 
 				if (!string.IsNullOrWhiteSpace(exampleClassName))
-					results.AppendLine($"\t\t[SwaggerResponseExample((int)HttpStatusCode.OK, typeof({exampleClassName}))]");
+					results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.OK, typeof({exampleClassName}))]");
 
-				results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.NotFound)]");
+				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 				results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 				results.AppendLine("\t\t[SupportRQL]");
 
 				EmitEndpoint(resourceClassName, "Get", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
-				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.Path}\");");
+				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
 				results.AppendLine();
 				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"Href=uri:/{BuildRoute(nn.PluralCamelCase, pkcolumns)}\")");
-				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.QueryString.Value));");
+				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 
 				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<I{validationClassName}>(User);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{validationClassName}>(User);");
 					results.AppendLine("\t\t\tawait validator.ValidateForGetAsync(node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
 
-				results.AppendLine($"\t\t\tusing (var service = HttpContext.RequestServices.Get<IServiceOrchestrator>(User))");
+				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 				results.AppendLine("\t\t\t{");
 				results.AppendLine($"\t\t\t\tvar item = await service.GetSingleAsync<{resourceClassName}>(node).ConfigureAwait(false);");
 				results.AppendLine();
@@ -164,27 +164,27 @@ namespace COFRSFrameworkInstaller
 			if (!string.IsNullOrWhiteSpace(exampleClassName))
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({resourceClassName}), typeof({exampleClassName}))]");
 
-			results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.Created, Type = typeof({resourceClassName}))]");
+			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.Created, Type = typeof({resourceClassName}))]");
 
 			if (!string.IsNullOrWhiteSpace(exampleClassName))
-				results.AppendLine($"\t\t[SwaggerResponseExample((int)HttpStatusCode.Created, typeof({exampleClassName}))]");
+				results.AppendLine($"\t\t[SwaggerResponseExample(HttpStatusCode.Created, typeof({exampleClassName}))]");
 
-			results.AppendLine($"\t\t[SwaggerResponseHeader((int)HttpStatusCode.Created, \"Location\", \"string\", \"Returns Href of new {resourceClassName}\")]");
+			results.AppendLine($"\t\t[SwaggerResponseHeader(HttpStatusCode.Created, \"Location\", \"string\", \"Returns Href of new {resourceClassName}\")]");
 			results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 			results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
-			results.AppendLine($"\t\tpublic async Task<IActionResult> Add{resourceClassName}Async([FromBody] {resourceClassName} item)");
+			results.AppendLine($"\t\tpublic async Task<IHttpActionResult> Add{resourceClassName}Async([FromBody] {resourceClassName} item)");
 			results.AppendLine("\t\t{");
-			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.Path}\");");
+			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
 			results.AppendLine();
 
 			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<I{validationClassName}>(User);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{validationClassName}>(User);");
 				results.AppendLine("\t\t\tawait validator.ValidateForAddAsync(item).ConfigureAwait(false);");
 				results.AppendLine();
 			}
 
-			results.AppendLine($"\t\t\tusing (var service = HttpContext.RequestServices.Get<IServiceOrchestrator>(User))");
+			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 			results.AppendLine("\t\t\t{");
 			results.AppendLine($"\t\t\t\titem = await service.AddAsync(item).ConfigureAwait(false);");
 			results.AppendLine($"\t\t\t\treturn Created(item.Href.AbsoluteUri, item);");
@@ -210,25 +210,25 @@ namespace COFRSFrameworkInstaller
 			if (!string.IsNullOrWhiteSpace(exampleClassName))
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof({resourceClassName}), typeof({exampleClassName}))]");
 
-			results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.NoContent)]");
-			results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.NotFound)]");
+			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
+			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 			results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 			results.AppendLine("\t\t[SupportRQL]");
-			results.AppendLine($"\t\tpublic async Task<IActionResult> Update{resourceClassName}Async([FromBody] {resourceClassName} item)");
+			results.AppendLine($"\t\tpublic async Task<IHttpActionResult> Update{resourceClassName}Async([FromBody] {resourceClassName} item)");
 			results.AppendLine("\t\t{");
-			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.Path}\");");
+			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
 			results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"Href=uri:{{item.Href}}\")");
-			results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.QueryString.Value));");
+			results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 			results.AppendLine();
 
 			if (hasValidator)
 			{
-				results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<I{validationClassName}>(User);");
+				results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{validationClassName}>(User);");
 				results.AppendLine("\t\t\tawait validator.ValidateForUpdateAsync(item, node).ConfigureAwait(false);");
 				results.AppendLine();
 			}
 
-			results.AppendLine($"\t\t\tusing (var service = HttpContext.RequestServices.Get<IServiceOrchestrator>(User))");
+			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 			results.AppendLine("\t\t\t{");
 			results.AppendLine($"\t\t\t\tawait service.UpdateAsync(item, node).ConfigureAwait(false);");
 			results.AppendLine($"\t\t\t\treturn NoContent();");
@@ -255,26 +255,26 @@ namespace COFRSFrameworkInstaller
 					results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
 
 				results.AppendLine($"\t\t[SwaggerRequestExample(typeof(IEnumerable<PatchCommand>), typeof(PatchExample))]");
-				results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.NoContent)]");
-				results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.NotFound)]");
+				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
+				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 				results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 				results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 				EmitEndpoint(resourceClassName, "Patch", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
-				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.Path}\");");
+				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
 				results.AppendLine();
 				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"Href=uri:/{BuildRoute(nn.PluralCamelCase, pkcolumns)}\")");
-				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.QueryString.Value));");
+				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 
 				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<I{validationClassName}>(User);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{validationClassName}>(User);");
 					results.AppendLine("\t\t\tawait validator.ValidateForPatchAsync(commands, node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
 
-				results.AppendLine($"\t\t\tusing (var service = HttpContext.RequestServices.Get<IServiceOrchestrator>(User))");
+				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 				results.AppendLine("\t\t\t{");
 				results.AppendLine($"\t\t\t\tawait service.PatchAsync<{resourceClassName}>(commands, node).ConfigureAwait(false);");
 				results.AppendLine($"\t\t\t\treturn NoContent();");
@@ -297,25 +297,25 @@ namespace COFRSFrameworkInstaller
 				if (!string.IsNullOrWhiteSpace(policy))
 					results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
 
-				results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.NoContent)]");
-				results.AppendLine($"\t\t[SwaggerResponse((int)HttpStatusCode.NotFound)]");
+				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
+				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 
 				EmitEndpoint(resourceClassName, "Delete", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
-				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.Path}\");");
+				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
 				results.AppendLine();
 				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"Href=uri:/{BuildRoute(nn.PluralCamelCase, pkcolumns)}\")");
-				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.QueryString.Value));");
+				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 
 				if (hasValidator)
 				{
-					results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<I{validationClassName}>(User);");
+					results.AppendLine($"\t\t\tvar validator = ServiceContainer.RequestServices.Get<I{validationClassName}>(User);");
 					results.AppendLine("\t\t\tawait validator.ValidateForDeleteAsync(node).ConfigureAwait(false);");
 					results.AppendLine();
 				}
 
-				results.AppendLine($"\t\t\tusing (var service = HttpContext.RequestServices.Get<IServiceOrchestrator>(User))");
+				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
 				results.AppendLine("\t\t\t{");
 				results.AppendLine($"\t\t\t\tawait service.DeleteAsync<{resourceClassName}>(node).ConfigureAwait(false);");
 				results.AppendLine($"\t\t\t\treturn NoContent();");
@@ -501,14 +501,14 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t///\t<summary>");
 			results.AppendLine($"\t///\t{resourceClassName} Example");
 			results.AppendLine("\t///\t</summary>");
-			results.AppendLine($"\tpublic class {exampleClassName} : IExamplesProvider<{resourceClassName}>");
+			results.AppendLine($"\tpublic class {exampleClassName} : IExamplesProvider");
 			results.AppendLine("\t{");
 
 			results.AppendLine("\t\t///\t<summary>");
 			results.AppendLine($"\t\t///\tGet Example");
 			results.AppendLine("\t\t///\t</summary>");
 			results.AppendLine($"\t\t///\t<returns>An example of {resourceClassName}</returns>");
-			results.AppendLine($"\t\tpublic {resourceClassName} GetExamples()");
+			results.AppendLine($"\t\tpublic object GetExamples()");
 			results.AppendLine("\t\t{");
 			results.AppendLine($"\t\t\tvar item = new {entityClassName}");
 			results.AppendLine("\t\t\t{");
@@ -610,14 +610,14 @@ namespace COFRSFrameworkInstaller
 			results.AppendLine("\t///\t<summary>");
 			results.AppendLine($"\t///\t{resourceClassName} Collection Example");
 			results.AppendLine("\t///\t</summary>");
-			results.AppendLine($"\tpublic class {exampleCollectionClassName} : IExamplesProvider<RqlCollection<{resourceClassName}>>");
+			results.AppendLine($"\tpublic class {exampleCollectionClassName} : IExamplesProvider");
 			results.AppendLine("\t{");
 
 			results.AppendLine("\t\t///\t<summary>");
 			results.AppendLine($"\t\t///\tGet Example");
 			results.AppendLine("\t\t///\t</summary>");
 			results.AppendLine($"\t\t///\t<returns>An example of {resourceClassName} collection</returns>");
-			results.AppendLine($"\t\tpublic RqlCollection<{resourceClassName}> GetExamples()");
+			results.AppendLine($"\t\tpublic object GetExamples()");
 			results.AppendLine("\t\t{");
 			results.AppendLine($"\t\t\tvar item = new {entityClassName}");
 			results.AppendLine("\t\t\t{");
@@ -729,7 +729,7 @@ where t.typname = @dataType
 			return builder.ToString();
 		}
 
-		public string EmitComposite(string schema, string dataType, string className, string connectionString, Dictionary<string, string> replacementsDictionary, List<EntityClassFile> definedElements, List<EntityClassFile> undefinedElements)
+		public string EmitComposite(string schema, string dataType, string className, string connectionString, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> definedElements, List<EntityDetailClassFile> undefinedElements)
 		{
 			var nn = new NameNormalizer(className);
 			var result = new StringBuilder();
@@ -801,7 +801,7 @@ select a.attname as columnname,
  order by a.attnum";
 
 			var columns = new List<DBColumn>();
-			var candidates = new List<EntityClassFile>();
+			var candidates = new List<EntityDetailClassFile>();
 
 			using (var connection = new NpgsqlConnection(connectionString))
 			{
@@ -823,11 +823,13 @@ select a.attname as columnname,
 							}
 							catch (InvalidCastException)
 							{
-								var classFile = new EntityClassFile()
+								var classFile = new EntityDetailClassFile()
 								{
 									ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
 									SchemaName = schema,
-									TableName = reader.GetString(1)
+									TableName = reader.GetString(1),
+									ClassNameSpace = replacementsDictionary["$rootnamespace$"] + ".Models.EntityModels",
+									FileName = Path.Combine(Utilities.LoadBaseFolder(replacementsDictionary["$solutiondirectory$"]), $"Models\\EntityModels\\{Utilities.NormalizeClassName(reader.GetString(1))}.cs")
 								};
 
 								candidates.Add(classFile);
@@ -5495,154 +5497,9 @@ select a.attname as columnname,
 			return first;
 		}
 
-		public bool UpdateServices(string solutionFolder, string validationClass, string entityNamespace, string resourceNamespace, string validationNamespace)
-		{
-			var servicesFile = FindServices(solutionFolder);
-
-			if (!string.IsNullOrWhiteSpace(servicesFile))
-			{
-				var serviceFolder = Path.GetDirectoryName(servicesFile);
-				var tempFile = Path.Combine(serviceFolder, "Services.old.cs");
-
-				try
-				{
-					File.Delete(tempFile);
-					File.Move(servicesFile, tempFile);
-
-					using (var stream = new FileStream(tempFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
-					{
-						using (var reader = new StreamReader(stream))
-						{
-							using (var outStream = new FileStream(servicesFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.ReadWrite))
-							{
-								using (var writer = new StreamWriter(outStream))
-								{
-									var state = 1;
-									bool hasDomainNamespace = false;
-									bool hasValidationNamespace = false;
-									bool hasEntityNamespace = false;
-									bool validatorRegistered = false;
-
-									while (!reader.EndOfStream)
-									{
-										var line = reader.ReadLine();
-
-										if (state == 1)
-										{
-											if (line.ToLower().Contains(resourceNamespace.ToLower()))
-											{
-												hasDomainNamespace = true;
-											}
-
-											if (line.ToLower().Contains(validationNamespace.ToLower()))
-											{
-												hasValidationNamespace = true;
-											}
-
-											if (line.ToLower().Contains(entityNamespace.ToLower()))
-											{
-												hasEntityNamespace = true;
-											}
-
-											if (string.IsNullOrWhiteSpace(line))
-											{
-												if (!hasDomainNamespace)
-												{
-													writer.WriteLine($"using {resourceNamespace};");
-												}
-
-												if (!hasValidationNamespace)
-												{
-													writer.WriteLine($"using {validationNamespace};");
-												}
-
-												if (!hasEntityNamespace)
-												{
-													writer.WriteLine($"using {entityNamespace};");
-												}
-
-												state = 2;
-											}
-
-										}
-										else if (state == 2)
-										{
-											if (line.ToLower().Contains("public static iapioptions configureservices"))
-											{
-												state = 3;
-											}
-										}
-										else if (state == 3)
-										{
-											if (line.Contains("{"))
-												state++;
-										}
-										else if (state == 4)
-										{
-											if (line.ToLower().Contains(($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>()").ToLower()))
-												validatorRegistered = true;
-
-											state += line.CountOf('{') - line.CountOf('}');
-
-											if (line.Contains("return ApiOptions;"))
-												state--;
-
-											if (state == 3)
-											{
-												if (!validatorRegistered)
-												{
-													writer.WriteLine($"\t\t\tservices.AddTransientWithParameters<I{validationClass}, {validationClass}>();");
-												}
-												state = 1000000;
-											}
-										}
-										else
-										{
-											state += line.CountOf('{') - line.CountOf('}');
-										}
-
-										writer.WriteLine(line);
-									}
-								}
-							}
-						}
-					}
-
-					File.Delete(tempFile);
-				}
-				catch (Exception error)
-				{
-					MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-					File.Delete(servicesFile);
-					File.Move(tempFile, servicesFile);
-					return false;
-				}
-			}
-
-			return true;
-		}
-
-		public string FindServices(string folder)
-		{
-			string filePath = Path.Combine(folder, "ServiceConfig.cs");
-
-			if (File.Exists(filePath))
-				return filePath;
-
-			foreach (var childFolder in Directory.GetDirectories(folder))
-			{
-				filePath = FindServices(childFolder);
-
-				if (!string.IsNullOrWhiteSpace(filePath))
-					return filePath;
-			}
-
-			return string.Empty;
-		}
-
 		private void EmitEndpoint(string resourceClassName, string action, StringBuilder results, IEnumerable<ClassMember> pkcolumns)
 		{
-			results.Append($"\t\tpublic async Task<IActionResult> {action}{resourceClassName}Async(");
+			results.Append($"\t\tpublic async Task<IHttpActionResult> {action}{resourceClassName}Async(");
 			bool first = true;
 
 			foreach (var domainColumn in pkcolumns)
@@ -5749,7 +5606,7 @@ select a.attname as columnname,
 		/// <param name="rootnamespace">The root namespace for the newly defined elements</param>
 		/// <param name="replacementsDictionary">The replacements dictionary</param>
 		/// <param name="definedElements">The lise of elements that are defined</param>
-		public void GenerateComposites(List<EntityClassFile> composites, string connectionString, string rootnamespace, Dictionary<string, string> replacementsDictionary, List<EntityClassFile> definedElements)
+		public void GenerateComposites(List<EntityDetailClassFile> composites, string connectionString, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> definedElements)
 		{
 			foreach (var composite in composites)
 			{
@@ -5760,22 +5617,12 @@ select a.attname as columnname,
 					result.AppendLine("using COFRS;");
 					result.AppendLine("using NpgsqlTypes;");
 					result.AppendLine();
-					result.AppendLine($"namespace {rootnamespace}");
+					result.AppendLine($"namespace {composite.ClassNameSpace}");
 					result.AppendLine("{");
 					result.Append(EmitEnum(composite.SchemaName, composite.TableName, composite.ClassName, connectionString));
 					result.AppendLine("}");
 
-					var destinationFolder = FindEntityModelsFolder(replacementsDictionary["$solutiondirectory$"]);
-
-					if (string.IsNullOrWhiteSpace(destinationFolder))
-					{
-						destinationFolder = FindProjectFolder($"{replacementsDictionary["$rootnamespace$"]}.csproj", replacementsDictionary["$solutiondirectory$"]);
-						destinationFolder = Path.Combine(destinationFolder, "Models\\EntityModels");
-						Directory.CreateDirectory(destinationFolder);
-					}
-
-					var fileName = Path.Combine(destinationFolder, $"{composite.ClassName}.cs");
-					File.WriteAllText(fileName, result.ToString());
+					File.WriteAllText(composite.FileName, result.ToString());
 				}
 				else if (composite.ElementType == ElementType.Composite)
 				{
@@ -5785,12 +5632,12 @@ select a.attname as columnname,
 
 					while (!allElementsDefined)
 					{
-						var undefinedElements = new List<EntityClassFile>();
+						var undefinedElements = new List<EntityDetailClassFile>();
 						body = EmitComposite(composite.SchemaName, composite.TableName, composite.ClassName, connectionString, replacementsDictionary, definedElements, undefinedElements);
 
 						if (undefinedElements.Count > 0)
 						{
-							GenerateComposites(undefinedElements, connectionString, rootnamespace, replacementsDictionary, definedElements);
+							GenerateComposites(undefinedElements, connectionString, replacementsDictionary, definedElements);
 							definedElements.AddRange(undefinedElements);
 						}
 						else
@@ -5825,18 +5672,12 @@ select a.attname as columnname,
 					}
 
 					result.AppendLine();
-					result.AppendLine($"namespace {rootnamespace}");
+					result.AppendLine($"namespace {composite.ClassNameSpace}");
 					result.AppendLine("{");
 					result.Append(body);
 					result.AppendLine("}");
 
-					var destinationFolder = FindEntityModelsFolder(replacementsDictionary["$solutiondirectory$"]);
-
-					if (!Directory.Exists(destinationFolder))
-						Directory.CreateDirectory(destinationFolder);
-
-					var fileName = Path.Combine(destinationFolder, $"{composite.ClassName}.cs");
-					File.WriteAllText(fileName, result.ToString());
+					File.WriteAllText(composite.FileName, result.ToString());
 				}
 			}
 		}
