@@ -576,7 +576,7 @@ select a.attname as columnname,
 
 				foreach (var candidate in _undefinedElements)
 				{
-					candidate.ElementType = DBHelper.GetElementType(candidate.SchemaName, candidate.TableName, ConnectionString);
+					candidate.ElementType = DBHelper.GetElementType(candidate.SchemaName, candidate.TableName, classList, ConnectionString);
 
 					if (candidate.ElementType == ElementType.Enum)
 					{

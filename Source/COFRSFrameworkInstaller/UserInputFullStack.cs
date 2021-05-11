@@ -32,7 +32,6 @@ namespace COFRSFrameworkInstaller
 		private bool Populating = false;
 		public DBTable DatabaseTable { get; set; }
 		public List<DBColumn> DatabaseColumns { get; set; }
-		public string SolutionFolder { get; set; }
 		public ProjectFolder EntityModelsFolder { get; set; }
 		public string RootNamespace { get; set; }
 		public string SingularResourceName { get; set; }
@@ -41,8 +40,10 @@ namespace COFRSFrameworkInstaller
 		public string DefaultConnectionString { get; set; }
 		public JObject Examples { get; set; }
 		public Dictionary<string, string> ReplacementsDictionary { get; set; }
+		public List<string> Policies;
 		public List<EntityDetailClassFile> ClassList { get; set; }
 		public List<EntityDetailClassFile> UndefinedClassList = new List<EntityDetailClassFile>();
+		public bool IsPostgresql { get; set; }
 
 		public string Policy
 		{
@@ -58,7 +59,6 @@ namespace COFRSFrameworkInstaller
 				}
 			}
 		}
-
 		#endregion
 
 		#region Utility functions
@@ -75,18 +75,15 @@ namespace COFRSFrameworkInstaller
 			SingularName.Text = SingularResourceName;
 			PluralName.Text = PluralResourceName;
 
-			LoadAppSettings();
 			ReadServerList();
 
-			var policies = Utilities.LoadPolicies(SolutionFolder);
-
-			if (policies != null)
+			if (Policies != null && Policies.Count > 0)
 			{
 				policyCombo.Visible = true;
 				policyLabel.Visible = true;
 				policyCombo.Items.Add("Anonymous");
 
-				foreach (var policy in policies)
+				foreach (var policy in Policies)
 					policyCombo.Items.Add(policy);
 
 				policyCombo.SelectedIndex = 0;
@@ -146,6 +143,7 @@ namespace COFRSFrameworkInstaller
 					_dbList.Items.Clear();
 					_tableList.Items.Clear();
 					var server = (DBServer)_serverList.SelectedItem;
+					IsPostgresql = server.DBType == DBServerType.POSTGRESQL;
 
 					if (server != null)
 					{
@@ -989,6 +987,7 @@ select c.name as column_name,
 									var dbColumn = new DBColumn
 									{
 										ColumnName = reader.GetString(0),
+										EntityName = reader.GetString(0),
 										dbDataType = reader.GetString(1),
 										DataType = DBHelper.ConvertSqlServerDataType(reader.GetString(1)),
 										Length = Convert.ToInt64(reader.GetValue(2)),
@@ -1054,13 +1053,11 @@ select c.name as column_name,
 			var server = (DBServer)_serverList.SelectedItem;
 			var db = (string)_dbList.SelectedItem;
 			DatabaseTable = (DBTable)_tableList.SelectedItem;
-			string baseFolder = Utilities.LoadBaseFolder(SolutionFolder);
 
 			if (server.DBType == DBServerType.POSTGRESQL)
 			{
 				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
-
-				UndefinedClassList = Utilities.LoadDetailEntityClassList(UndefinedClassList, ClassList, SolutionFolder, connectionString);
+				UndefinedClassList = Utilities.LoadDetailEntityClassList(UndefinedClassList, ClassList, ReplacementsDictionary["$solutionDirectory$"], connectionString);
 			}
 
 			List<EntityDetailClassFile> theClassList = new List<EntityDetailClassFile>();
@@ -1677,10 +1674,6 @@ select name
 
 			//	We're done. Turn off the populating flag.
 			Populating = false;
-		}
-		private void LoadAppSettings()
-		{
-			LoadAppSettings(SolutionFolder);
 		}
 
 		private bool LoadAppSettings(string folder)
@@ -2704,37 +2697,19 @@ select name
 				else
 					query.Append(", ");
 
+				var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
+
 				if (string.Equals(column.dbDataType, "hierarchyid", StringComparison.OrdinalIgnoreCase))
 				{
-					query.Append($"REPLACE(CAST({column.ColumnName} AS nvarchar({column.Length})), '/', '-' ) as [{column.ColumnName}]");
+					query.Append($"REPLACE(CAST({columnName} AS nvarchar({column.Length})), '/', '-' ) as [{columnName}]");
 				}
 				else
 				{
-					query.Append($"[{column.ColumnName}]");
+					query.Append($"[{columnName}]");
 				}
 			}
 
 			query.Append($" FROM [{table.Schema}].[{table.Table}] WITH(NOLOCK)");
-			return query.ToString();
-		}
-
-		private string GeneratePostgresqlQuery(DBTable table)
-		{
-			var query = new StringBuilder("SELECT ");
-
-			bool firstColumn = true;
-
-			foreach (var column in DatabaseColumns)
-			{
-				if (firstColumn)
-					firstColumn = false;
-				else
-					query.Append(", ");
-
-				query.Append($"\"{column.ColumnName}\"");
-			}
-
-			query.Append($" FROM \"{table.Schema}\".\"{table.Table}\" LIMIT 1");
 			return query.ToString();
 		}
 
@@ -2749,23 +2724,15 @@ select name
 				if (firstColumn)
 					firstColumn = false;
 				else
-					query.Append(", ");
+					query.Append(", "); 
+				
+				var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
 
-				query.Append($"`{column.ColumnName}`");
+				query.Append($"`{columnName}`");
 			}
 
 			query.Append($" FROM `{table.Table}` LIMIT 1;");
 			return query.ToString();
-		}
-
-		private ElementType GetElementType(string Schema, string elementName, string connectionString)
-		{
-			var classFile = ClassList.FirstOrDefault(c => string.Equals(c.SchemaName, Schema, StringComparison.OrdinalIgnoreCase) && string.Equals(c.TableName, elementName, StringComparison.OrdinalIgnoreCase));
-
-			if (classFile != null)
-				return classFile.ElementType;
-
-			return DBHelper.GetElementType(Schema, elementName, connectionString);
 		}
 
 		private string GeneratePostgresqlQuery(DBTable table, List<EntityDetailClassFile> classList)
@@ -2776,6 +2743,8 @@ select name
 
 			foreach (var column in DatabaseColumns)
 			{
+				var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
+
 				if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
 				{
 					var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
@@ -2783,18 +2752,18 @@ select name
 					if (cl == null || cl.ElementType == ElementType.Enum)
 					{
 						firstColumn = AppendComma(query, firstColumn);
-						query.Append($"\"{column.ColumnName}\"");
+						query.Append($"\"{columnName}\"");
 					}
 					else
 					{
-						var parent = $"\"{column.ColumnName}\"";
+						var parent = $"\"{columnName}\"";
 						firstColumn = DeconstructComposite(parent, column, classList, query, firstColumn);
 					}
 				}
 				else
 				{
 					firstColumn = AppendComma(query, firstColumn);
-					query.Append($"\"{column.ColumnName}\"");
+					query.Append($"\"{columnName}\"");
 				}
 			}
 

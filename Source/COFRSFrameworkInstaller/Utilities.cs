@@ -14,11 +14,176 @@ using System.Runtime.Caching;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
+using VSLangProj;
 
 namespace COFRSFrameworkInstaller
 {
 	public static class Utilities
 	{
+		#region Solution functions
+		public static List<EntityDetailClassFile> LoadEntityDetailClassList(Solution solution)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+			var classList = new List<EntityDetailClassFile>();
+
+			foreach (Project project in solution.Projects)
+			{
+				if (project.Kind == PrjKind.prjKindCSharpProject)
+				{
+					classList.AddRange(Utilities.ScanProject(project.ProjectItems));
+				}
+			}
+
+			return classList;
+		}
+
+		public static List<string> LoadPolicies(Solution solution)
+		{
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            var results = new List<string>();
+			var appSettings = FindProjectItem(solution, "appSettings.json");
+
+			var wasOpen = appSettings.IsOpen[Constants.vsViewKindAny];
+
+			if (!wasOpen)
+				appSettings.Open(Constants.vsViewKindTextView);
+
+			var doc = appSettings.Document;
+			var sel = (TextSelection)doc.Selection;
+
+			sel.SelectAll();
+
+			using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(sel.Text)))
+            {
+				using (var textReader = new StreamReader(stream))
+				{
+					using (var reader = new JsonTextReader(textReader))
+					{
+						var jsonConfig = JObject.Load(reader, new JsonLoadSettings { CommentHandling = CommentHandling.Ignore, LineInfoHandling = LineInfoHandling.Ignore });
+
+						if (jsonConfig["OAuth2"] == null)
+							return null;
+
+						var oAuth2Settings = jsonConfig["OAuth2"].Value<JObject>();
+
+						if (oAuth2Settings["Policies"] == null)
+							return null;
+
+						var policyArray = oAuth2Settings["Policies"].Value<JArray>();
+
+						foreach (var policy in policyArray)
+							results.Add(policy["Policy"].Value<string>());
+					}
+				}
+			}
+
+			if (!wasOpen)
+					doc.Close();
+
+			return results;
+		}
+
+		private static List<EntityDetailClassFile> ScanProject(ProjectItems projectItems)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+			var results = new List<EntityDetailClassFile>();
+
+			foreach (ProjectItem item in projectItems)
+			{
+				if (item.FileCodeModel != null)
+				{
+					int buildAction = 0;
+
+					foreach (Property property in item.Properties)
+					{
+						if (property.Name == "BuildAction")
+							buildAction = Convert.ToInt32(property.Value);
+					}
+
+					if (item.Name.Contains(".cs") && buildAction == 1)
+					{
+						var wasOpen = item.IsOpen[Constants.vsViewKindAny];
+
+						if (!wasOpen)
+							item.Open(Constants.vsViewKindCode);
+
+						var doc = item.Document;
+						var sel = (TextSelection)doc.Selection;
+
+						var anchorPoint = sel.AnchorPoint;
+						var activePoint = sel.ActivePoint;
+
+						bool isComposite = false;
+						bool isEnum = false;
+						bool isEntity = false;
+
+						sel.StartOfDocument();
+						isComposite = sel.FindText("[PgComposite");
+
+						if (!isComposite)
+						{
+							sel.StartOfDocument();
+							isEnum = sel.FindText("[PgEnum");
+
+							if (!isEnum)
+							{
+								sel.StartOfDocument();
+								isEntity = sel.FindText("[Table");
+							}
+						}
+
+						if (!wasOpen)
+							doc.Close();
+						else
+						{
+							sel.MoveToPoint(anchorPoint);
+							sel.SwapAnchor();
+							sel.MoveToPoint(activePoint);
+						}
+
+						if (isComposite || isEnum || isEntity)
+						{
+							var entity = Utilities.LoadEntityClass(item.FileNames[0]);
+
+							results.Add(entity);
+						}
+					}
+				}
+				else
+				{
+					results.AddRange(ScanProject(item.ProjectItems));
+				}
+			}
+
+			return results;
+		}
+
+		public static bool IsRootNamespace(Solution solution, string candidateNamespace)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            foreach ( Project project in solution.Projects)
+            {
+				var projectNamespace = string.Empty;
+
+				foreach (Property property in project.Properties)
+				{
+					try
+					{
+						if (string.Equals(property.Name, "RootNamespace", StringComparison.OrdinalIgnoreCase))
+							projectNamespace = property.Value.ToString();
+					}
+					catch (Exception) { }
+				}
+
+				if (string.Equals(candidateNamespace, projectNamespace, StringComparison.OrdinalIgnoreCase))
+					return true;
+			}
+
+			return false;
+		}
+
 		public static ProjectFolder FindEntityModelsFolder(Solution solution)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -104,18 +269,21 @@ namespace COFRSFrameworkInstaller
 
 				foreach (ProjectItem projectItem in project.ProjectItems)
 				{
-					var folderNamespace = $"{projectNamespace}.{projectItem.Name}";
-
-					if (string.Equals(projectItem.Name, folderName, StringComparison.OrdinalIgnoreCase))
+					if (string.IsNullOrWhiteSpace(Path.GetExtension(projectItem.Name)))
 					{
-						var folder = new ProjectFolder { Namespace = folderNamespace, Folder = projectItem.FileNames[0] };
-						return folder;
+						var folderNamespace = $"{projectNamespace}.{projectItem.Name}";
+
+						if (string.Equals(projectItem.Name, folderName, StringComparison.OrdinalIgnoreCase))
+						{
+							var folder = new ProjectFolder { Namespace = folderNamespace, Folder = projectItem.FileNames[0] };
+							return folder;
+						}
+
+						var candidate = FindProjectFolder(folderNamespace, projectItem, folderName);
+
+						if (candidate != null)
+							return candidate;
 					}
-
-					var candidate = FindProjectFolder(folderNamespace, projectItem, folderName);
-
-					if (candidate != null )
-						return candidate;
 				}
 			}
 			return null;
@@ -127,18 +295,21 @@ namespace COFRSFrameworkInstaller
 
 			foreach (ProjectItem child in projectItem.ProjectItems)
 			{
-				var folderNamespace = $"{projectNamespace}.{projectItem.Name}";
-
-				if (string.Equals(child.Name, folderName, StringComparison.OrdinalIgnoreCase))
+				if (string.IsNullOrWhiteSpace(Path.GetExtension(projectItem.Name)))
 				{
-					var folder = new ProjectFolder { Namespace = folderNamespace, Folder = projectItem.FileNames[0] };
-					return folder;
+					var folderNamespace = $"{projectNamespace}.{child.Name}";
+
+					if (string.Equals(child.Name, folderName, StringComparison.OrdinalIgnoreCase))
+					{
+						var folder = new ProjectFolder { Namespace = folderNamespace, Folder = child.FileNames[0] };
+						return folder;
+					}
+
+					var candidate = FindProjectFolder(folderNamespace, child, folderName);
+
+					if (candidate != null)
+						return candidate;
 				}
-
-				var candidate = FindProjectFolder(folderNamespace, child, folderName);
-
-				if (candidate != null)
-					return candidate;
 			}
 
 			return null;
@@ -207,6 +378,33 @@ namespace COFRSFrameworkInstaller
 				doc.Close(vsSaveChanges.vsSaveChangesYes);
 
 			return moniker;
+		}
+
+		public static string GetConnectionString(Solution solution)
+        {
+			ThreadHelper.ThrowIfNotOnUIThread();
+			var connectionString = string.Empty;
+
+			//	The first thing we need to do, is we need to load the appSettings.local.json file
+			ProjectItem settingsFile = GetProjectItem(solution, "appsettings.local.json");
+
+			var wasOpen = settingsFile.IsOpen[Constants.vsViewKindAny];
+
+			if (!wasOpen)
+				settingsFile.Open(Constants.vsViewKindTextView);
+
+			Document doc = settingsFile.Document;
+			TextSelection sel = (TextSelection)doc.Selection;
+
+			sel.SelectAll();
+			var settings = JObject.Parse(sel.Text);
+			var connectionStrings = settings["ConnectionStrings"].Value<JObject>();
+			connectionString = connectionStrings["DefaultConnection"].Value<string>();
+
+			if (!wasOpen)
+				doc.Close(vsSaveChanges.vsSaveChangesYes);
+
+			return connectionString;
 		}
 
 		public static void ReplaceConnectionString(Solution solution, string connectionString)
@@ -375,7 +573,6 @@ namespace COFRSFrameworkInstaller
 				doc.Close(vsSaveChanges.vsSaveChangesYes);
 		}
 
-
 		public static ProjectItem GetProjectItem(Solution solution, string name)
         {
             Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
@@ -416,8 +613,9 @@ namespace COFRSFrameworkInstaller
 
 			return null;
 		}
+        #endregion
 
-		public static string LoadBaseFolder(string folder)
+        public static string LoadBaseFolder(string folder)
         {
 			var files = Directory.GetFiles(folder, "*.csproj");
 
@@ -455,41 +653,6 @@ namespace COFRSFrameworkInstaller
 
 
 			return string.Empty;
-		}
-
-		public static List<string> LoadPolicies(string solutionFolder)
-		{
-			var results = new List<string>();
-
-			try
-			{
-				var configFile = Utilities.FindFile(solutionFolder, "appSettings.json");
-
-				if (string.IsNullOrWhiteSpace(configFile))
-					return null;
-
-				using (var stream = new FileStream(configFile, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
-				{
-					using (var textReader = new StreamReader(stream))
-					{
-						using (var reader = new JsonTextReader(textReader))
-						{
-							var jsonConfig = JObject.Load(reader, new JsonLoadSettings { CommentHandling = CommentHandling.Ignore, LineInfoHandling = LineInfoHandling.Ignore });
-							var oAuth2Settings = jsonConfig["OAuth2"].Value<JObject>();
-							var policyArray = oAuth2Settings["Policies"].Value<JArray>();
-
-							foreach (var policy in policyArray)
-								results.Add(policy["Policy"].Value<string>());
-						}
-					}
-				}
-			}
-			catch (Exception)
-			{
-				results = null;
-			}
-
-			return results;
 		}
 
 		public static List<ClassMember> LoadEntityClassMembers(string entityFileName, List<DBColumn> columns)
@@ -1197,46 +1360,6 @@ namespace COFRSFrameworkInstaller
 			}
 		}
 
-		public static string GetRootNamespace(string SolutionFolder)
-		{
-			string fullPath = Path.Combine(SolutionFolder, "Startup.cs");
-
-			if (File.Exists(fullPath))
-			{
-				using (var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-				{
-					using (var reader = new StreamReader(stream))
-					{
-						while (!reader.EndOfStream)
-						{
-							var line = reader.ReadLine();
-
-							var match = Regex.Match(line, "[ \t]*namespace[ \t]+(?<namespace>[a-zA-Z_][a-zA-Z0-9_\\.]*)");
-
-							if (match.Success)
-							{
-								return match.Groups["namespace"].Value;
-							}
-						}
-					}
-				}
-			}
-			else
-			{
-				var subFolders = Directory.GetDirectories(SolutionFolder);
-
-				foreach (var subFolder in subFolders)
-				{
-					var ns = GetRootNamespace(subFolder);
-
-					if (!string.IsNullOrWhiteSpace(ns))
-						return ns;
-				}
-			}
-
-			return string.Empty;
-		}
-
 		public static List<ResourceClassFile> LoadResourceClassList(string folder)
 		{
 			var theList = new List<ResourceClassFile>();
@@ -1358,7 +1481,7 @@ namespace COFRSFrameworkInstaller
 									SchemaName = classFile.SchemaName,
 									FileName = Path.Combine(LoadBaseFolder(solutionFolder), $"Models\\EntityModels\\{NormalizeClassName(column.EntityName)}.cs"),
 									ClassNameSpace = classFile.ClassNameSpace,
-									ElementType = DBHelper.GetElementType(classFile.SchemaName, column.EntityName, connectionString)
+									ElementType = DBHelper.GetElementType(classFile.SchemaName, column.EntityName, DefinedClassList, connectionString)
 								};
 								aList.Add(aClassFile);
 								bList.AddRange(DefinedClassList);
@@ -1548,7 +1671,7 @@ namespace COFRSFrameworkInstaller
 
 		private static EntityDetailClassFile LoadDetailEntityClass(EntityDetailClassFile classFile, string connectionString)
         {
-			classFile.ElementType = DBHelper.GetElementType(classFile.SchemaName, classFile.TableName, connectionString);
+			classFile.ElementType = DBHelper.GetElementType(classFile.SchemaName, classFile.TableName, null, connectionString);
 
 			if ( classFile.ElementType == ElementType.Enum)
 				LoadEnumColumns(connectionString, classFile);
