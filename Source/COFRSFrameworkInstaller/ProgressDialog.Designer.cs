@@ -49,7 +49,7 @@ namespace COFRSFrameworkInstaller
             this.ClientSize = new System.Drawing.Size(349, 42);
             this.ControlBox = false;
             this.Controls.Add(this.MessageText);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedToolWindow;
+            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
             this.Name = "ProgressDialog";

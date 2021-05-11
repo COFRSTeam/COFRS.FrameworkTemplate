@@ -9,6 +9,7 @@ using System.Data.SqlClient;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
@@ -21,14 +22,14 @@ namespace COFRSFrameworkInstaller
 		private bool Populating = false;
 		public DBTable DatabaseTable { get; set; }
 		public List<DBColumn> DatabaseColumns { get; set; }
-		public string SolutionFolder { get; set; }
-		public string RootNamespace { get; set; }
 		public string ConnectionString { get; set; }
-
 		public ProjectFolder EntityModelsFolder { get; set; }
 		public string DefaultConnectionString { get; set; }
-		public List<EntityDetailClassFile> _entityClassList { get; set; }
-		public Dictionary<string, string> replacementsDictionary { get; set; }
+		public List<EntityDetailClassFile> ClassList { get; set; }
+		public Dictionary<string, string> ReplacementsDictionary { get; set; }
+		public List<EntityDetailClassFile> UndefinedClassList { get; set; }
+		public bool IsPostgresql { get; set; }
+
 		#endregion
 
 		#region Utility functions
@@ -49,9 +50,8 @@ namespace COFRSFrameworkInstaller
 		{
 			_portNumber.Location = new Point(93, 60);
 			DatabaseColumns = new List<DBColumn>();
-			LoadAppSettings();
+			UndefinedClassList = new List<EntityDetailClassFile>();
 			ReadServerList();
-			_entityClassList = Utilities.LoadEntityClassList(SolutionFolder);
 		}
 		#endregion
 
@@ -102,6 +102,7 @@ namespace COFRSFrameworkInstaller
 					_dbList.Items.Clear();
 					_tableList.Items.Clear();
 					var server = (DBServer)_serverList.SelectedItem;
+					IsPostgresql = server.DBType == DBServerType.POSTGRESQL;
 
 					if (server != null)
 					{
@@ -347,32 +348,6 @@ select s.name, t.name
 			}
 		}
 
-		private string FindEntityModelsFolder(string folder)
-		{
-			if (string.Equals(Path.GetFileName(folder), "EntityModels", StringComparison.OrdinalIgnoreCase))
-				return folder;
-
-			foreach (var childfolder in Directory.GetDirectories(folder))
-			{
-				var result = FindEntityModelsFolder(childfolder);
-
-				if (!string.IsNullOrWhiteSpace(result))
-					return result;
-			}
-
-			return string.Empty;
-		}
-
-		private ElementType GetElementType(string Schema, string elementName, string connectionString)
-		{
-			var classFile = _entityClassList.FirstOrDefault(c => string.Equals(c.SchemaName, Schema, StringComparison.OrdinalIgnoreCase) && string.Equals(c.TableName, elementName, StringComparison.OrdinalIgnoreCase));
-
-			if (classFile != null)
-				return classFile.ElementType;
-
-			return DBHelper.GetElementType(Schema, elementName, connectionString);
-		}
-
 		private void OnSelectedTableChanged(object sender, EventArgs e)
 		{
 			_okButton.Enabled = true;
@@ -397,7 +372,8 @@ select s.name, t.name
 				{
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
 
-					var elementType = GetElementType(table.Schema, table.Table, connectionString);
+					UndefinedClassList.Clear();
+					var elementType = DBHelper.GetElementType(table.Schema, table.Table, ClassList, connectionString);
 
 					switch (elementType)
 					{
@@ -406,7 +382,6 @@ select s.name, t.name
 
 						case ElementType.Composite:
 							{
-								List<EntityDetailClassFile> UnknownElementsList = new List<EntityDetailClassFile>();
 								using (var connection = new NpgsqlConnection(connectionString))
 								{
 									connection.Open();
@@ -482,7 +457,7 @@ select a.attname as columnname,
 												}
 												catch (InvalidCastException)
 												{
-													var unknownClass = _entityClassList.FirstOrDefault(c =>
+													var unknownClass = ClassList.FirstOrDefault(c =>
 														string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
 														string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
 
@@ -497,7 +472,7 @@ select a.attname as columnname,
 															ClassNameSpace = EntityModelsFolder.Namespace
 														};
 
-														UnknownElementsList.Add(unknownClass);
+														UndefinedClassList.Add(unknownClass);
 													}
 												}
 
@@ -525,30 +500,91 @@ select a.attname as columnname,
 									}
 								}
 
-								foreach (var unknownClass in UnknownElementsList)
+								if (UndefinedClassList.Count > 0)
 								{
-									unknownClass.ElementType = GetElementType(unknownClass.SchemaName, unknownClass.TableName, connectionString);
+									var message = new StringBuilder();
+									message.Append($"The composite {table.Table} uses ");
 
-									if (unknownClass.ElementType == ElementType.Enum)
+									var unknownEnums = new List<string>();
+									var unknownComposits = new List<string>();
+									var unknownTables = new List<string>();
+
+									foreach (var unknownClass in UndefinedClassList)
 									{
-										var answer = MessageBox.Show($"The composite {table.Table} uses an enum type of {unknownClass.TableName}.\r\n\r\nNo enum class corresponding to {unknownClass.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding enum definition for {unknownClass.TableName}.\r\n\r\nWould you like to generate the {unknownClass.TableName} enum as part of generating this class?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-
-										if (answer == DialogResult.No)
-											_okButton.Enabled = false;
+										if (unknownClass.ElementType == ElementType.Enum)
+											unknownEnums.Add(unknownClass.TableName);
+										if (unknownClass.ElementType == ElementType.Composite)
+											unknownComposits.Add(unknownClass.TableName);
+										if (unknownClass.ElementType == ElementType.Table)
+											unknownTables.Add(unknownClass.TableName);
 									}
-									else if (unknownClass.ElementType == ElementType.Composite)
+
+									if (unknownEnums.Count > 0)
 									{
-										var answer = MessageBox.Show($"The composite {table.Table} uses a composite type of {unknownClass.TableName}.\r\n\r\nNo composite class corresponding to {unknownClass.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding composite definition for {unknownClass.TableName}.\r\n\r\nWould you like to generate the {unknownClass.TableName} composite as part of generating this class?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+										if (unknownEnums.Count > 1)
+											message.Append("enum types of ");
+										else
+											message.Append("an enum type of ");
 
-										if (answer == DialogResult.No)
-											_okButton.Enabled = false;
+										for (int index = 0; index < unknownEnums.Count(); index++)
+										{
+											if (index == unknownEnums.Count() - 1 && unknownEnums.Count > 1)
+												message.Append($" and {unknownEnums[index]}");
+											else if (index > 0)
+												message.Append($", {unknownEnums[index]}");
+											else if (index == 0)
+												message.Append(unknownEnums[index]);
+										}
 									}
-								}
 
-								if (_okButton.Enabled)
-								{
-									var emitter = new Emitter();
-									emitter.GenerateComposites(UnknownElementsList, connectionString, replacementsDictionary, _entityClassList);
+									if (unknownComposits.Count > 0)
+									{
+										if (unknownEnums.Count > 0)
+											message.Append("and ");
+
+										if (unknownComposits.Count > 1)
+											message.Append("composite types of ");
+										else
+											message.Append("a composite type of ");
+
+										for (int index = 0; index < unknownComposits.Count(); index++)
+										{
+											if (index == unknownComposits.Count() - 1 && unknownComposits.Count > 1)
+												message.Append($" and {unknownComposits[index]}");
+											else if (index > 0)
+												message.Append($", {unknownComposits[index]}");
+											else if (index == 0)
+												message.Append(unknownComposits[index]);
+										}
+									}
+
+									if (unknownTables.Count > 0)
+									{
+										if (unknownEnums.Count > 0 || unknownComposits.Count > 0)
+											message.Append("and ");
+
+										if (unknownTables.Count > 1)
+											message.Append("table types of ");
+										else
+											message.Append("a table type of ");
+
+										for (int index = 0; index < unknownTables.Count(); index++)
+										{
+											if (index == unknownTables.Count() - 1 && unknownTables.Count > 1)
+												message.Append($" and {unknownTables[index]}");
+											else if (index > 0)
+												message.Append($", {unknownTables[index]}");
+											else if (index == 0)
+												message.Append(unknownTables[index]);
+										}
+									}
+
+									message.Append(".\r\n\r\n:You cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
+
+									var answer = MessageBox.Show(message.ToString(), "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+									if (answer == DialogResult.No)
+										_okButton.Enabled = false;
 								}
 							}
 							break;
@@ -631,7 +667,7 @@ select a.attname as columnname,
 												}
 												catch (InvalidCastException)
 												{
-													var unknownClass = _entityClassList.FirstOrDefault(c =>
+													var unknownClass = ClassList.FirstOrDefault(c =>
 														string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
 														string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
 
@@ -642,6 +678,8 @@ select a.attname as columnname,
 															SchemaName = table.Schema,
 															ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
 															TableName = reader.GetString(1),
+															FileName = Path.Combine(EntityModelsFolder.Folder, Utilities.NormalizeClassName(reader.GetString(1))),
+															ClassNameSpace = EntityModelsFolder.Namespace
 														};
 
 														UnknownElementsList.Add(unknownClass);
@@ -671,31 +709,92 @@ select a.attname as columnname,
 										}
 									}
 
-									foreach (var unknownClass in UnknownElementsList)
+									if (UnknownElementsList.Count > 0)
 									{
-										unknownClass.ElementType = GetElementType(unknownClass.SchemaName, unknownClass.TableName, connectionString);
+										var message = new StringBuilder();
+										message.Append($"The composite {table.Table} uses ");
 
-										if (unknownClass.ElementType == ElementType.Enum)
+										var unknownEnums = new List<string>();
+										var unknownComposits = new List<string>();
+										var unknownTables = new List<string>();
+
+										foreach (var unknownClass in UnknownElementsList)
 										{
-											var answer = MessageBox.Show($"The composite {table.Table} uses an enum type of {unknownClass.TableName}.\r\n\r\nNo enum class corresponding to {unknownClass.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding enum definition for {unknownClass.TableName}.\r\n\r\nWould you like to generate the {unknownClass.TableName} enum as part of generating this class?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-
-											if (answer == DialogResult.No)
-												_okButton.Enabled = false;
+											if (unknownClass.ElementType == ElementType.Enum)
+												unknownEnums.Add(unknownClass.TableName);
+											if (unknownClass.ElementType == ElementType.Composite)
+												unknownComposits.Add(unknownClass.TableName);
+											if (unknownClass.ElementType == ElementType.Table)
+												unknownTables.Add(unknownClass.TableName);
 										}
-										else if (unknownClass.ElementType == ElementType.Composite)
+
+										if (unknownEnums.Count > 0)
 										{
-											var answer = MessageBox.Show($"The composite {table.Table} uses a composite type of {unknownClass.TableName}.\r\n\r\nNo composite class corresponding to {unknownClass.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding composite definition for {unknownClass.TableName}.\r\n\r\nWould you like to generate the {unknownClass.TableName} composite as part of generating this class?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+											if (unknownEnums.Count > 1)
+												message.Append("enum types of ");
+											else
+												message.Append("an enum type of ");
 
-											if (answer == DialogResult.No)
-												_okButton.Enabled = false;
+											for (int index = 0; index < unknownEnums.Count(); index++)
+											{
+												if (index == unknownEnums.Count() - 1 && unknownEnums.Count > 1)
+													message.Append($" and {unknownEnums[index]}");
+												else if (index > 0)
+													message.Append($", {unknownEnums[index]}");
+												else if (index == 0)
+													message.Append(unknownEnums[index]);
+											}
 										}
+
+										if (unknownComposits.Count > 0)
+										{
+											if (unknownEnums.Count > 0)
+												message.Append("and ");
+
+											if (unknownComposits.Count > 1)
+												message.Append("composite types of ");
+											else
+												message.Append("a composite type of ");
+
+											for (int index = 0; index < unknownComposits.Count(); index++)
+											{
+												if (index == unknownComposits.Count() - 1 && unknownComposits.Count > 1)
+													message.Append($" and {unknownComposits[index]}");
+												else if (index > 0)
+													message.Append($", {unknownComposits[index]}");
+												else if (index == 0)
+													message.Append(unknownComposits[index]);
+											}
+										}
+
+										if (unknownTables.Count > 0)
+										{
+											if (unknownEnums.Count > 0 || unknownComposits.Count > 0)
+												message.Append("and ");
+
+											if (unknownTables.Count > 1)
+												message.Append("table types of ");
+											else
+												message.Append("a table type of ");
+
+											for (int index = 0; index < unknownTables.Count(); index++)
+											{
+												if (index == unknownTables.Count() - 1 && unknownTables.Count > 1)
+													message.Append($" and {unknownTables[index]}");
+												else if (index > 0)
+													message.Append($", {unknownTables[index]}");
+												else if (index == 0)
+													message.Append(unknownTables[index]);
+											}
+										}
+
+										message.Append(".\r\n\r\n:You cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
+
+										var answer = MessageBox.Show(message.ToString(), "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+										if (answer == DialogResult.No)
+											_okButton.Enabled = false;
 									}
-								}
-
-								if (_okButton.Enabled)
-								{
-									var emitter = new Emitter();
-									emitter.GenerateComposites(UnknownElementsList, connectionString, replacementsDictionary, _entityClassList);
 								}
 							}
 							break;
@@ -1124,6 +1223,15 @@ select c.name as column_name,
 
 			Save();
 			DatabaseTable = (DBTable)_tableList.SelectedItem;
+
+			var server = (DBServer)_serverList.SelectedItem;
+			var db = (string)_dbList.SelectedItem;
+
+			if (server.DBType == DBServerType.POSTGRESQL)
+			{
+				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
+				UndefinedClassList = Utilities.LoadDetailEntityClassList(UndefinedClassList, ClassList, ReplacementsDictionary["$solutionDirectory$"], connectionString);
+			}
 
 			DialogResult = DialogResult.OK;
 			Close();
@@ -1733,40 +1841,6 @@ select name
 
 			//	We're done. Turn off the populating flag.
 			Populating = false;
-		}
-		private void LoadAppSettings()
-		{
-			LoadAppSettings(SolutionFolder);
-		}
-
-		private bool LoadAppSettings(string folder)
-		{
-			var files = Directory.GetFiles(folder, "appSettings.Local.json");
-
-			foreach (var file in files)
-			{
-				using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.Read))
-				{
-					using (var reader = new StreamReader(stream))
-					{
-						string content = reader.ReadToEnd();
-						var settings = JObject.Parse(content);
-						var connectionStrings = settings["ConnectionStrings"].Value<JObject>();
-						DefaultConnectionString = connectionStrings["DefaultConnection"].Value<string>();
-						return true;
-					}
-				}
-			}
-
-			var childFolders = Directory.GetDirectories(folder);
-
-			foreach (var childFolder in childFolders)
-			{
-				if (LoadAppSettings(childFolder))
-					return true;
-			}
-
-			return false;
 		}
 		#endregion
 	}

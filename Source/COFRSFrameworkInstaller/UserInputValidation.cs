@@ -25,8 +25,7 @@ namespace COFRSFrameworkInstaller
 		public List<DBColumn> DatabaseColumns { get; set; }
 		public JObject Examples { get; set; }
 		public string DefaultConnectionString { get; set; }
-
-		public List<EntityDetailClassFile> _entityClasses;
+		public List<EntityDetailClassFile> ClassList { get; set; }
 		#endregion
 
 		#region Utility Functions
@@ -46,11 +45,11 @@ namespace COFRSFrameworkInstaller
 			LoadAppSettings();
 			ReadServerList();
 
-			_entityClasses = Utilities.LoadEntityClassList(SolutionFolder);
+			ClassList = Utilities.LoadEntityClassList(SolutionFolder);
 
 			_entityModelList.Items.Clear();
 
-			foreach (var entityClass in _entityClasses)
+			foreach (var entityClass in ClassList)
 				if (entityClass.ElementType == ElementType.Table)
 					_entityModelList.Items.Add(entityClass);
 
@@ -841,7 +840,7 @@ select a.attname as columnname,
 								}
 								catch (InvalidCastException)
 								{
-									var entityFile = _entityClasses.FirstOrDefault(c =>
+									var entityFile = ClassList.FirstOrDefault(c =>
 										string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
 										string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
 
@@ -884,7 +883,7 @@ select a.attname as columnname,
 
 				foreach (var candidate in _undefinedElements)
 				{
-					candidate.ElementType = DBHelper.GetElementType(candidate.SchemaName, candidate.TableName, connectionString);
+					candidate.ElementType = DBHelper.GetElementType(candidate.SchemaName, candidate.TableName, ClassList, connectionString);
 
 					if (candidate.ElementType == ElementType.Enum)
 					{
