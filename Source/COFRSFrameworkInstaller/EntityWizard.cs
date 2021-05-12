@@ -43,7 +43,6 @@ namespace COFRSFrameworkInstaller
 
 			try
 			{
-
 				//	Show the user that we are busy doing things...
 				var parent = new WindowClass((IntPtr)_appObject.ActiveWindow.HWnd);
 
@@ -53,12 +52,10 @@ namespace COFRSFrameworkInstaller
 
 				HandleMessages();
 
-				var entityModelsFolder = Utilities.FindEntityModelsFolder(_appObject.Solution);
-
 				var form = new UserInputEntity
 				{
 					ReplacementsDictionary = replacementsDictionary,
-					EntityModelsFolder = entityModelsFolder,
+					EntityModelsFolder = Utilities.FindEntityModelsFolder(_appObject.Solution),
 					DefaultConnectionString = Utilities.GetConnectionString(_appObject.Solution),
 					ClassList = Utilities.LoadEntityDetailClassList(_appObject.Solution)
 				};
@@ -87,8 +84,9 @@ namespace COFRSFrameworkInstaller
 
 					var emitter = new Emitter();
 					var classList = form.ClassList;
+					ElementType etype = ElementType.Table;
 
-					if (form.IsPostgresql)
+					if (form.ServerType == DBServerType.POSTGRESQL)
 					{
 						emitter.GenerateComposites(composits, connectionString, replacementsDictionary, form.ClassList);
 						HandleMessages();
@@ -102,9 +100,9 @@ namespace COFRSFrameworkInstaller
 						}
 
 						classList.AddRange(composits);
+						etype = DBHelper.GetElementType(form.DatabaseTable.Schema, form.DatabaseTable.Table, classList, connectionString);
 					}
 
-					var etype = DBHelper.GetElementType(form.DatabaseTable.Schema, form.DatabaseTable.Table, classList, connectionString);
 					string entityModel = string.Empty;
 
 					if (etype == ElementType.Enum)
@@ -142,10 +140,10 @@ namespace COFRSFrameworkInstaller
 					}
 					else
 					{
-						entityModel = emitter.EmitEntityModel(form.DatabaseTable, replacementsDictionary["$safeitemname$"], form.DatabaseColumns, replacementsDictionary, connectionString);
+						entityModel = emitter.EmitEntityModel(form.ServerType, form.DatabaseTable, replacementsDictionary["$safeitemname$"], form.DatabaseColumns, replacementsDictionary, connectionString);
 					}
 
-					replacementsDictionary.Add("$model$", entityModel);
+					replacementsDictionary.Add("$entityModel$", entityModel);
 					HandleMessages();
 
 					progressDialog.Close();

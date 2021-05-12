@@ -43,7 +43,7 @@ namespace COFRSFrameworkInstaller
 		public List<string> Policies;
 		public List<EntityDetailClassFile> ClassList { get; set; }
 		public List<EntityDetailClassFile> UndefinedClassList = new List<EntityDetailClassFile>();
-		public bool IsPostgresql { get; set; }
+		public DBServerType ServerType { get; set; }
 
 		public string Policy
 		{
@@ -143,7 +143,7 @@ namespace COFRSFrameworkInstaller
 					_dbList.Items.Clear();
 					_tableList.Items.Clear();
 					var server = (DBServer)_serverList.SelectedItem;
-					IsPostgresql = server.DBType == DBServerType.POSTGRESQL;
+					ServerType = server.DBType;
 
 					if (server != null)
 					{
@@ -856,8 +856,7 @@ select a.attname as columnname,
 										IsPrimaryKey = Convert.ToBoolean(reader.GetValue(8)),
 										IsIndexed = Convert.ToBoolean(reader.GetValue(9)),
 										IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
-										ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
-										ServerType = DBServerType.POSTGRESQL
+										ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
 									};
 
 									DatabaseColumns.Add(dbColumn);
@@ -921,8 +920,7 @@ ORDER BY c.ORDINAL_POSITION;
 										IsIndexed = Convert.ToBoolean(reader.GetValue(8)),
 										IsNullable = Convert.ToBoolean(reader.GetValue(9)),
 										IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
-										ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
-										ServerType = DBServerType.MYSQL
+										ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
 									};
 
 									DatabaseColumns.Add(dbColumn);
@@ -999,8 +997,7 @@ select c.name as column_name,
 										IsPrimaryKey = Convert.ToBoolean(reader.GetValue(8)),
 										IsIndexed = Convert.ToBoolean(reader.GetValue(9)),
 										IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
-										ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
-										ServerType = DBServerType.SQLSERVER
+										ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
 									};
 
 									if (string.Equals(dbColumn.dbDataType, "geometry", StringComparison.OrdinalIgnoreCase))

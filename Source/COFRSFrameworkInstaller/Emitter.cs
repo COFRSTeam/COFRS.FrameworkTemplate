@@ -15,7 +15,7 @@ namespace COFRSFrameworkInstaller
 {
 	public class Emitter
 	{
-		public string EmitController(List<ClassMember> columns, bool hasValidator, string moniker, string resourceClassName, string controllerClassName, string validationClassName, string exampleClassName, string exampleCollectionClassName, string policy)
+		public string EmitController(DBServerType serverType, List<ClassMember> columns, bool hasValidator, string moniker, string resourceClassName, string controllerClassName, string validationClassName, string exampleClassName, string exampleCollectionClassName, string policy)
 		{
 			var results = new StringBuilder();
 			var nn = new NameNormalizer(resourceClassName);
@@ -118,7 +118,7 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 				results.AppendLine("\t\t[SupportRQL]");
 
-				EmitEndpoint(resourceClassName, "Get", results, pkcolumns);
+				EmitEndpoint(serverType, resourceClassName, "Get", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
@@ -259,7 +259,7 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 				results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 				results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
-				EmitEndpoint(resourceClassName, "Patch", results, pkcolumns);
+				EmitEndpoint(serverType, resourceClassName, "Patch", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
@@ -300,7 +300,7 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 
-				EmitEndpoint(resourceClassName, "Delete", results, pkcolumns);
+				EmitEndpoint(serverType, resourceClassName, "Delete", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
@@ -490,7 +490,7 @@ namespace COFRSFrameworkInstaller
 			return results.ToString();
 		}
 
-		public string EmitExampleModel(string schema, string connectionString, List<ClassMember> classMembers, string entityClassName, string resourceClassName, string exampleClassName, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> classFiles)
+		public string EmitExampleModel(DBServerType serverType, string schema, string connectionString, List<ClassMember> classMembers, string entityClassName, string resourceClassName, string exampleClassName, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> classFiles)
 		{
 			var results = new StringBuilder();
 			replacementsDictionary.Add("$exampleimage$", "false");
@@ -551,7 +551,7 @@ namespace COFRSFrameworkInstaller
 
 					//	Set Flags to include necessary usings...
 
-					if (column.ServerType == DBServerType.POSTGRESQL)
+					if (serverType == DBServerType.POSTGRESQL)
 					{
 						if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
 							replacementsDictionary["$examplenet$"] = "true";
@@ -591,24 +591,20 @@ namespace COFRSFrameworkInstaller
 							replacementsDictionary["$usenpgtypes$"] = "true";
 						else if ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Polygon))
 							replacementsDictionary["$usenpgtypes$"] = "true";
+
+						EmitPostgresValue(column, parentClass, Example, results, classFiles, 0);
 					}
-					else if (column.ServerType == DBServerType.SQLSERVER)
+					else if (serverType == DBServerType.SQLSERVER)
 					{
 						if ((SqlDbType)column.DataType == SqlDbType.Image)
 							replacementsDictionary["$exampleimage$"] = "true";
-					}
 
-					//	Get the member value 
-
-					if (column.ServerType == DBServerType.MYSQL)
-						GetMySqlValue(column, Example, results);
-					else if (column.ServerType == DBServerType.POSTGRESQL)
-						EmitPostgresValue(column, parentClass, Example, results, classFiles, 0);
-					else if (column.ServerType == DBServerType.SQLSERVER)
 						GetSqlServerValue(column, Example, results);
-
-					//	Write the member set function
-
+					}
+					else if (serverType == DBServerType.MYSQL)
+					{
+						GetMySqlValue(column, Example, results);
+					}
 				}
 			}
 
@@ -624,7 +620,7 @@ namespace COFRSFrameworkInstaller
 			return results.ToString();
 		}
 
-		public string EmitExampleCollectionModel(string schema, string connectionString, List<ClassMember> classMembers, string entityClassName, string resourceClassName, string exampleCollectionClassName, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> classFiles)
+		public string EmitExampleCollectionModel(DBServerType serverType, string schema, string connectionString, List<ClassMember> classMembers, string entityClassName, string resourceClassName, string exampleCollectionClassName, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> classFiles)
 		{
 			var results = new StringBuilder();
 
@@ -672,7 +668,7 @@ namespace COFRSFrameworkInstaller
 
 			foreach (var member in classMembers)
 			{
-				first = EmitEntiyMemeberSetting(Columns, parentClass, schema, connectionString, replacementsDictionary["$solutiondirectory$"], Example, results, first, member, classFiles);
+				first = EmitEntiyMemeberSetting(serverType, Columns, parentClass, schema, connectionString, replacementsDictionary["$solutiondirectory$"], Example, results, first, member, classFiles);
 			}
 
 			results.AppendLine();
@@ -885,8 +881,7 @@ select a.attname as columnname,
 								IsPrimaryKey = Convert.ToBoolean(reader.GetValue(8)),
 								IsIndexed = Convert.ToBoolean(reader.GetValue(9)),
 								IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
-								ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
-								ServerType = DBServerType.POSTGRESQL
+								ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
 							};
 
 							columns.Add(column);
@@ -1003,7 +998,7 @@ select a.attname as columnname,
 					AppendPrecision(result, column.NumericPrecision, column.NumericScale, ref first);
 				}
 
-				AppendDatabaseType(result, column, ref first);
+				AppendDatabaseType(result, DBServerType.POSTGRESQL, column, ref first);
 
 				if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
 					replacementsDictionary["$net$"] = "true";
@@ -1070,7 +1065,7 @@ select a.attname as columnname,
 			return result.ToString();
 		}
 
-		public string EmitMappingModel(List<ClassMember> classMembers, string resourceClassName, string entityClassName, string mappingClassName, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
+		public string EmitMappingModel(DBServerType serverType, List<ClassMember> classMembers, string resourceClassName, string entityClassName, string mappingClassName, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
 		{
 			var ImageConversionRequired = false;
 			var results = new StringBuilder();
@@ -1127,11 +1122,11 @@ select a.attname as columnname,
 
 						string dataType = "Unknown";
 
-						if (entityColumn.ServerType == DBServerType.MYSQL)
+						if (serverType == DBServerType.MYSQL)
 							dataType = DBHelper.GetNonNullableMySqlDataType(entityColumn);
-						else if (entityColumn.ServerType == DBServerType.POSTGRESQL)
+						else if (serverType == DBServerType.POSTGRESQL)
 							dataType = DBHelper.GetNonNullablePostgresqlDataType(entityColumn);
-						else if (entityColumn.ServerType == DBServerType.SQLSERVER)
+						else if (serverType == DBServerType.SQLSERVER)
 							dataType = DBHelper.GetNonNullableSqlServerDataType(entityColumn);
 
 						if (ix == 0)
@@ -1153,11 +1148,11 @@ select a.attname as columnname,
 
 						string dataType = "Unknown";
 
-						if (entityColumn.ServerType == DBServerType.MYSQL)
+						if (serverType == DBServerType.MYSQL)
 							dataType = DBHelper.GetNonNullableMySqlDataType(entityColumn);
-						else if (entityColumn.ServerType == DBServerType.POSTGRESQL)
+						else if (serverType == DBServerType.POSTGRESQL)
 							dataType = DBHelper.GetNonNullablePostgresqlDataType(entityColumn);
-						else if (entityColumn.ServerType == DBServerType.SQLSERVER)
+						else if (serverType == DBServerType.SQLSERVER)
 							dataType = DBHelper.GetNonNullableSqlServerDataType(entityColumn);
 
 						if (entityColumn.IsNullable)
@@ -1278,7 +1273,7 @@ select a.attname as columnname,
 			return results.ToString();
 		}
 
-		public string EmitResourceModel(List<ClassMember> entityClassMembers, string resourceClassName, string entityClassName, DBTable table, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary, string connectionString)
+		public string EmitResourceModel(DBServerType serverType, List<ClassMember> entityClassMembers, string resourceClassName, string entityClassName, DBTable table, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary, string connectionString)
 		{
 			replacementsDictionary.Add("$resourceimage$", "false");
 			replacementsDictionary.Add("$resourcenet$", "false");
@@ -1328,48 +1323,48 @@ select a.attname as columnname,
 					results.AppendLine($"\t\t///\t{member.ResourceMemberName}");
 					results.AppendLine("\t\t///\t</summary>");
 
-					if (member.EntityNames[0].ServerType == DBServerType.SQLSERVER && (SqlDbType)member.EntityNames[0].DataType == SqlDbType.Image)
+					if (serverType == DBServerType.SQLSERVER && (SqlDbType)member.EntityNames[0].DataType == SqlDbType.Image)
 						replacementsDictionary["$resourceimage$"] = "true";
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Inet)
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Inet)
 						replacementsDictionary["$resourcenet$"] = "true";
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Cidr)
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Cidr)
 						replacementsDictionary["$resourcenet$"] = "true";
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.MacAddr)
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.MacAddr)
 						replacementsDictionary["$resourcenetinfo$"] = "true";
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.MacAddr8)
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.MacAddr8)
 						replacementsDictionary["$resourcenetinfo$"] = "true";
 
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == (NpgsqlDbType.Array | NpgsqlDbType.Boolean))
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == (NpgsqlDbType.Array | NpgsqlDbType.Boolean))
 						replacementsDictionary["$resourcebarray$"] = "true";
 
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit))
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit))
 						replacementsDictionary["$resourcebarray$"] = "true";
 
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Bit && member.EntityNames[0].Length > 1)
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Bit && member.EntityNames[0].Length > 1)
 						replacementsDictionary["$resourcebarray$"] = "true";
 
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Varbit)
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Varbit)
 						replacementsDictionary["$resourcebarray$"] = "true";
 
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Unknown ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Point ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.LSeg ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Path ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Circle ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Polygon ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Line ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Box)
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Unknown ||
+						serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Point ||
+						serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.LSeg ||
+						serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Path ||
+						serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Circle ||
+						serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Polygon ||
+						serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Line ||
+						serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Box)
 						replacementsDictionary["$usenpgtypes$"] = "true";
 
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL)
+					if (serverType == DBServerType.POSTGRESQL)
 					{
 						var solutionFolder = replacementsDictionary["$solutiondirectory$"];
 						var dataType = DBHelper.GetPostgresqlResourceDataType(member.EntityNames[0], connectionString, table.Schema, solutionFolder);
 						results.AppendLine($"\t\tpublic {dataType} {member.ResourceMemberName} {{ get; set; }}");
 					}
-					else if (member.EntityNames[0].ServerType == DBServerType.MYSQL)
+					else if (serverType == DBServerType.MYSQL)
 						results.AppendLine($"\t\tpublic {DBHelper.GetMySqlResourceDataType(member.EntityNames[0])} {member.ResourceMemberName} {{ get; set; }}");
-					else if (member.EntityNames[0].ServerType == DBServerType.SQLSERVER)
+					else if (serverType == DBServerType.SQLSERVER)
 						results.AppendLine($"\t\tpublic {DBHelper.GetSqlServerResourceDataType(member.EntityNames[0])} {member.ResourceMemberName} {{ get; set; }}");
 				}
 			}
@@ -1379,7 +1374,7 @@ select a.attname as columnname,
 			return results.ToString();
 		}
 
-		public string EmitEntityModel(DBTable table, string entityClassName, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary, string connectionString)
+		public string EmitEntityModel(DBServerType serverType, DBTable table, string entityClassName, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary, string connectionString)
 		{
 			var result = new StringBuilder();
 			replacementsDictionary.Add("$image$", "false");
@@ -1392,9 +1387,9 @@ select a.attname as columnname,
 			result.AppendLine("\t///\t</summary>");
 
 			if (string.IsNullOrWhiteSpace(table.Schema))
-				result.AppendLine($"\t[Table(\"{table.Table}\")]");
+				result.AppendLine($"\t[Table(\"{table.Table}\", DBType = \"{serverType}\")]");
 			else
-				result.AppendLine($"\t[Table(\"{table.Table}\", Schema = \"{table.Schema}\")]");
+				result.AppendLine($"\t[Table(\"{table.Table}\", Schema = \"{table.Schema}\", DBType = \"{serverType}\")]");
 
 			result.AppendLine($"\tpublic class {entityClassName}");
 			result.AppendLine("\t{");
@@ -1437,63 +1432,63 @@ select a.attname as columnname,
 
 				AppendNullable(result, column.IsNullable, ref first);
 
-				if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NVarChar)
+				if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NVarChar)
 				{
 					AppendFixed(result, column.Length, false, ref first);
 				}
 
-				else if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NChar)
+				else if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NChar)
 				{
 					if (column.Length > 1)
 						AppendFixed(result, column.Length, true, ref first);
 				}
 
-				else if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NText)
+				else if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NText)
 				{
 					AppendFixed(result, -1, false, ref first);
 				}
 
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.VarChar) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Name) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Varchar)) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarChar))
+				else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.VarChar) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Name) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Varchar)) ||
+						 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarChar))
 				{
-					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar && column.Length < 0)
+					if (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar && column.Length < 0)
 						AppendFixed(result, -1, false, ref first);
 					else
 						AppendFixed(result, column.Length, false, ref first);
 				}
 
-				else if ((column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bit) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit)))
+				else if ((serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bit) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit)))
 				{
 					//	Insert the column definition
 					AppendFixed(result, column.Length, true, ref first);
 				}
 
-				else if ((column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varbit) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Varbit)))
+				else if ((serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varbit) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Varbit)))
 				{
 					AppendFixed(result, column.Length, false, ref first);
 				}
 
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Text) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Text) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Citext) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Text)) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Text))
+				else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Text) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Text) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Citext) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Text)) ||
+						 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Text))
 				{
 					AppendFixed(result, -1, false, ref first);
 				}
 
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Char) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Char) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Char)) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.String))
+				else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Char) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Char) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Char)) ||
+						 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.String))
 				{
 					//	Insert the column definition
-					if (column.ServerType == DBServerType.POSTGRESQL)
+					if (serverType == DBServerType.POSTGRESQL)
 					{
 						if (string.Equals(column.dbDataType, "bpchar", StringComparison.OrdinalIgnoreCase))
 						{
@@ -1504,7 +1499,7 @@ select a.attname as columnname,
 							AppendFixed(result, column.Length, true, ref first);
 						}
 					}
-					else if (column.ServerType == DBServerType.MYSQL)
+					else if (serverType == DBServerType.MYSQL)
 					{
 						if (column.Length != 1)
 							AppendFixed(result, column.Length, true, ref first);
@@ -1516,35 +1511,35 @@ select a.attname as columnname,
 					}
 				}
 
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.VarBinary) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bytea) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarBinary))
+				else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.VarBinary) ||
+						 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bytea) ||
+						 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarBinary))
 				{
 					AppendFixed(result, column.Length, false, ref first);
 				}
 
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Binary) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Binary))
+				else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Binary) ||
+						 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Binary))
 				{
 					AppendFixed(result, column.Length, true, ref first);
 				}
 
-				else if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Timestamp)
+				else if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Timestamp)
 				{
 					AppendFixed(result, column.Length, true, ref first);
 					AppendAutofield(result, ref first);
 				}
 
-				if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Decimal) ||
-					(column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Decimal) ||
-					(column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Numeric))
+				if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Decimal) ||
+					(serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Decimal) ||
+					(serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Numeric))
 				{
 					AppendPrecision(result, column.NumericPrecision, column.NumericScale, ref first);
 				}
 
-				AppendDatabaseType(result, column, ref first);
+				AppendDatabaseType(result, serverType, column, ref first);
 
-				if (column.ServerType == DBServerType.POSTGRESQL)
+				if (serverType == DBServerType.POSTGRESQL)
 				{
 					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
 						replacementsDictionary["$net$"] = "true";
@@ -1594,7 +1589,7 @@ select a.attname as columnname,
 					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Polygon)
 						replacementsDictionary["$npgsqltypes$"] = "true";
 				}
-				else if (column.ServerType == DBServerType.SQLSERVER)
+				else if (serverType == DBServerType.SQLSERVER)
 				{
 					if ((SqlDbType)column.DataType == SqlDbType.Image)
 						replacementsDictionary["$image$"] = "true";
@@ -1607,11 +1602,11 @@ select a.attname as columnname,
 				result.AppendLine(")]");
 
 				//	Insert the column definition
-				if (column.ServerType == DBServerType.POSTGRESQL)
+				if (serverType == DBServerType.POSTGRESQL)
 					result.AppendLine($"\t\tpublic {DBHelper.GetPostgresDataType(table.Schema, column, connectionString, replacementsDictionary["$solutiondirectory$"])} {column.ColumnName} {{ get; set; }}");
-				else if (column.ServerType == DBServerType.MYSQL)
+				else if (serverType == DBServerType.MYSQL)
 					result.AppendLine($"\t\tpublic {DBHelper.GetMySqlDataType(column)} {column.ColumnName} {{ get; set; }}");
-				else if (column.ServerType == DBServerType.SQLSERVER)
+				else if (serverType == DBServerType.SQLSERVER)
 					result.AppendLine($"\t\tpublic {DBHelper.GetSQLServerDataType(column)} {column.ColumnName} {{ get; set; }}");
 			}
 
@@ -1777,17 +1772,17 @@ select a.attname as columnname,
 			}
 		}
 
-		private void AppendDatabaseType(StringBuilder result, DBColumn column, ref bool first)
+		private void AppendDatabaseType(StringBuilder result, DBServerType serverType, DBColumn column, ref bool first)
 		{
 			AppendComma(result, ref first);
 
-			if (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarChar)
+			if (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarChar)
 				result.Append("NativeDataType=\"VarChar\"");
-			else if (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarBinary)
+			else if (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarBinary)
 				result.Append("NativeDataType=\"VarBinary\"");
-			else if (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.String)
+			else if (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.String)
 				result.Append("NativeDataType=\"char\"");
-			else if (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Decimal)
+			else if (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Decimal)
 				result.Append("NativeDataType=\"Decimal\"");
 			else
 				result.Append($"NativeDataType=\"{column.dbDataType}\"");
@@ -2612,7 +2607,7 @@ select a.attname as columnname,
 					break;
 			}
 		}
-
+		
 		private void GetMySqlValue(DBColumn column, JObject ExampleValue, StringBuilder results)
 		{
 			var value = ExampleValue[column.EntityName];
@@ -5424,13 +5419,13 @@ select a.attname as columnname,
 		}
 		#endregion
 
-		private bool EmitEntiyMemeberSetting(List<DBColumn> Columns, EntityDetailClassFile parentClass, string schema, string connectionString, string solutionFolder, JObject Example, StringBuilder results, bool first, ClassMember member, List<EntityDetailClassFile> classFiles)
+		private bool EmitEntiyMemeberSetting(DBServerType serverType, List<DBColumn> Columns, EntityDetailClassFile parentClass, string schema, string connectionString, string solutionFolder, JObject Example, StringBuilder results, bool first, ClassMember member, List<EntityDetailClassFile> classFiles)
 		{
 			if (member.ChildMembers.Count > 0)
 			{
 				foreach (var childMember in member.ChildMembers)
 				{
-					first = EmitEntiyMemeberSetting(Columns, parentClass, schema, connectionString, solutionFolder, Example, results, first, childMember, classFiles);
+					first = EmitEntiyMemeberSetting(serverType, Columns, parentClass, schema, connectionString, solutionFolder, Example, results, first, childMember, classFiles);
 				}
 			}
 			else
@@ -5442,11 +5437,11 @@ select a.attname as columnname,
 					else
 						results.AppendLine(",");
 
-					if (column.ServerType == DBServerType.MYSQL)
+					if (serverType == DBServerType.MYSQL)
 						GetMySqlValue(column, Example, results);
-					else if (column.ServerType == DBServerType.POSTGRESQL)
+					else if (serverType == DBServerType.POSTGRESQL)
 						EmitPostgresValue(column, parentClass, Example, results, classFiles, 0);
-					else if (column.ServerType == DBServerType.SQLSERVER)
+					else if (serverType == DBServerType.SQLSERVER)
 						GetSqlServerValue(column, Example, results);
 				}
 			}
@@ -5454,7 +5449,7 @@ select a.attname as columnname,
 			return first;
 		}
 
-		private void EmitEndpoint(string resourceClassName, string action, StringBuilder results, IEnumerable<ClassMember> pkcolumns)
+		private void EmitEndpoint(DBServerType serverType, string resourceClassName, string action, StringBuilder results, IEnumerable<ClassMember> pkcolumns)
 		{
 			results.Append($"\t\tpublic async Task<IHttpActionResult> {action}{resourceClassName}Async(");
 			bool first = true;
@@ -5470,11 +5465,11 @@ select a.attname as columnname,
 
 					string dataType = "Unrecognized";
 
-					if (column.ServerType == DBServerType.POSTGRESQL)
+					if (serverType == DBServerType.POSTGRESQL)
 						dataType = DBHelper.GetNonNullablePostgresqlDataType(column);
-					else if (column.ServerType == DBServerType.MYSQL)
+					else if (serverType == DBServerType.MYSQL)
 						dataType = DBHelper.GetNonNullableMySqlDataType(column);
-					else if (column.ServerType == DBServerType.SQLSERVER)
+					else if (serverType == DBServerType.SQLSERVER)
 						dataType = DBHelper.GetNonNullableSqlServerDataType(column);
 
 					results.Append($"{dataType} {column.EntityName}");

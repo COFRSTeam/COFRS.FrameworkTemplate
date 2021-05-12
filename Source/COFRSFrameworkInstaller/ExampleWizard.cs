@@ -86,9 +86,10 @@ namespace COFRSFrameworkInstaller
 					var emitter = new Emitter();
 
 					var model = emitter.EmitExampleModel(
+						form.ServerType,
 						classFile.SchemaName,
 						connectionString,
-						Utilities.LoadClassColumns(domainFile.FileName, classFile.FileName, form.DatabaseColumns),
+						Utilities.LoadClassColumns(form.ServerType, domainFile.FileName, classFile.FileName, form.DatabaseColumns),
 						classFile.ClassName,
 						domainFile.ClassName,
 						replacementsDictionary["$safeitemname$"],
@@ -96,9 +97,10 @@ namespace COFRSFrameworkInstaller
 						form.classList);
 
 					var collectionmodel = emitter.EmitExampleCollectionModel(
+						form.ServerType,
 						classFile.SchemaName,
 						connectionString,
-						Utilities.LoadClassColumns(domainFile.FileName, classFile.FileName, form.DatabaseColumns),
+						Utilities.LoadClassColumns(form.ServerType, domainFile.FileName, classFile.FileName, form.DatabaseColumns),
 						classFile.ClassName,
 						domainFile.ClassName,
 						"Collection" + replacementsDictionary["$safeitemname$"],

@@ -969,22 +969,29 @@ namespace COFRSFrameworkInstaller
 
 				case NpgsqlDbType.Unknown:
 					{
-						var etype = GetElementType(schema, column.dbDataType, null, connectionString);
-
-						if (etype == ElementType.Enum)
+						if (string.IsNullOrWhiteSpace(connectionString))
 						{
-							var entityFile = SearchForEnum(schema, column.dbDataType, SolutionFolder);
-
-							if (entityFile != null)
-								return entityFile.ClassName;
+							return Utilities.NormalizeClassName(column.dbDataType);
 						}
-
-						else if (etype == ElementType.Composite)
+						else
 						{
-							var entityFile = SearchForComposite(schema, column.dbDataType, SolutionFolder);
+							var etype = GetElementType(schema, column.dbDataType, null, connectionString);
 
-							if (entityFile != null)
-								return entityFile.ClassName;
+							if (etype == ElementType.Enum)
+							{
+								var entityFile = SearchForEnum(schema, column.dbDataType, SolutionFolder);
+
+								if (entityFile != null)
+									return entityFile.ClassName;
+							}
+
+							else if (etype == ElementType.Composite)
+							{
+								var entityFile = SearchForComposite(schema, column.dbDataType, SolutionFolder);
+
+								if (entityFile != null)
+									return entityFile.ClassName;
+							}
 						}
 					}
 					break;

@@ -23,6 +23,7 @@ namespace COFRSFrameworkInstaller
 		public List<DBColumn> DatabaseColumns { get; set; }
 		public string ConnectionString { get; set; }
 		public List<EntityDetailClassFile> ClassList { get; set; }
+		public DBServerType ServerType { get; set; }
 		#endregion
 
 		#region Utility functions
@@ -105,6 +106,7 @@ namespace COFRSFrameworkInstaller
 					_dbList.Items.Clear();
 					_tableList.Items.Clear();
 					var server = (DBServer)_serverList.SelectedItem;
+					ServerType = server.DBType;
 
 					if (server != null)
 					{
@@ -473,8 +475,7 @@ select a.attname as columnname,
 									IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6)),
 									IsIndexed = Convert.ToBoolean(reader.GetValue(7)),
 									IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-									ServerType = DBServerType.POSTGRESQL
+									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
 								};
 
 								DatabaseColumns.Add(dbColumn);
@@ -551,8 +552,7 @@ ORDER BY c.ORDINAL_POSITION;
 									IsIndexed = Convert.ToBoolean(reader.GetValue(6)),
 									IsNullable = Convert.ToBoolean(reader.GetValue(7)),
 									IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-									ServerType = DBServerType.MYSQL
+									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
 								};
 
 								DatabaseColumns.Add(dbColumn);
@@ -623,8 +623,7 @@ select c.name as column_name,
 									IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6)),
 									IsIndexed = Convert.ToBoolean(reader.GetValue(7)),
 									IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-									ServerType = DBServerType.SQLSERVER
+									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
 								};
 
 								DatabaseColumns.Add(dbColumn);

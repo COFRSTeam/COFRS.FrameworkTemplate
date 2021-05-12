@@ -120,10 +120,11 @@ namespace COFRSFrameworkInstaller
 					else
 						replacementsDictionary.Add("$singleexamplenamespace$", "none");
 
-					var columns = Utilities.LoadClassColumns(resourceClassFile.FileName, entityClassFile.FileName, form.DatabaseColumns);
+					var columns = Utilities.LoadClassColumns(form.ServerType, resourceClassFile.FileName, entityClassFile.FileName, form.DatabaseColumns);
 
 					var emitter = new Emitter();
-					var model = emitter.EmitController(columns,
+					var model = emitter.EmitController(form.ServerType, 
+						                               columns,
 													   hasValidator,
 													   moniker,
 													   resourceClassFile.ClassName,

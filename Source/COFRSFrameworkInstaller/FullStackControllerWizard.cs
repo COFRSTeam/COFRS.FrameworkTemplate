@@ -52,11 +52,10 @@ namespace COFRSFrameworkInstaller
 
 			try
 			{
-
 				//	Full stack must start at the root namespace. Insure that we do...
 				if (!Utilities.IsRootNamespace(_appObject.Solution, replacementsDictionary["$rootnamespace$"]))
 				{
-					MessageBox.Show("The COFRS Controller Full Stack should be placed at the project root. It will add the appropriate components in the appropriate folders.", "Placement Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+					MessageBox.Show("The COFRS Controller Full Stack should be placed at the project root. It will add the appropriate components in the appropriate folders.", "COFRS", MessageBoxButtons.OK, MessageBoxIcon.Error);
 					Proceed = false;
 					return;
 				}
@@ -149,7 +148,7 @@ namespace COFRSFrameworkInstaller
 
 					var emitter = new Emitter();
 
-					if (form.IsPostgresql)
+					if (form.ServerType == DBServerType.POSTGRESQL)
 					{
 						emitter.GenerateComposites(composits, connectionString, replacementsDictionary, form.ClassList);
 						HandleMessages();
@@ -164,31 +163,32 @@ namespace COFRSFrameworkInstaller
 					}
 
 					//	Emit Entity Model
-					var entityModel = emitter.EmitEntityModel(form.DatabaseTable, entityClassName, form.DatabaseColumns, replacementsDictionary, connectionString);
+					var entityModel = emitter.EmitEntityModel(form.ServerType, form.DatabaseTable, entityClassName, form.DatabaseColumns, replacementsDictionary, connectionString);
 					replacementsDictionary.Add("$entityModel$", entityModel);
 					HandleMessages();
 
-					List<ClassMember> classMembers = LoadClassMembers(form.DatabaseTable, form.DatabaseColumns, replacementsDictionary["$solutiondirectory$"], connectionString);
+					List<ClassMember> classMembers = LoadClassMembers(form.ServerType, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary["$solutiondirectory$"], connectionString);
 					List<EntityDetailClassFile> ClassList = null;
 
-					if (form.IsPostgresql)
+					if (form.ServerType == DBServerType.POSTGRESQL)
 					{
 						ClassList = Utilities.LoadDetailEntityClassList(replacementsDictionary["$solutiondirectory$"], connectionString);
 						HandleMessages();
 					}
 
 					//	Emit Resource Model
-					var resourceModel = emitter.EmitResourceModel(classMembers, resourceClassName, entityClassName, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary, connectionString);
+					var resourceModel = emitter.EmitResourceModel(form.ServerType, classMembers, resourceClassName, entityClassName, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary, connectionString);
 					replacementsDictionary.Add("$resourceModel$", resourceModel);
 					HandleMessages();
 
 					//	Emit Mapping Model
-					var mappingModel = emitter.EmitMappingModel(classMembers, resourceClassName, entityClassName, mappingClassName, form.DatabaseColumns, replacementsDictionary);
+					var mappingModel = emitter.EmitMappingModel(form.ServerType, classMembers, resourceClassName, entityClassName, mappingClassName, form.DatabaseColumns, replacementsDictionary);
 					replacementsDictionary.Add("$mappingModel$", mappingModel);
 					HandleMessages();
 
 					//	Emit Example Model
 					var exampleModel = emitter.EmitExampleModel(
+											form.ServerType,
 											form.DatabaseTable.Schema,
 											connectionString,
 											classMembers,
@@ -202,6 +202,7 @@ namespace COFRSFrameworkInstaller
 
 
 					var exampleCollectionModel = emitter.EmitExampleCollectionModel(
+						form.ServerType,
 						form.DatabaseTable.Schema,
 						connectionString,
 						classMembers,
@@ -225,7 +226,7 @@ namespace COFRSFrameworkInstaller
 													  replacementsDictionary["$validatornamespace$"]);
 
 					//	Emit Controller
-					var controllerModel = emitter.EmitController(classMembers,
+					var controllerModel = emitter.EmitController(form.ServerType, classMembers,
 								   true,
 								   moniker,
 								   resourceClassName,
@@ -264,7 +265,7 @@ namespace COFRSFrameworkInstaller
 			return Proceed;
 		}
 
-		private List<ClassMember> LoadClassMembers(DBTable table, List<DBColumn> columns, string solutionFolder, string connectionString)
+		private List<ClassMember> LoadClassMembers(DBServerType serverType, DBTable table, List<DBColumn> columns, string solutionFolder, string connectionString)
 		{
 			var members = new List<ClassMember>();
 
@@ -286,11 +287,11 @@ namespace COFRSFrameworkInstaller
 
 			foreach (var column in columns)
 			{
-				if (column.ServerType == DBServerType.POSTGRESQL)
+				if (serverType == DBServerType.POSTGRESQL)
 					column.EntityType = DBHelper.GetPostgresDataType(table.Schema, column, connectionString, solutionFolder);
-				else if (column.ServerType == DBServerType.MYSQL)
+				else if (serverType == DBServerType.MYSQL)
 					column.EntityType = DBHelper.GetMySqlDataType(column);
-				else if (column.ServerType == DBServerType.SQLSERVER)
+				else if (serverType == DBServerType.SQLSERVER)
 					column.EntityType = DBHelper.GetSQLServerDataType(column);
 
 				if (!column.IsPrimaryKey)

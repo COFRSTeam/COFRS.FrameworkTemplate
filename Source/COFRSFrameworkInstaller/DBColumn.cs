@@ -85,11 +85,6 @@
 		/// </summary>
 		public bool IsFixed { get; set; }
 
-		/// <summary>
-		/// The database technology that corresponds to this column (i.e., SQL Server, vs. Postgresql, etc.)
-		/// </summary>
-		public DBServerType ServerType { get; set; }
-
 		public override string ToString()
 		{
 			return ColumnName;

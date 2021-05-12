@@ -8,6 +8,7 @@ namespace COFRSFrameworkInstaller
 {
     public class ProjectFolder
     {
+        public string ProjectName { get; set; }
         public string Namespace { get; set; }
         public string Folder { get; set; }
     }

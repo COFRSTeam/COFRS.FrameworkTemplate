@@ -66,10 +66,10 @@ namespace COFRSFrameworkInstaller
 				var entityClassFile = (EntityClassFile)form._entityModelList.SelectedItem;
 				var resourceClassFile = (ResourceClassFile)form._resourceModelList.SelectedItem;
 
-				var classMembers = Utilities.LoadClassColumns(resourceClassFile.FileName, entityClassFile.FileName, form.DatabaseColumns);
+				var classMembers = Utilities.LoadClassColumns(form.ServerType, resourceClassFile.FileName, entityClassFile.FileName, form.DatabaseColumns);
 
 				var emitter = new Emitter();
-				var model = emitter.EmitMappingModel(classMembers, resourceClassFile.ClassName, entityClassFile.ClassName,
+				var model = emitter.EmitMappingModel(form.ServerType, classMembers, resourceClassFile.ClassName, entityClassFile.ClassName,
 													 replacementsDictionary["$safeitemname$"],
 													 form.DatabaseColumns, replacementsDictionary);
 
