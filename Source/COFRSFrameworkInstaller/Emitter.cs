@@ -1,4 +1,6 @@
-﻿using MySql.Data.MySqlClient;
+﻿using COFRS.Template.Common.Models;
+using COFRS.Template.Common.ServiceUtilities;
+using MySql.Data.MySqlClient;
 using Newtonsoft.Json.Linq;
 using Npgsql;
 using NpgsqlTypes;
@@ -8,14 +10,12 @@ using System.Data;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms;
 
-namespace COFRSFrameworkInstaller
+namespace COFRS.Template
 {
-	public class Emitter
+    public class Emitter
 	{
-		public string EmitController(List<ClassMember> columns, bool hasValidator, string moniker, string resourceClassName, string controllerClassName, string validationClassName, string exampleClassName, string exampleCollectionClassName, string policy)
+		public string EmitController(DBServerType serverType, List<ClassMember> columns, bool hasValidator, string moniker, string resourceClassName, string controllerClassName, string validationClassName, string exampleClassName, string exampleCollectionClassName, string policy)
 		{
 			var results = new StringBuilder();
 			var nn = new NameNormalizer(resourceClassName);
@@ -118,7 +118,7 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 				results.AppendLine("\t\t[SupportRQL]");
 
-				EmitEndpoint(resourceClassName, "Get", results, pkcolumns);
+				EmitEndpoint(serverType, resourceClassName, "Get", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method} {Request.RequestUri.AbsolutePath}\");");
@@ -259,7 +259,7 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 				results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 				results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
-				EmitEndpoint(resourceClassName, "Patch", results, pkcolumns);
+				EmitEndpoint(serverType, resourceClassName, "Patch", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
@@ -300,7 +300,7 @@ namespace COFRSFrameworkInstaller
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 
-				EmitEndpoint(resourceClassName, "Delete", results, pkcolumns);
+				EmitEndpoint(serverType, resourceClassName, "Delete", results, pkcolumns);
 
 				results.AppendLine("\t\t{");
 				results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
@@ -490,7 +490,7 @@ namespace COFRSFrameworkInstaller
 			return results.ToString();
 		}
 
-		public string EmitExampleModel(string schema, string connectionString, List<ClassMember> classMembers, string entityClassName, string resourceClassName, string exampleClassName, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> classFiles)
+		public string EmitExampleModel(DBServerType serverType, string schema, string connectionString, List<ClassMember> classMembers, string entityClassName, string resourceClassName, string exampleClassName, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> classFiles)
 		{
 			var results = new StringBuilder();
 			replacementsDictionary.Add("$exampleimage$", "false");
@@ -551,7 +551,7 @@ namespace COFRSFrameworkInstaller
 
 					//	Set Flags to include necessary usings...
 
-					if (column.ServerType == DBServerType.POSTGRESQL)
+					if (serverType == DBServerType.POSTGRESQL)
 					{
 						if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
 							replacementsDictionary["$examplenet$"] = "true";
@@ -591,24 +591,20 @@ namespace COFRSFrameworkInstaller
 							replacementsDictionary["$usenpgtypes$"] = "true";
 						else if ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Polygon))
 							replacementsDictionary["$usenpgtypes$"] = "true";
+
+						EmitPostgresValue(column, parentClass, Example, results, classFiles, 0);
 					}
-					else if (column.ServerType == DBServerType.SQLSERVER)
+					else if (serverType == DBServerType.SQLSERVER)
 					{
 						if ((SqlDbType)column.DataType == SqlDbType.Image)
 							replacementsDictionary["$exampleimage$"] = "true";
-					}
 
-					//	Get the member value 
-
-					if (column.ServerType == DBServerType.MYSQL)
-						GetMySqlValue(column, Example, results);
-					else if (column.ServerType == DBServerType.POSTGRESQL)
-						EmitPostgresValue(column, parentClass, Example, results, classFiles, 0);
-					else if (column.ServerType == DBServerType.SQLSERVER)
 						GetSqlServerValue(column, Example, results);
-
-					//	Write the member set function
-
+					}
+					else if (serverType == DBServerType.MYSQL)
+					{
+						GetMySqlValue(column, Example, results);
+					}
 				}
 			}
 
@@ -624,7 +620,7 @@ namespace COFRSFrameworkInstaller
 			return results.ToString();
 		}
 
-		public string EmitExampleCollectionModel(string schema, string connectionString, List<ClassMember> classMembers, string entityClassName, string resourceClassName, string exampleCollectionClassName, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> classFiles)
+		public string EmitExampleCollectionModel(DBServerType serverType, string schema, string connectionString, List<ClassMember> classMembers, string entityClassName, string resourceClassName, string exampleCollectionClassName, List<DBColumn> Columns, JObject Example, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> classFiles)
 		{
 			var results = new StringBuilder();
 
@@ -672,7 +668,7 @@ namespace COFRSFrameworkInstaller
 
 			foreach (var member in classMembers)
 			{
-				first = EmitEntiyMemeberSetting(Columns, parentClass, schema, connectionString, replacementsDictionary["$solutiondirectory$"], Example, results, first, member, classFiles);
+				first = EmitEntiyMemeberSetting(serverType, Columns, parentClass, schema, connectionString, replacementsDictionary["$solutiondirectory$"], Example, results, first, member, classFiles);
 			}
 
 			results.AppendLine();
@@ -697,380 +693,7 @@ namespace COFRSFrameworkInstaller
 			return results.ToString();
 		}
 
-		public string EmitEnum(string schema, string dataType, string className, string connectionString)
-		{
-			var nn = new NameNormalizer(className);
-			var builder = new StringBuilder();
-
-			builder.Clear();
-			builder.AppendLine("\t///\t<summary>");
-			builder.AppendLine($"\t///\tEnumerates a list of {nn.PluralForm}");
-			builder.AppendLine("\t///\t</summary>");
-
-			if (string.IsNullOrWhiteSpace(schema))
-				builder.AppendLine($"\t[PgEnum(\"{dataType}\")]");
-			else
-				builder.AppendLine($"\t[PgEnum(\"{dataType}\", Schema = \"{schema}\")]");
-
-			builder.AppendLine($"\tpublic enum {className}");
-			builder.AppendLine("\t{");
-
-			string query = @"
-select e.enumlabel as enum_value
-from pg_type t 
-   join pg_enum e on t.oid = e.enumtypid  
-   join pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-where t.typname = @dataType
-  and n.nspname = @schema";
-
-			using (var connection = new NpgsqlConnection(connectionString))
-			{
-				connection.Open();
-				using (var command = new NpgsqlCommand(query, connection))
-				{
-					command.Parameters.AddWithValue("@dataType", dataType);
-					command.Parameters.AddWithValue("@schema", schema);
-
-					bool firstUse = true;
-
-					using (var reader = command.ExecuteReader())
-					{
-						while (reader.Read())
-						{
-							if (firstUse)
-								firstUse = false;
-							else
-							{
-								builder.AppendLine(",");
-								builder.AppendLine();
-							}
-
-							var element = reader.GetString(0);
-
-							builder.AppendLine("\t\t///\t<summary>");
-							builder.AppendLine($"\t\t///\t{element}");
-							builder.AppendLine("\t\t///\t</summary>");
-							builder.AppendLine($"\t\t[PgName(\"{element}\")]");
-
-							var elementName = Utilities.NormalizeClassName(element);
-							builder.Append($"\t\t{elementName}");
-						}
-					}
-				}
-			}
-
-			builder.AppendLine();
-			builder.AppendLine("\t}");
-
-			return builder.ToString();
-		}
-
-		public string EmitComposite(string schema, string dataType, string className, string connectionString, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> definedElements, List<EntityDetailClassFile> undefinedElements)
-		{
-			var nn = new NameNormalizer(className);
-			var result = new StringBuilder();
-
-			result.Clear();
-			result.AppendLine("\t///\t<summary>");
-			result.AppendLine($"\t///\t{className}");
-			result.AppendLine("\t///\t</summary>");
-
-			if (string.IsNullOrWhiteSpace(schema))
-				result.AppendLine($"\t[PgComposite(\"{dataType}\")]");
-			else
-				result.AppendLine($"\t[PgComposite(\"{dataType}\", Schema = \"{schema}\")]");
-
-			result.AppendLine($"\tpublic class {className}");
-			result.AppendLine("\t{");
-
-			string query = @"
-select a.attname as columnname,
-	   t.typname as datatype,
-	   case when t.typname = 'varchar' then a.atttypmod-4
-	        when t.typname = 'bpchar' then a.atttypmod-4
-			when t.typname = '_varchar' then a.atttypmod-4
-			when t.typname = '_bpchar' then a.atttypmod-4
-	        when a.atttypmod > -1 then a.atttypmod
-	        else a.attlen end as max_len,
-	   case atttypid
-            when 21 /*int2*/ then 16
-            when 23 /*int4*/ then 32
-            when 20 /*int8*/ then 64
-         	when 1700 /*numeric*/ then
-              	case when atttypmod = -1
-                     then 0
-                     else ((atttypmod - 4) >> 16) & 65535     -- calculate the precision
-                     end
-         	when 700 /*float4*/ then 24 /*FLT_MANT_DIG*/
-         	when 701 /*float8*/ then 53 /*DBL_MANT_DIG*/
-         	else 0
-  			end as numeric_precision,
-  		case when atttypid in (21, 23, 20) then 0
-    		 when atttypid in (1700) then            
-        		  case when atttypmod = -1 then 0       
-            		   else (atttypmod - 4) & 65535            -- calculate the scale  
-        			   end
-       		else 0
-  			end as numeric_scale,		
-	   not a.attnotnull as is_nullable,
-	   case when ( a.attgenerated = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
-                 || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
-                 || '''::regclass)')
-	        then true else false end as is_computed,
-
-	   case when ( a.attidentity = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
-                 || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
-                 || '''::regclass)')
-	        then true else false end as is_identity,
-
-	   case when (select indrelid from pg_index as px where px.indisprimary = true and px.indrelid = c.oid and a.attnum = ANY(px.indkey)) = c.oid then true else false end as is_primary,
-	   case when (select indrelid from pg_index as ix where ix.indrelid = c.oid and a.attnum = ANY(ix.indkey)) = c.oid then true else false end as is_indexed,
-	   case when (select conrelid from pg_constraint as cx where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) = c.oid then true else false end as is_foreignkey,
-       (  select cc.relname from pg_constraint as cx inner join pg_class as cc on cc.oid = cx.confrelid where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) as foeigntablename
-   from pg_class as c
-  inner join pg_namespace as ns on ns.oid = c.relnamespace
-  inner join pg_attribute as a on a.attrelid = c.oid and not a.attisdropped and attnum > 0
-  inner join pg_type as t on t.oid = a.atttypid
-  left outer join pg_attrdef as ad on ad.adrelid = a.attrelid and ad.adnum = a.attnum 
-  where ns.nspname = @schema
-    and c.relname = @dataType
- order by a.attnum";
-
-			var columns = new List<DBColumn>();
-			var candidates = new List<EntityDetailClassFile>();
-
-			using (var connection = new NpgsqlConnection(connectionString))
-			{
-				connection.Open();
-				using (var command = new NpgsqlCommand(query, connection))
-				{
-					command.Parameters.AddWithValue("@dataType", dataType);
-					command.Parameters.AddWithValue("@schema", schema);
-
-					using (var reader = command.ExecuteReader())
-					{
-						while (reader.Read())
-						{
-							NpgsqlDbType theDataType = NpgsqlDbType.Unknown;
-
-							try
-							{
-								theDataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
-							}
-							catch (InvalidCastException)
-							{
-								var classFile = new EntityDetailClassFile()
-								{
-									ClassName = Utilities.NormalizeClassName(reader.GetString(1)),
-									SchemaName = schema,
-									TableName = reader.GetString(1),
-									ClassNameSpace = replacementsDictionary["$rootnamespace$"] + ".Models.EntityModels",
-									FileName = Path.Combine(Utilities.LoadBaseFolder(replacementsDictionary["$solutiondirectory$"]), $"Models\\EntityModels\\{Utilities.NormalizeClassName(reader.GetString(1))}.cs")
-								};
-
-								candidates.Add(classFile);
-							}
-
-							var column = new DBColumn
-							{
-								ColumnName = reader.GetString(0),
-								DataType = theDataType,
-								dbDataType = reader.GetString(1),
-								Length = Convert.ToInt64(reader.GetValue(2)),
-								NumericPrecision = Convert.ToInt32(reader.GetValue(3)),
-								NumericScale = Convert.ToInt32(reader.GetValue(4)),
-								IsNullable = Convert.ToBoolean(reader.GetValue(5)),
-								IsComputed = Convert.ToBoolean(reader.GetValue(6)),
-								IsIdentity = Convert.ToBoolean(reader.GetValue(7)),
-								IsPrimaryKey = Convert.ToBoolean(reader.GetValue(8)),
-								IsIndexed = Convert.ToBoolean(reader.GetValue(9)),
-								IsForeignKey = Convert.ToBoolean(reader.GetValue(10)),
-								ForeignTableName = reader.IsDBNull(11) ? string.Empty : reader.GetString(11),
-								ServerType = DBServerType.POSTGRESQL
-							};
-
-							columns.Add(column);
-						}
-					}
-				}
-			}
-
-			foreach (var candidate in candidates)
-			{
-				if (definedElements.FirstOrDefault(c => string.Equals(c.SchemaName, candidate.SchemaName, StringComparison.OrdinalIgnoreCase) &&
-														string.Equals(c.TableName, candidate.TableName, StringComparison.OrdinalIgnoreCase)) == null)
-				{
-					candidate.ElementType = DBHelper.GetElementType(candidate.SchemaName, candidate.TableName, definedElements, connectionString);
-					undefinedElements.Add(candidate);
-				}
-			}
-
-			if (undefinedElements.Count > 0)
-				return string.Empty;
-
-			bool firstColumn = true;
-
-			foreach (var column in columns)
-			{
-
-				if (firstColumn)
-					firstColumn = false;
-				else
-					result.AppendLine();
-
-				result.AppendLine("\t\t///\t<summary>");
-				result.AppendLine($"\t\t///\t{column.ColumnName}");
-				result.AppendLine("\t\t///\t</summary>");
-
-				//	Construct the [Member] attribute
-				result.Append("\t\t[Member(");
-				bool first = true;
-
-				if (column.IsPrimaryKey)
-				{
-					AppendPrimaryKey(result, ref first);
-				}
-
-				if (column.IsIdentity)
-				{
-					AppendIdentity(result, ref first);
-				}
-
-				if (column.IsIndexed || column.IsForeignKey)
-				{
-					AppendIndexed(result, ref first);
-				}
-
-				if (column.IsForeignKey)
-				{
-					AppendForeignKey(result, ref first);
-				}
-
-				AppendNullable(result, column.IsNullable, ref first);
-
-
-				if (((NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar) ||
-					((NpgsqlDbType)column.DataType == NpgsqlDbType.Name) ||
-					((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Varchar)))
-				{
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar && column.Length < 0)
-						AppendFixed(result, -1, false, ref first);
-					else
-						AppendFixed(result, column.Length, false, ref first);
-				}
-
-				else if (((NpgsqlDbType)column.DataType == NpgsqlDbType.Bit) ||
-						 ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit)))
-				{
-					//	Insert the column definition
-					AppendFixed(result, column.Length, true, ref first);
-				}
-
-				else if (((NpgsqlDbType)column.DataType == NpgsqlDbType.Varbit) ||
-						 ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Varbit)))
-				{
-					AppendFixed(result, column.Length, false, ref first);
-				}
-
-				else if (((NpgsqlDbType)column.DataType == NpgsqlDbType.Text) ||
-						 ((NpgsqlDbType)column.DataType == NpgsqlDbType.Citext) ||
-						 ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Text)))
-				{
-					AppendFixed(result, -1, false, ref first);
-				}
-
-				else if (((NpgsqlDbType)column.DataType == NpgsqlDbType.Char) ||
-						 ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Char)))
-				{
-					//	Insert the column definition
-					if (string.Equals(column.dbDataType, "bpchar", StringComparison.OrdinalIgnoreCase))
-					{
-						AppendFixed(result, column.Length, true, ref first);
-					}
-					else if (string.Equals(column.dbDataType, "_bpchar", StringComparison.OrdinalIgnoreCase))
-					{
-						AppendFixed(result, column.Length, true, ref first);
-					}
-				}
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Bytea)
-				{
-					AppendFixed(result, column.Length, false, ref first);
-				}
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Numeric)
-				{
-					AppendPrecision(result, column.NumericPrecision, column.NumericScale, ref first);
-				}
-
-				AppendDatabaseType(result, column, ref first);
-
-				if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
-					replacementsDictionary["$net$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Cidr)
-					replacementsDictionary["$net$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.MacAddr)
-					replacementsDictionary["$netinfo$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.MacAddr8)
-					replacementsDictionary["$netinfo$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Boolean))
-					replacementsDictionary["$barray$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit))
-					replacementsDictionary["$barray$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Bit && column.Length > 1)
-					replacementsDictionary["$barray$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Varbit)
-					replacementsDictionary["$barray$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Point)
-					replacementsDictionary["$npgsqltypes$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.LSeg)
-					replacementsDictionary["$npgsqltypes$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Circle)
-					replacementsDictionary["$npgsqltypes$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Box)
-					replacementsDictionary["$npgsqltypes$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Line)
-					replacementsDictionary["$npgsqltypes$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Path)
-					replacementsDictionary["$npgsqltypes$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.LSeg)
-					replacementsDictionary["$npgsqltypes$"] = "true";
-
-				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Polygon)
-					replacementsDictionary["$npgsqltypes$"] = "true";
-
-				//	Correct for reserved words
-				CorrectForReservedNames(result, column, ref first);
-
-				result.AppendLine(")]");
-
-				var memberName = Utilities.NormalizeClassName(column.ColumnName);
-				result.AppendLine($"\t\t[PgName(\"{column.ColumnName}\")]");
-
-				//	Insert the column definition
-				result.AppendLine($"\t\tpublic {DBHelper.GetPostgresDataType(schema, column, connectionString, replacementsDictionary["$solutiondirectory$"])} {memberName} {{ get; set; }}");
-			}
-
-			result.AppendLine("\t}");
-
-			return result.ToString();
-		}
-
-		public string EmitMappingModel(List<ClassMember> classMembers, string resourceClassName, string entityClassName, string mappingClassName, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
+		public string EmitMappingModel(DBServerType serverType, List<ClassMember> classMembers, string resourceClassName, string entityClassName, string mappingClassName, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary)
 		{
 			var ImageConversionRequired = false;
 			var results = new StringBuilder();
@@ -1127,11 +750,11 @@ select a.attname as columnname,
 
 						string dataType = "Unknown";
 
-						if (entityColumn.ServerType == DBServerType.MYSQL)
+						if (serverType == DBServerType.MYSQL)
 							dataType = DBHelper.GetNonNullableMySqlDataType(entityColumn);
-						else if (entityColumn.ServerType == DBServerType.POSTGRESQL)
+						else if (serverType == DBServerType.POSTGRESQL)
 							dataType = DBHelper.GetNonNullablePostgresqlDataType(entityColumn);
-						else if (entityColumn.ServerType == DBServerType.SQLSERVER)
+						else if (serverType == DBServerType.SQLSERVER)
 							dataType = DBHelper.GetNonNullableSqlServerDataType(entityColumn);
 
 						if (ix == 0)
@@ -1153,11 +776,11 @@ select a.attname as columnname,
 
 						string dataType = "Unknown";
 
-						if (entityColumn.ServerType == DBServerType.MYSQL)
+						if (serverType == DBServerType.MYSQL)
 							dataType = DBHelper.GetNonNullableMySqlDataType(entityColumn);
-						else if (entityColumn.ServerType == DBServerType.POSTGRESQL)
+						else if (serverType == DBServerType.POSTGRESQL)
 							dataType = DBHelper.GetNonNullablePostgresqlDataType(entityColumn);
-						else if (entityColumn.ServerType == DBServerType.SQLSERVER)
+						else if (serverType == DBServerType.SQLSERVER)
 							dataType = DBHelper.GetNonNullableSqlServerDataType(entityColumn);
 
 						if (entityColumn.IsNullable)
@@ -1276,554 +899,6 @@ select a.attname as columnname,
 			results.AppendLine("\t}");
 
 			return results.ToString();
-		}
-
-		public string EmitResourceModel(List<ClassMember> entityClassMembers, string resourceClassName, string entityClassName, DBTable table, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary, string connectionString)
-		{
-			replacementsDictionary.Add("$resourceimage$", "false");
-			replacementsDictionary.Add("$resourcenet$", "false");
-			replacementsDictionary.Add("$resourcenetinfo$", "false");
-			replacementsDictionary.Add("$resourcebarray$", "false");
-			replacementsDictionary.Add("$usenpgtypes$", "false");
-
-			var results = new StringBuilder();
-			bool hasPrimary = false;
-
-			results.AppendLine("\t///\t<summary>");
-			results.AppendLine($"\t///\t{resourceClassName}");
-			results.AppendLine("\t///\t</summary>");
-			results.AppendLine($"\t[Entity(typeof({entityClassName}))]");
-			results.AppendLine($"\tpublic class {resourceClassName}");
-			results.AppendLine("\t{");
-
-			bool firstColumn = true;
-			foreach (var member in entityClassMembers)
-			{
-				if (firstColumn)
-					firstColumn = false;
-				else
-					results.AppendLine();
-
-				if (member.EntityNames[0].IsPrimaryKey)
-				{
-					if (!hasPrimary)
-					{
-						results.AppendLine("\t\t///\t<summary>");
-						results.AppendLine($"\t\t///\tThe hypertext reference that identifies the resource.");
-						results.AppendLine("\t\t///\t</summary>");
-						results.AppendLine($"\t\tpublic Uri {member.ResourceMemberName} {{ get; set; }}");
-						hasPrimary = true;
-					}
-				}
-				else if (member.EntityNames[0].IsForeignKey)
-				{
-					results.AppendLine("\t\t///\t<summary>");
-					results.AppendLine($"\t\t///\tA hypertext reference that identifies the associated {member.ResourceMemberName}");
-					results.AppendLine("\t\t///\t</summary>");
-					results.AppendLine($"\t\tpublic Uri {member.ResourceMemberName} {{ get; set; }}");
-				}
-				else
-				{
-					results.AppendLine("\t\t///\t<summary>");
-					results.AppendLine($"\t\t///\t{member.ResourceMemberName}");
-					results.AppendLine("\t\t///\t</summary>");
-
-					if (member.EntityNames[0].ServerType == DBServerType.SQLSERVER && (SqlDbType)member.EntityNames[0].DataType == SqlDbType.Image)
-						replacementsDictionary["$resourceimage$"] = "true";
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Inet)
-						replacementsDictionary["$resourcenet$"] = "true";
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Cidr)
-						replacementsDictionary["$resourcenet$"] = "true";
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.MacAddr)
-						replacementsDictionary["$resourcenetinfo$"] = "true";
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.MacAddr8)
-						replacementsDictionary["$resourcenetinfo$"] = "true";
-
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == (NpgsqlDbType.Array | NpgsqlDbType.Boolean))
-						replacementsDictionary["$resourcebarray$"] = "true";
-
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit))
-						replacementsDictionary["$resourcebarray$"] = "true";
-
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Bit && member.EntityNames[0].Length > 1)
-						replacementsDictionary["$resourcebarray$"] = "true";
-
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Varbit)
-						replacementsDictionary["$resourcebarray$"] = "true";
-
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Unknown ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Point ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.LSeg ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Path ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Circle ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Polygon ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Line ||
-						member.EntityNames[0].ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)member.EntityNames[0].DataType == NpgsqlDbType.Box)
-						replacementsDictionary["$usenpgtypes$"] = "true";
-
-					if (member.EntityNames[0].ServerType == DBServerType.POSTGRESQL)
-					{
-						var solutionFolder = replacementsDictionary["$solutiondirectory$"];
-						var dataType = DBHelper.GetPostgresqlResourceDataType(member.EntityNames[0], connectionString, table.Schema, solutionFolder);
-						results.AppendLine($"\t\tpublic {dataType} {member.ResourceMemberName} {{ get; set; }}");
-					}
-					else if (member.EntityNames[0].ServerType == DBServerType.MYSQL)
-						results.AppendLine($"\t\tpublic {DBHelper.GetMySqlResourceDataType(member.EntityNames[0])} {member.ResourceMemberName} {{ get; set; }}");
-					else if (member.EntityNames[0].ServerType == DBServerType.SQLSERVER)
-						results.AppendLine($"\t\tpublic {DBHelper.GetSqlServerResourceDataType(member.EntityNames[0])} {member.ResourceMemberName} {{ get; set; }}");
-				}
-			}
-
-			results.AppendLine("\t}");
-
-			return results.ToString();
-		}
-
-		public string EmitEntityModel(DBTable table, string entityClassName, List<DBColumn> columns, Dictionary<string, string> replacementsDictionary, string connectionString)
-		{
-			var result = new StringBuilder();
-			replacementsDictionary.Add("$image$", "false");
-			replacementsDictionary.Add("$net$", "false");
-			replacementsDictionary.Add("$netinfo$", "false");
-			replacementsDictionary.Add("$barray$", "false");
-
-			result.AppendLine("\t///\t<summary>");
-			result.AppendLine($"\t///\t{entityClassName}");
-			result.AppendLine("\t///\t</summary>");
-
-			if (string.IsNullOrWhiteSpace(table.Schema))
-				result.AppendLine($"\t[Table(\"{table.Table}\")]");
-			else
-				result.AppendLine($"\t[Table(\"{table.Table}\", Schema = \"{table.Schema}\")]");
-
-			result.AppendLine($"\tpublic class {entityClassName}");
-			result.AppendLine("\t{");
-
-			bool firstColumn = true;
-			foreach (var column in columns)
-			{
-				if (firstColumn)
-					firstColumn = false;
-				else
-					result.AppendLine();
-
-				result.AppendLine("\t\t///\t<summary>");
-				result.AppendLine($"\t\t///\t{column.ColumnName}");
-				result.AppendLine("\t\t///\t</summary>");
-
-				//	Construct the [Member] attribute
-				result.Append("\t\t[Member(");
-				bool first = true;
-
-				if (column.IsPrimaryKey)
-				{
-					AppendPrimaryKey(result, ref first);
-				}
-
-				if (column.IsIdentity)
-				{
-					AppendIdentity(result, ref first);
-				}
-
-				if (column.IsIndexed || column.IsForeignKey)
-				{
-					AppendIndexed(result, ref first);
-				}
-
-				if (column.IsForeignKey)
-				{
-					AppendForeignKey(result, ref first);
-				}
-
-				AppendNullable(result, column.IsNullable, ref first);
-
-				if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NVarChar)
-				{
-					AppendFixed(result, column.Length, false, ref first);
-				}
-
-				else if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NChar)
-				{
-					if (column.Length > 1)
-						AppendFixed(result, column.Length, true, ref first);
-				}
-
-				else if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NText)
-				{
-					AppendFixed(result, -1, false, ref first);
-				}
-
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.VarChar) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Name) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Varchar)) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarChar))
-				{
-					if (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar && column.Length < 0)
-						AppendFixed(result, -1, false, ref first);
-					else
-						AppendFixed(result, column.Length, false, ref first);
-				}
-
-				else if ((column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bit) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit)))
-				{
-					//	Insert the column definition
-					AppendFixed(result, column.Length, true, ref first);
-				}
-
-				else if ((column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varbit) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Varbit)))
-				{
-					AppendFixed(result, column.Length, false, ref first);
-				}
-
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Text) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Text) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Citext) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Text)) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Text))
-				{
-					AppendFixed(result, -1, false, ref first);
-				}
-
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Char) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Char) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Char)) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.String))
-				{
-					//	Insert the column definition
-					if (column.ServerType == DBServerType.POSTGRESQL)
-					{
-						if (string.Equals(column.dbDataType, "bpchar", StringComparison.OrdinalIgnoreCase))
-						{
-							AppendFixed(result, column.Length, true, ref first);
-						}
-						else if (string.Equals(column.dbDataType, "_bpchar", StringComparison.OrdinalIgnoreCase))
-						{
-							AppendFixed(result, column.Length, true, ref first);
-						}
-					}
-					else if (column.ServerType == DBServerType.MYSQL)
-					{
-						if (column.Length != 1)
-							AppendFixed(result, column.Length, true, ref first);
-					}
-					else
-					{
-						if (column.Length != 1)
-							AppendFixed(result, column.Length, true, ref first);
-					}
-				}
-
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.VarBinary) ||
-						 (column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bytea) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarBinary))
-				{
-					AppendFixed(result, column.Length, false, ref first);
-				}
-
-				else if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Binary) ||
-						 (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Binary))
-				{
-					AppendFixed(result, column.Length, true, ref first);
-				}
-
-				else if (column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Timestamp)
-				{
-					AppendFixed(result, column.Length, true, ref first);
-					AppendAutofield(result, ref first);
-				}
-
-				if ((column.ServerType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Decimal) ||
-					(column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Decimal) ||
-					(column.ServerType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Numeric))
-				{
-					AppendPrecision(result, column.NumericPrecision, column.NumericScale, ref first);
-				}
-
-				AppendDatabaseType(result, column, ref first);
-
-				if (column.ServerType == DBServerType.POSTGRESQL)
-				{
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
-						replacementsDictionary["$net$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Cidr)
-						replacementsDictionary["$net$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.MacAddr)
-						replacementsDictionary["$netinfo$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.MacAddr8)
-						replacementsDictionary["$netinfo$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Boolean))
-						replacementsDictionary["$barray$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == (NpgsqlDbType.Array | NpgsqlDbType.Bit))
-						replacementsDictionary["$barray$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Bit && column.Length > 1)
-						replacementsDictionary["$barray$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Varbit)
-						replacementsDictionary["$barray$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Point)
-						replacementsDictionary["$npgsqltypes$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.LSeg)
-						replacementsDictionary["$npgsqltypes$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Circle)
-						replacementsDictionary["$npgsqltypes$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Box)
-						replacementsDictionary["$npgsqltypes$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Line)
-						replacementsDictionary["$npgsqltypes$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Path)
-						replacementsDictionary["$npgsqltypes$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.LSeg)
-						replacementsDictionary["$npgsqltypes$"] = "true";
-
-					if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Polygon)
-						replacementsDictionary["$npgsqltypes$"] = "true";
-				}
-				else if (column.ServerType == DBServerType.SQLSERVER)
-				{
-					if ((SqlDbType)column.DataType == SqlDbType.Image)
-						replacementsDictionary["$image$"] = "true";
-				}
-
-
-				//	Correct for reserved words
-				CorrectForReservedNames(result, column, ref first);
-
-				result.AppendLine(")]");
-
-				//	Insert the column definition
-				if (column.ServerType == DBServerType.POSTGRESQL)
-					result.AppendLine($"\t\tpublic {DBHelper.GetPostgresDataType(table.Schema, column, connectionString, replacementsDictionary["$solutiondirectory$"])} {column.ColumnName} {{ get; set; }}");
-				else if (column.ServerType == DBServerType.MYSQL)
-					result.AppendLine($"\t\tpublic {DBHelper.GetMySqlDataType(column)} {column.ColumnName} {{ get; set; }}");
-				else if (column.ServerType == DBServerType.SQLSERVER)
-					result.AppendLine($"\t\tpublic {DBHelper.GetSQLServerDataType(column)} {column.ColumnName} {{ get; set; }}");
-			}
-
-			result.AppendLine("\t}");
-
-			return result.ToString();
-		}
-
-		private void AppendPrimaryKey(StringBuilder result, ref bool first)
-		{
-			AppendComma(result, ref first);
-			result.Append("IsPrimaryKey = true");
-		}
-
-		private void AppendComma(StringBuilder result, ref bool first)
-		{
-			if (first)
-				first = false;
-			else
-				result.Append(", ");
-		}
-
-		private void AppendIdentity(StringBuilder result, ref bool first)
-		{
-			AppendComma(result, ref first);
-			result.Append("IsIdentity = true, AutoField = true");
-		}
-
-		private void AppendIndexed(StringBuilder result, ref bool first)
-		{
-			AppendComma(result, ref first);
-			result.Append("IsIndexed = true");
-		}
-
-		private void AppendForeignKey(StringBuilder result, ref bool first)
-		{
-			AppendComma(result, ref first);
-			result.Append("IsForeignKey = true");
-		}
-
-		private void AppendNullable(StringBuilder result, bool isNullable, ref bool first)
-		{
-			AppendComma(result, ref first);
-
-			if (isNullable)
-				result.Append("IsNullable = true");
-			else
-				result.Append("IsNullable = false");
-		}
-
-		private void CorrectForReservedNames(StringBuilder result, DBColumn column, ref bool first)
-		{
-			if (string.Equals(column.ColumnName, "abstract", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "as", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "base", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "bool", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "break", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "byte", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "case", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "catch", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "char", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "checked", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "class", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "const", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "continue", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "decimal", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "default", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "delegate", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "do", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "double", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "else", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "enum", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "event", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "explicit", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "extern", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "false", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "finally", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "fixed", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "float", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "for", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "foreach", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "goto", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "if", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "implicit", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "in", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "int", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "interface", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "internal", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "is", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "lock", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "long", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "namespace", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "new", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "null", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "object", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "operator", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "out", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "override", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "params", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "private", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "protected", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "public", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "readonly", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "ref", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "return", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "sbyte", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "sealed", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "short", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "sizeof", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "stackalloc", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "static", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "string", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "struct", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "switch", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "this", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "throw", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "true", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "try", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "typeof", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "uint", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "ulong", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "unchecked", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "unsafe", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "ushort", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "using", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "virtual", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "void", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "volatile", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "while", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "add", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "alias", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "ascending", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "async", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "await", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "by", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "descending", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "dynamic", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "equals", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "from", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "get", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "global", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "group", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "into", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "join", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "let", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "nameof", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "on", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "orderby", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "partial", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "remove", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "select", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "set", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "unmanaged", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "value", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "var", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "when", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "where", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "yield", StringComparison.OrdinalIgnoreCase))
-			{
-				AppendComma(result, ref first);
-				result.Append($"ColumnName = \"{column.ColumnName}\"");
-				column.ColumnName += "_Value";
-			}
-		}
-
-		private void AppendDatabaseType(StringBuilder result, DBColumn column, ref bool first)
-		{
-			AppendComma(result, ref first);
-
-			if (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarChar)
-				result.Append("NativeDataType=\"VarChar\"");
-			else if (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarBinary)
-				result.Append("NativeDataType=\"VarBinary\"");
-			else if (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.String)
-				result.Append("NativeDataType=\"char\"");
-			else if (column.ServerType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Decimal)
-				result.Append("NativeDataType=\"Decimal\"");
-			else
-				result.Append($"NativeDataType=\"{column.dbDataType}\"");
-		}
-
-		private void AppendFixed(StringBuilder result, long length, bool isFixed, ref bool first)
-		{
-			AppendComma(result, ref first);
-
-			if (length == -1)
-			{
-				if (isFixed)
-					result.Append($"IsFixed = true");
-				else
-					result.Append($"IsFixed = false");
-			}
-			else
-			{
-				if (isFixed)
-					result.Append($"Length = {length}, IsFixed = true");
-				else
-					result.Append($"Length = {length}, IsFixed = false");
-			}
-		}
-
-		private void AppendAutofield(StringBuilder result, ref bool first)
-		{
-			AppendComma(result, ref first);
-			result.Append("AutoField = true");
-		}
-
-		private void AppendPrecision(StringBuilder result, int NumericPrecision, int NumericScale, ref bool first)
-		{
-			AppendComma(result, ref first);
-
-			result.Append($"Precision={NumericPrecision}, Scale={NumericScale}");
 		}
 
 		private bool CheckMapping(ClassMember member)
@@ -2612,7 +1687,7 @@ select a.attname as columnname,
 					break;
 			}
 		}
-
+		
 		private void GetMySqlValue(DBColumn column, JObject ExampleValue, StringBuilder results)
 		{
 			var value = ExampleValue[column.EntityName];
@@ -5424,13 +4499,13 @@ select a.attname as columnname,
 		}
 		#endregion
 
-		private bool EmitEntiyMemeberSetting(List<DBColumn> Columns, EntityDetailClassFile parentClass, string schema, string connectionString, string solutionFolder, JObject Example, StringBuilder results, bool first, ClassMember member, List<EntityDetailClassFile> classFiles)
+		private bool EmitEntiyMemeberSetting(DBServerType serverType, List<DBColumn> Columns, EntityDetailClassFile parentClass, string schema, string connectionString, string solutionFolder, JObject Example, StringBuilder results, bool first, ClassMember member, List<EntityDetailClassFile> classFiles)
 		{
 			if (member.ChildMembers.Count > 0)
 			{
 				foreach (var childMember in member.ChildMembers)
 				{
-					first = EmitEntiyMemeberSetting(Columns, parentClass, schema, connectionString, solutionFolder, Example, results, first, childMember, classFiles);
+					first = EmitEntiyMemeberSetting(serverType, Columns, parentClass, schema, connectionString, solutionFolder, Example, results, first, childMember, classFiles);
 				}
 			}
 			else
@@ -5442,11 +4517,11 @@ select a.attname as columnname,
 					else
 						results.AppendLine(",");
 
-					if (column.ServerType == DBServerType.MYSQL)
+					if (serverType == DBServerType.MYSQL)
 						GetMySqlValue(column, Example, results);
-					else if (column.ServerType == DBServerType.POSTGRESQL)
+					else if (serverType == DBServerType.POSTGRESQL)
 						EmitPostgresValue(column, parentClass, Example, results, classFiles, 0);
-					else if (column.ServerType == DBServerType.SQLSERVER)
+					else if (serverType == DBServerType.SQLSERVER)
 						GetSqlServerValue(column, Example, results);
 				}
 			}
@@ -5454,7 +4529,7 @@ select a.attname as columnname,
 			return first;
 		}
 
-		private void EmitEndpoint(string resourceClassName, string action, StringBuilder results, IEnumerable<ClassMember> pkcolumns)
+		private void EmitEndpoint(DBServerType serverType, string resourceClassName, string action, StringBuilder results, IEnumerable<ClassMember> pkcolumns)
 		{
 			results.Append($"\t\tpublic async Task<IHttpActionResult> {action}{resourceClassName}Async(");
 			bool first = true;
@@ -5470,11 +4545,11 @@ select a.attname as columnname,
 
 					string dataType = "Unrecognized";
 
-					if (column.ServerType == DBServerType.POSTGRESQL)
+					if (serverType == DBServerType.POSTGRESQL)
 						dataType = DBHelper.GetNonNullablePostgresqlDataType(column);
-					else if (column.ServerType == DBServerType.MYSQL)
+					else if (serverType == DBServerType.MYSQL)
 						dataType = DBHelper.GetNonNullableMySqlDataType(column);
-					else if (column.ServerType == DBServerType.SQLSERVER)
+					else if (serverType == DBServerType.SQLSERVER)
 						dataType = DBHelper.GetNonNullableSqlServerDataType(column);
 
 					results.Append($"{dataType} {column.EntityName}");
@@ -5552,91 +4627,6 @@ select a.attname as columnname,
 			}
 
 			return string.Empty;
-		}
-
-
-		/// <summary>
-		/// Generate undefined elements
-		/// </summary>
-		/// <param name="composites">The list of elements to be defined"/></param>
-		/// <param name="connectionString">The connection string to the database server</param>
-		/// <param name="rootnamespace">The root namespace for the newly defined elements</param>
-		/// <param name="replacementsDictionary">The replacements dictionary</param>
-		/// <param name="definedElements">The lise of elements that are defined</param>
-		public void GenerateComposites(List<EntityDetailClassFile> composites, string connectionString, Dictionary<string, string> replacementsDictionary, List<EntityDetailClassFile> definedElements)
-		{
-			foreach (var composite in composites)
-			{
-				if (composite.ElementType == ElementType.Enum)
-				{
-					var result = new StringBuilder();
-
-					result.AppendLine("using COFRS;");
-					result.AppendLine("using NpgsqlTypes;");
-					result.AppendLine();
-					result.AppendLine($"namespace {composite.ClassNameSpace}");
-					result.AppendLine("{");
-					result.Append(EmitEnum(composite.SchemaName, composite.TableName, composite.ClassName, connectionString));
-					result.AppendLine("}");
-
-					File.WriteAllText(composite.FileName, result.ToString());
-				}
-				else if (composite.ElementType == ElementType.Composite)
-				{
-					var result = new StringBuilder();
-					var allElementsDefined = false;
-					string body = string.Empty;
-
-					while (!allElementsDefined)
-					{
-						var undefinedElements = new List<EntityDetailClassFile>();
-						body = EmitComposite(composite.SchemaName, composite.TableName, composite.ClassName, connectionString, replacementsDictionary, definedElements, undefinedElements);
-
-						if (undefinedElements.Count > 0)
-						{
-							GenerateComposites(undefinedElements, connectionString, replacementsDictionary, definedElements);
-							definedElements.AddRange(undefinedElements);
-						}
-						else
-							allElementsDefined = true;
-					}
-
-					result.AppendLine("using COFRS;");
-					result.AppendLine("using NpgsqlTypes;");
-
-					if (replacementsDictionary.ContainsKey("$net$"))
-					{
-						if (string.Equals(replacementsDictionary["$net$"], "true", StringComparison.OrdinalIgnoreCase))
-							result.AppendLine("using System.Net;");
-					}
-
-					if (replacementsDictionary.ContainsKey("$barray$"))
-					{
-						if (string.Equals(replacementsDictionary["$barray$"], "true", StringComparison.OrdinalIgnoreCase))
-							result.AppendLine("using System.Collections;");
-					}
-
-					if (replacementsDictionary.ContainsKey("$image$"))
-					{
-						if (string.Equals(replacementsDictionary["$image$"], "true", StringComparison.OrdinalIgnoreCase))
-							result.AppendLine("using System.Drawing;");
-					}
-
-					if (replacementsDictionary.ContainsKey("$netinfo$"))
-					{
-						if (string.Equals(replacementsDictionary["$netinfo$"], "true", StringComparison.OrdinalIgnoreCase))
-							result.AppendLine("using System.Net.NetworkInformation;");
-					}
-
-					result.AppendLine();
-					result.AppendLine($"namespace {composite.ClassNameSpace}");
-					result.AppendLine("{");
-					result.Append(body);
-					result.AppendLine("}");
-
-					File.WriteAllText(composite.FileName, result.ToString());
-				}
-			}
 		}
 	}
 }

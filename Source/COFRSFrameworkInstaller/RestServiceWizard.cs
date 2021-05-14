@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Windows.Forms;
 
-namespace COFRSFrameworkInstaller
+namespace COFRS.Template
 {
     public class RestServiceWizard : IWizard
     {
