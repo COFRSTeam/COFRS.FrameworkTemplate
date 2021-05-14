@@ -835,9 +835,9 @@ select a.attname as columnname,
 											{
 												SchemaName = table.Schema,
 												TableName = reader.GetString(1),
-												ClassName = SolutionUtil.NormalizeClassName(reader.GetString(1)),
+												ClassName = StandardUtils.NormalizeClassName(reader.GetString(1)),
 												ClassNameSpace = EntityModelsFolder.Namespace,
-												FileName = Path.Combine(EntityModelsFolder.Folder, $"{SolutionUtil.NormalizeClassName(reader.GetString(1))}.cs")
+												FileName = Path.Combine(EntityModelsFolder.Folder, $"{StandardUtils.NormalizeClassName(reader.GetString(1))}.cs")
 											};
 
 											UndefinedClassList.Add(unknownClass);
@@ -1055,8 +1055,7 @@ select c.name as column_name,
 
 			if (server.DBType == DBServerType.POSTGRESQL)
 			{
-				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
-				UndefinedClassList = Utilities.LoadDetailEntityClassList(UndefinedClassList, ClassList, ReplacementsDictionary["$solutionDirectory$"], connectionString);
+				UndefinedClassList = StandardUtils.GenerateDetailEntityClassList(UndefinedClassList, ClassList, ReplacementsDictionary["$solutionDirectory$"], ConnectionString);
 			}
 
 			List<EntityDetailClassFile> theClassList = new List<EntityDetailClassFile>();

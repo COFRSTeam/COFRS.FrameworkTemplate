@@ -457,8 +457,8 @@ select a.attname as columnname,
 										{
 											SchemaName = table.Schema,
 											TableName = reader.GetString(1),
-											ClassName = SolutionUtil.NormalizeClassName(reader.GetString(1)),
-											FileName = Path.Combine(Utilities.LoadBaseFolder(SolutionFolder), $"Models\\EntityModels\\{SolutionUtil.NormalizeClassName(reader.GetString(1))}.cs"),
+											ClassName = StandardUtils.NormalizeClassName(reader.GetString(1)),
+											FileName = Path.Combine(Utilities.LoadBaseFolder(SolutionFolder), $"Models\\EntityModels\\{StandardUtils.NormalizeClassName(reader.GetString(1))}.cs"),
 										};
 
 										_undefinedElements.Add(entityFile);

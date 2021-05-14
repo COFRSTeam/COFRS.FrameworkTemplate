@@ -187,6 +187,7 @@ namespace COFRS.Template.Common.ServiceUtilities
 				}
 
 				AppendDatabaseType(result, serverType, column, ref first);
+				AppendEntityName(result, column, ref first);
 
 				if (serverType == DBServerType.POSTGRESQL)
 				{
@@ -243,10 +244,6 @@ namespace COFRS.Template.Common.ServiceUtilities
 					if ((SqlDbType)column.DataType == SqlDbType.Image)
 						replacementsDictionary["$image$"] = "true";
 				}
-
-
-				//	Correct for reserved words
-				CorrectForReservedNames(result, column, ref first);
 
 				result.AppendLine(")]");
 
@@ -420,7 +417,7 @@ where t.typname = @dataType
 							builder.AppendLine("\t\t///\t</summary>");
 							builder.AppendLine($"\t\t[PgName(\"{element}\")]");
 
-							var elementName = SolutionUtil.NormalizeClassName(element);
+							var elementName = StandardUtils.NormalizeClassName(element);
 							builder.Append($"\t\t{elementName}");
 						}
 					}
@@ -529,11 +526,11 @@ select a.attname as columnname,
 							{
 								var classFile = new EntityDetailClassFile()
 								{
-									ClassName = SolutionUtil.NormalizeClassName(reader.GetString(1)),
+									ClassName = StandardUtils.NormalizeClassName(reader.GetString(1)),
 									SchemaName = schema,
 									TableName = reader.GetString(1),
 									ClassNameSpace = replacementsDictionary["$rootnamespace$"] + ".Models.EntityModels",
-									FileName = Path.Combine(Utilities.LoadBaseFolder(replacementsDictionary["$solutiondirectory$"]), $"Models\\EntityModels\\{SolutionUtil.NormalizeClassName(reader.GetString(1))}.cs")
+									FileName = Path.Combine(Utilities.LoadBaseFolder(replacementsDictionary["$solutiondirectory$"]), $"Models\\EntityModels\\{StandardUtils.NormalizeClassName(reader.GetString(1))}.cs")
 								};
 
 								candidates.Add(classFile);
@@ -671,6 +668,7 @@ select a.attname as columnname,
 				}
 
 				AppendDatabaseType(result, DBServerType.POSTGRESQL, column, ref first);
+				AppendEntityName(result, column, ref first);
 
 				if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Inet)
 					replacementsDictionary["$net$"] = "true";
@@ -720,12 +718,9 @@ select a.attname as columnname,
 				else if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Polygon)
 					replacementsDictionary["$npgsqltypes$"] = "true";
 
-				//	Correct for reserved words
-				CorrectForReservedNames(result, column, ref first);
-
 				result.AppendLine(")]");
 
-				var memberName = SolutionUtil.NormalizeClassName(column.ColumnName);
+				var memberName = StandardUtils.NormalizeClassName(column.ColumnName);
 				result.AppendLine($"\t\t[PgName(\"{column.ColumnName}\")]");
 
 				//	Insert the column definition
@@ -823,120 +818,6 @@ select a.attname as columnname,
 
 
 		#region Helper Functions
-		private void CorrectForReservedNames(StringBuilder result, DBColumn column, ref bool first)
-		{
-			if (string.Equals(column.ColumnName, "abstract", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "as", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "base", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "bool", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "break", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "byte", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "case", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "catch", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "char", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "checked", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "class", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "const", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "continue", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "decimal", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "default", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "delegate", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "do", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "double", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "else", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "enum", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "event", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "explicit", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "extern", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "false", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "finally", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "fixed", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "float", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "for", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "foreach", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "goto", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "if", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "implicit", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "in", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "int", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "interface", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "internal", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "is", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "lock", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "long", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "namespace", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "new", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "null", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "object", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "operator", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "out", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "override", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "params", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "private", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "protected", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "public", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "readonly", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "ref", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "return", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "sbyte", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "sealed", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "short", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "sizeof", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "stackalloc", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "static", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "string", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "struct", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "switch", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "this", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "throw", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "true", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "try", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "typeof", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "uint", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "ulong", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "unchecked", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "unsafe", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "ushort", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "using", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "virtual", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "void", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "volatile", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "while", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "add", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "alias", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "ascending", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "async", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "await", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "by", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "descending", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "dynamic", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "equals", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "from", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "get", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "global", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "group", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "into", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "join", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "let", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "nameof", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "on", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "orderby", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "partial", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "remove", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "select", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "set", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "unmanaged", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "var", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "when", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "where", StringComparison.OrdinalIgnoreCase) ||
-				 string.Equals(column.ColumnName, "yield", StringComparison.OrdinalIgnoreCase))
-			{
-				AppendComma(result, ref first);
-				result.Append($"ColumnName = \"{column.ColumnName}\"");
-				column.ColumnName += "_Value";
-			}
-		}
-
 		private void AppendComma(StringBuilder result, ref bool first)
 		{
 			if (first)
@@ -1019,6 +900,16 @@ select a.attname as columnname,
 			AppendComma(result, ref first);
 			result.Append("AutoField = true");
 		}
+
+		private void AppendEntityName(StringBuilder result, DBColumn column, ref bool first)
+        {
+			if (!string.IsNullOrWhiteSpace(column.EntityName) && !string.Equals(column.ColumnName, column.EntityName, StringComparison.Ordinal))
+			{
+				AppendComma(result, ref first);
+				result.Append($"ColumnName = \"{column.EntityName}\"");
+			}
+		}
+
 
 		private void AppendPrecision(StringBuilder result, int NumericPrecision, int NumericScale, ref bool first)
 		{

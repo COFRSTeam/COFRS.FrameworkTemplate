@@ -50,7 +50,7 @@ namespace COFRS.Template.Common.Wizards
 			try
 			{
 				//	Full stack must start at the root namespace. Insure that we do...
-				if (!SolutionUtil.IsRootNamespace(_appObject.Solution, replacementsDictionary["$rootnamespace$"]))
+				if (!StandardUtils.IsRootNamespace(_appObject.Solution, replacementsDictionary["$rootnamespace$"]))
 				{
 					MessageBox.Show("The COFRS Controller Full Stack should be placed at the project root. It will add the appropriate components in the appropriate folders.", "COFRS", MessageBoxButtons.OK, MessageBoxIcon.Error);
 					Proceed = false;
@@ -91,10 +91,10 @@ namespace COFRS.Template.Common.Wizards
 					PluralResourceName = resourceName.PluralForm,
 					RootNamespace = rootNamespace,
 					ReplacementsDictionary = replacementsDictionary,
-					ClassList = SolutionUtil.LoadEntityDetailClassList(_appObject.Solution),
-					EntityModelsFolder = SolutionUtil.FindEntityModelsFolder(_appObject.Solution),
-					Policies = SolutionUtil.LoadPolicies(_appObject.Solution),
-					DefaultConnectionString = SolutionUtil.GetConnectionString(_appObject.Solution)
+					ClassList = StandardUtils.LoadEntityDetailClassList(_appObject.Solution),
+					EntityModelsFolder = StandardUtils.FindEntityModelsFolder(_appObject.Solution),
+					Policies = StandardUtils.LoadPolicies(_appObject.Solution),
+					DefaultConnectionString = StandardUtils.GetConnectionString(_appObject.Solution)
 				};
 
 				HandleMessages();
@@ -114,7 +114,7 @@ namespace COFRS.Template.Common.Wizards
 
 					//	Replace the ConnectionString
 					var connectionString = form.ConnectionString;
-					SolutionUtil.ReplaceConnectionString(_appObject.Solution, connectionString);
+					StandardUtils.ReplaceConnectionString(_appObject.Solution, connectionString);
 					HandleMessages();
 
 					var entityClassName = $"E{form.SingularResourceName}";
@@ -133,7 +133,7 @@ namespace COFRS.Template.Common.Wizards
 					replacementsDictionary["$validatorClass$"] = validationClassName;
 					replacementsDictionary["$controllerClass$"] = controllerClassName;
 
-					var moniker = SolutionUtil.LoadMoniker(_appObject.Solution);
+					var moniker = StandardUtils.LoadMoniker(_appObject.Solution);
 					var policy = form.Policy;
 					HandleMessages();
 
@@ -156,7 +156,7 @@ namespace COFRS.Template.Common.Wizards
 							var pj = (VSProject)_appObject.Solution.Projects.Item(1).Object;
 							pj.Project.ProjectItems.AddFromFile(composite.FileName);
 
-							SolutionUtil.RegisterComposite(_appObject.Solution, composite);
+							StandardUtils.RegisterComposite(_appObject.Solution, composite);
 						}
 					}
 
@@ -219,7 +219,7 @@ namespace COFRS.Template.Common.Wizards
 
 					//	Register the validation model
 
-					SolutionUtil.RegisterValidationModel(_appObject.Solution, 
+					StandardUtils.RegisterValidationModel(_appObject.Solution, 
 						                              validationClassName,
 													  replacementsDictionary["$validatornamespace$"]);
 

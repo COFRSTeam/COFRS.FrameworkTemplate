@@ -50,6 +50,7 @@ namespace COFRS.Template.Common.Wizards
 				//	Show the user that we are busy doing things...
 				progressDialog = new ProgressDialog("Loading classes and preparing project...");
 				progressDialog.Show(new WindowClass((IntPtr)_appObject.ActiveWindow.HWnd));
+				progressDialog.Activate();
 				_appObject.StatusBar.Animate(true, vsStatusAnimation.vsStatusAnimationBuild);
 
 				HandleMessages();
@@ -58,9 +59,9 @@ namespace COFRS.Template.Common.Wizards
 				var form = new UserInputEntity
 				{
 					ReplacementsDictionary = replacementsDictionary,
-					EntityModelsFolder = SolutionUtil.FindEntityModelsFolder(_appObject.Solution),
-					DefaultConnectionString = SolutionUtil.GetConnectionString(_appObject.Solution),
-					ClassList = SolutionUtil.LoadEntityDetailClassList(_appObject.Solution)
+					EntityModelsFolder = StandardUtils.FindEntityModelsFolder(_appObject.Solution),
+					DefaultConnectionString = StandardUtils.GetConnectionString(_appObject.Solution),
+					ClassList = StandardUtils.LoadEntityDetailClassList(_appObject.Solution)
 				};
 
 				HandleMessages();
@@ -73,6 +74,7 @@ namespace COFRS.Template.Common.Wizards
 					//	Show the user that we are busy...
 					progressDialog = new ProgressDialog("Building classes...");
 					progressDialog.Show(new WindowClass((IntPtr)_appObject.ActiveWindow.HWnd));
+					progressDialog.Activate();
 					_appObject.StatusBar.Animate(true, vsStatusAnimation.vsStatusAnimationBuild);
 
 					HandleMessages();
@@ -80,7 +82,7 @@ namespace COFRS.Template.Common.Wizards
 					//	Replace the default connection string in the appSettings.Local.json, so that the 
 					//	user doesn't have to do it. Note: this function only replaces the connection string
 					//	if the appSettings.Local.json contains the original placeholder connection string.
-					SolutionUtil.ReplaceConnectionString(_appObject.Solution, form.ConnectionString);
+					StandardUtils.ReplaceConnectionString(_appObject.Solution, form.ConnectionString);
 
 					//	We well need these when we replace placeholders in the class
 					var className = replacementsDictionary["$safeitemname$"];
@@ -110,7 +112,7 @@ namespace COFRS.Template.Common.Wizards
 							var pj = (VSProject)_appObject.Solution.Projects.Item(1).Object;
 							pj.Project.ProjectItems.AddFromFile(composite.FileName);
 
-							SolutionUtil.RegisterComposite(_appObject.Solution, composite);
+							StandardUtils.RegisterComposite(_appObject.Solution, composite);
 						}
 
 						classList.AddRange(composits);
@@ -135,7 +137,7 @@ namespace COFRS.Template.Common.Wizards
 							ElementType = ElementType.Enum,
 						};
 
-						SolutionUtil.RegisterComposite(_appObject.Solution, entityclassFile);
+						StandardUtils.RegisterComposite(_appObject.Solution, entityclassFile);
 					}
 					else if (etype == ElementType.Composite)
 					{
@@ -152,7 +154,7 @@ namespace COFRS.Template.Common.Wizards
 							ElementType = ElementType.Composite
 						};
 
-						SolutionUtil.RegisterComposite(_appObject.Solution, classFile);
+						StandardUtils.RegisterComposite(_appObject.Solution, classFile);
 					}
 					else
 					{

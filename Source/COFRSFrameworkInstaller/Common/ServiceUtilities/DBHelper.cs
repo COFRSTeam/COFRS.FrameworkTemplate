@@ -972,7 +972,7 @@ namespace COFRS.Template.Common.ServiceUtilities
 					{
 						if (string.IsNullOrWhiteSpace(connectionString))
 						{
-							return SolutionUtil.NormalizeClassName(column.dbDataType);
+							return StandardUtils.NormalizeClassName(column.dbDataType);
 						}
 						else
 						{

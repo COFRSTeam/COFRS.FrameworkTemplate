@@ -61,7 +61,7 @@
     </Compile>
     <Compile Include="Common\Models\Snipit.cs" />
     <Compile Include="Common\Models\SnipitType.cs" />
-    <Compile Include="Common\ServiceUtilities\SolutionUtil.cs" />
+    <Compile Include="Common\ServiceUtilities\StandardUtils.cs" />
     <Compile Include="Common\ServiceUtilities\StandardEmitter.cs" />
     <Compile Include="Common\ServiceUtilities\StringExtensions.cs" />
     <Compile Include="Common\Models\ProjectFolder.cs" />
