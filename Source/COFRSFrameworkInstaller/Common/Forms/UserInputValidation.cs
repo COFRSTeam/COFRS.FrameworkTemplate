@@ -852,7 +852,7 @@ select a.attname as columnname,
 										{
 											SchemaName = table.Schema,
 											TableName = reader.GetString(1),
-											ClassName = SolutionUtil.NormalizeClassName(reader.GetString(1))
+											ClassName = StandardUtils.NormalizeClassName(reader.GetString(1))
 										};
 
 										_undefinedElements.Add(entityFile);

@@ -3,6 +3,8 @@ using EnvDTE;
 using Microsoft.VisualStudio.Shell;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Npgsql;
+using NpgsqlTypes;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,8 +17,122 @@ using VSLangProj;
 
 namespace COFRS.Template.Common.ServiceUtilities
 {
-    public static class SolutionUtil
+    public static class StandardUtils
     {
+		public static string CorrectForReservedNames(string columnName)
+		{
+			if (string.Equals(columnName, "abstract", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "as", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "base", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "bool", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "break", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "byte", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "case", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "catch", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "char", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "checked", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "class", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "const", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "continue", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "decimal", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "default", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "delegate", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "do", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "double", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "else", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "enum", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "event", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "explicit", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "extern", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "false", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "finally", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "fixed", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "float", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "for", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "foreach", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "goto", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "if", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "implicit", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "in", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "int", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "interface", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "internal", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "is", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "lock", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "long", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "namespace", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "new", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "null", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "object", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "operator", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "out", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "override", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "params", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "private", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "protected", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "public", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "readonly", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "ref", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "return", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "sbyte", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "sealed", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "short", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "sizeof", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "stackalloc", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "static", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "string", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "struct", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "switch", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "this", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "throw", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "true", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "try", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "typeof", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "uint", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "ulong", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "unchecked", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "unsafe", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "ushort", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "using", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "virtual", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "void", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "volatile", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "while", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "add", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "alias", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "ascending", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "async", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "await", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "by", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "descending", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "dynamic", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "equals", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "from", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "get", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "global", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "group", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "into", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "join", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "let", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "nameof", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "on", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "orderby", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "partial", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "remove", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "select", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "set", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "unmanaged", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "var", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "when", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "where", StringComparison.OrdinalIgnoreCase) ||
+				 string.Equals(columnName, "yield", StringComparison.OrdinalIgnoreCase))
+			{
+				return $"{columnName}_Value";
+			}
+
+			return columnName;
+		}
+
 		public static string NormalizeClassName(string className)
 		{
 			var normalizedName = new StringBuilder();
@@ -55,6 +171,254 @@ namespace COFRS.Template.Common.ServiceUtilities
 
 			return normalizedName.ToString();
 		}
+
+		public static List<EntityDetailClassFile> GenerateDetailEntityClassList(List<EntityDetailClassFile> UndefinedClassList, List<EntityDetailClassFile> DefinedClassList, string baseFolder, string connectionString)
+		{
+			List<EntityDetailClassFile> resultList = new List<EntityDetailClassFile>();
+
+			foreach (var classFile in UndefinedClassList)
+			{
+				var newClassFile = GenerateDetailEntityClass(classFile, connectionString);
+				resultList.Add(newClassFile);
+
+				if (newClassFile.ElementType != ElementType.Enum)
+				{
+					foreach (var column in newClassFile.Columns)
+					{
+						if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
+						{
+							if (DefinedClassList.FirstOrDefault(c => string.Equals(c.TableName, column.EntityName, StringComparison.OrdinalIgnoreCase)) == null)
+							{
+								var aList = new List<EntityDetailClassFile>();
+								var bList = new List<EntityDetailClassFile>();
+
+								var aClassFile = new EntityDetailClassFile()
+								{
+									ClassName = CorrectForReservedNames(NormalizeClassName(column.EntityName)),
+									TableName = column.EntityName,
+									SchemaName = classFile.SchemaName,
+									FileName = Path.Combine(baseFolder, $"{CorrectForReservedNames(NormalizeClassName(column.EntityName))}.cs"),
+									ClassNameSpace = classFile.ClassNameSpace,
+									ElementType = DBHelper.GetElementType(classFile.SchemaName, column.EntityName, DefinedClassList, connectionString)
+								};
+								aList.Add(aClassFile);
+								bList.AddRange(DefinedClassList);
+								bList.AddRange(UndefinedClassList);
+
+								resultList.AddRange(GenerateDetailEntityClassList(aList, bList, baseFolder, connectionString));
+							}
+						}
+					}
+				}
+			}
+
+			return resultList;
+		}
+
+		private static EntityDetailClassFile GenerateDetailEntityClass(EntityDetailClassFile classFile, string connectionString)
+		{
+			classFile.ElementType = DBHelper.GetElementType(classFile.SchemaName, classFile.TableName, null, connectionString);
+
+			if (classFile.ElementType == ElementType.Enum)
+				GenerateEnumColumns(connectionString, classFile);
+			else
+				GenerateColumns(connectionString, classFile);
+
+			return classFile;
+		}
+
+		private static void GenerateEnumColumns(string connectionString, EntityDetailClassFile classFile)
+		{
+			classFile.Columns = new List<DBColumn>();
+			string query = @"
+select e.enumlabel as enum_value
+from pg_type t 
+   join pg_enum e on t.oid = e.enumtypid  
+   join pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+where t.typname = @dataType
+  and n.nspname = @schema";
+
+			using (var connection = new NpgsqlConnection(connectionString))
+			{
+				connection.Open();
+				using (var command = new NpgsqlCommand(query, connection))
+				{
+					command.Parameters.AddWithValue("@dataType", classFile.TableName);
+					command.Parameters.AddWithValue("@schema", classFile.SchemaName);
+
+					using (var reader = command.ExecuteReader())
+					{
+						while (reader.Read())
+						{
+							var element = reader.GetString(0);
+							var elementName = StandardUtils.NormalizeClassName(element);
+
+							var column = new DBColumn()
+							{
+								ColumnName = elementName,
+								EntityName = element
+							};
+
+							classFile.Columns.Add(column);
+						}
+					}
+				}
+			}
+		}
+
+		private static void GenerateColumns(string connectionString, EntityDetailClassFile classFile)
+		{
+			if (File.Exists(classFile.FileName))
+			{
+				var contents = File.ReadAllText(classFile.FileName);
+				classFile.Columns = new List<DBColumn>();
+
+				var lines = contents.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+				var tableName = classFile.TableName;
+				var schema = classFile.SchemaName;
+				var entityName = string.Empty;
+
+				foreach (var line in lines)
+				{
+					//	Is this a member annotation?
+					if (line.Trim().StartsWith("[PgName", StringComparison.OrdinalIgnoreCase))
+					{
+						var match = Regex.Match(line, "\\[PgName[ \\t]*\\([ \\t]*\\\"(?<columnName>[a-zA-Z_][a-zA-Z0-9_]*)\\\"\\)\\]");
+
+						//	If the entity specified a different column name than the member name, remember it.
+						if (match.Success)
+							entityName = match.Groups["columnName"].Value;
+					}
+
+					//	Is this a member?
+					else if (line.Trim().StartsWith("public", StringComparison.OrdinalIgnoreCase))
+					{
+						//	The following will recoginze these types of data types:
+						//	
+						//	Simple data types:  int, long, string, Guid, Datetime, etc.
+						//	Typed data types:  List<T>, IEnumerable<int>
+						//	Embedded Typed Data types: IEnumerable<ValueTuple<string, int>>
+
+						var whitespace = "[ \\t]*";
+						var space = "[ \\t]+";
+						var variableName = "[a-zA-Z_][a-zA-Z0-9_]*[\\?]?(\\[\\])?";
+						var singletype = $"\\<{whitespace}{variableName}({whitespace}\\,{whitespace}{variableName})*{whitespace}\\>";
+						var multitype = $"<{whitespace}{variableName}{whitespace}{singletype}{whitespace}\\>";
+						var typedecl = $"{variableName}(({singletype})|({multitype}))*";
+						var pattern = $"{whitespace}public{space}(?<datatype>{typedecl})[ \\t]+(?<columnname>{variableName})[ \\t]+{{{whitespace}get{whitespace}\\;{whitespace}set{whitespace}\\;{whitespace}\\}}";
+						var match2 = Regex.Match(line, pattern);
+
+						if (match2.Success)
+						{
+							//	Okay, we got a column. Get the member name can call it the entityName.
+							var className = match2.Groups["columnname"].Value;
+
+							if (string.IsNullOrWhiteSpace(entityName))
+								entityName = className;
+
+							var entityColumn = new DBColumn()
+							{
+								ColumnName = className,
+								EntityName = entityName,
+								EntityType = match2.Groups["datatype"].Value
+							};
+
+							classFile.Columns.Add(entityColumn);
+
+							entityName = string.Empty;
+						}
+					}
+				}
+			}
+			else
+			{
+				classFile.Columns = new List<DBColumn>();
+			}
+
+			using (var connection = new NpgsqlConnection(connectionString))
+			{
+				connection.Open();
+
+				var query = @"
+select a.attname as columnname,
+	   t.typname as datatype,
+	   case when t.typname = 'varchar' then a.atttypmod-4
+	        when t.typname = 'bpchar' then a.atttypmod-4
+			when t.typname = '_varchar' then a.atttypmod-4
+			when t.typname = '_bpchar' then a.atttypmod-4
+	        when a.atttypmod > -1 then a.atttypmod
+	        else a.attlen end as max_len,
+	   not a.attnotnull as is_nullable,
+
+	   case when ( a.attgenerated = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
+                 || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
+                 || '''::regclass)')
+	        then true else false end as is_computed,
+
+	   case when ( a.attidentity = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
+                 || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
+                 || '''::regclass)')
+	        then true else false end as is_identity,
+
+	   case when (select indrelid from pg_index as px where px.indisprimary = true and px.indrelid = c.oid and a.attnum = ANY(px.indkey)) = c.oid then true else false end as is_primary,
+	   case when (select indrelid from pg_index as ix where ix.indrelid = c.oid and a.attnum = ANY(ix.indkey)) = c.oid then true else false end as is_indexed,
+	   case when (select conrelid from pg_constraint as cx where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) = c.oid then true else false end as is_foreignkey,
+       (  select cc.relname from pg_constraint as cx inner join pg_class as cc on cc.oid = cx.confrelid where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) as foeigntablename
+  from pg_class as c
+  inner join pg_namespace as ns on ns.oid = c.relnamespace
+  inner join pg_attribute as a on a.attrelid = c.oid and not a.attisdropped and attnum > 0
+  inner join pg_type as t on t.oid = a.atttypid
+  left outer join pg_attrdef as ad on ad.adrelid = a.attrelid and ad.adnum = a.attnum 
+  where ns.nspname = @schema
+    and c.relname = @tablename
+ order by a.attnum
+";
+
+				using (var command = new NpgsqlCommand(query, connection))
+				{
+					command.Parameters.AddWithValue("@schema", classFile.SchemaName);
+					command.Parameters.AddWithValue("@tablename", classFile.TableName);
+					using (var reader = command.ExecuteReader())
+					{
+						while (reader.Read())
+						{
+							NpgsqlDbType dataType = NpgsqlDbType.Unknown;
+
+							try
+							{
+								dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
+							}
+							catch (InvalidCastException)
+							{
+							}
+
+							var dbColumn = classFile.Columns.FirstOrDefault(c => string.Equals(c.EntityName, reader.GetString(0), StringComparison.OrdinalIgnoreCase));
+
+							if (dbColumn == null)
+							{
+								dbColumn = new DBColumn();
+								dbColumn.EntityName = reader.GetString(0);
+								dbColumn.ColumnName = StandardUtils.NormalizeClassName(reader.GetString(0));
+								classFile.Columns.Add(dbColumn);
+							}
+
+							dbColumn.DataType = dataType;
+							dbColumn.dbDataType = reader.GetString(1);
+							dbColumn.Length = Convert.ToInt64(reader.GetValue(2));
+							dbColumn.IsNullable = Convert.ToBoolean(reader.GetValue(3));
+							dbColumn.IsComputed = Convert.ToBoolean(reader.GetValue(4));
+							dbColumn.IsIdentity = Convert.ToBoolean(reader.GetValue(5));
+							dbColumn.IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6));
+							dbColumn.IsIndexed = Convert.ToBoolean(reader.GetValue(7));
+							dbColumn.IsForeignKey = Convert.ToBoolean(reader.GetValue(8));
+							dbColumn.ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9);
+						}
+					}
+				}
+			}
+		}
+
+
 
 		#region Solution functions
 		/// <summary>

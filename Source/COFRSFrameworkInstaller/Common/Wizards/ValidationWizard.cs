@@ -102,7 +102,7 @@ namespace COFRS.Template.Common.Wizards
 					replacementsDictionary.Add("$entitynamespace$", entityClassFile.ClassNameSpace);
 					replacementsDictionary.Add("$resourcenamespace$", resourceClassFile.ClassNamespace);
 
-					SolutionUtil.RegisterValidationModel(_appObject.Solution,
+					StandardUtils.RegisterValidationModel(_appObject.Solution,
 													  replacementsDictionary["$safeitemname$"],
 													  rootNamespace);
 				}

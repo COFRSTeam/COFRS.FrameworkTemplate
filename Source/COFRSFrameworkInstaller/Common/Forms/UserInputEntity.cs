@@ -104,7 +104,7 @@ namespace COFRS.Template.Common.Forms
 					_dbList.Items.Clear();
 					_tableList.Items.Clear();
 					var server = (DBServer)_serverList.SelectedItem;
-					var serverType = server.DBType;
+					ServerType = server.DBType;
 
 					if (server != null)
 					{
@@ -357,6 +357,7 @@ select s.name, t.name
 			try
 			{
 				var server = (DBServer)_serverList.SelectedItem;
+				ServerType = server.DBType;
 				var db = (string)_dbList.SelectedItem;
 				var table = (DBTable)_tableList.SelectedItem;
 				DatabaseColumns.Clear();
@@ -468,9 +469,9 @@ select a.attname as columnname,
 														unknownClass = new EntityDetailClassFile()
 														{
 															SchemaName = table.Schema,
-															ClassName = SolutionUtil.NormalizeClassName(reader.GetString(1)),
+															ClassName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(1))),
 															TableName = reader.GetString(1),
-															FileName = Path.Combine(EntityModelsFolder.Folder, SolutionUtil.NormalizeClassName(reader.GetString(1))),
+															FileName = Path.Combine(EntityModelsFolder.Folder, $"{StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(1)))}.cs"),
 															ClassNameSpace = EntityModelsFolder.Namespace
 														};
 
@@ -480,7 +481,8 @@ select a.attname as columnname,
 
 												var dbColumn = new DBColumn
 												{
-													ColumnName = reader.GetString(0),
+													ColumnName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(0))),
+													EntityName = reader.GetString(0),
 													DataType = dataType,
 													dbDataType = reader.GetString(1),
 													Length = Convert.ToInt64(reader.GetValue(2)),
@@ -512,11 +514,13 @@ select a.attname as columnname,
 
 									foreach (var unknownClass in UndefinedClassList)
 									{
+										unknownClass.ElementType = DBHelper.GetElementType(unknownClass.SchemaName, unknownClass.TableName, ClassList, connectionString);
+
 										if (unknownClass.ElementType == ElementType.Enum)
 											unknownEnums.Add(unknownClass.TableName);
-										if (unknownClass.ElementType == ElementType.Composite)
+										else if (unknownClass.ElementType == ElementType.Composite)
 											unknownComposits.Add(unknownClass.TableName);
-										if (unknownClass.ElementType == ElementType.Table)
+										else if (unknownClass.ElementType == ElementType.Table)
 											unknownTables.Add(unknownClass.TableName);
 									}
 
@@ -580,7 +584,7 @@ select a.attname as columnname,
 										}
 									}
 
-									message.Append(".\r\n\r\n:You cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
+									message.Append(".\r\n\r\nYou cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
 
 									var answer = MessageBox.Show(message.ToString(), "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
@@ -592,7 +596,6 @@ select a.attname as columnname,
 
 						case ElementType.Table:
 							{
-								List<EntityDetailClassFile> UnknownElementsList = new List<EntityDetailClassFile>();
 								using (var connection = new NpgsqlConnection(connectionString))
 								{
 									connection.Open();
@@ -661,6 +664,7 @@ select a.attname as columnname,
 											while (reader.Read())
 											{
 												NpgsqlDbType dataType = NpgsqlDbType.Unknown;
+												var entityName = reader.GetString(0);
 
 												try
 												{
@@ -674,22 +678,24 @@ select a.attname as columnname,
 
 													if (unknownClass == null)
 													{
+														entityName = reader.GetString(1);
 														unknownClass = new EntityDetailClassFile()
 														{
 															SchemaName = table.Schema,
-															ClassName = SolutionUtil.NormalizeClassName(reader.GetString(1)),
+															ClassName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(1))),
 															TableName = reader.GetString(1),
-															FileName = Path.Combine(EntityModelsFolder.Folder, SolutionUtil.NormalizeClassName(reader.GetString(1))),
+															FileName = Path.Combine(EntityModelsFolder.Folder, $"{StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(1)))}.cs"),
 															ClassNameSpace = EntityModelsFolder.Namespace
 														};
 
-														UnknownElementsList.Add(unknownClass);
+														UndefinedClassList.Add(unknownClass);
 													}
 												}
 
 												var dbColumn = new DBColumn
 												{
-													ColumnName = reader.GetString(0),
+													ColumnName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(0))),
+													EntityName = entityName,
 													DataType = dataType,
 													dbDataType = reader.GetString(1),
 													Length = Convert.ToInt64(reader.GetValue(2)),
@@ -709,7 +715,7 @@ select a.attname as columnname,
 										}
 									}
 
-									if (UnknownElementsList.Count > 0)
+									if (UndefinedClassList.Count > 0)
 									{
 										var message = new StringBuilder();
 										message.Append($"The composite {table.Table} uses ");
@@ -718,13 +724,15 @@ select a.attname as columnname,
 										var unknownComposits = new List<string>();
 										var unknownTables = new List<string>();
 
-										foreach (var unknownClass in UnknownElementsList)
+										foreach (var unknownClass in UndefinedClassList)
 										{
+											unknownClass.ElementType = DBHelper.GetElementType(unknownClass.SchemaName, unknownClass.TableName, ClassList, connectionString);
+
 											if (unknownClass.ElementType == ElementType.Enum)
 												unknownEnums.Add(unknownClass.TableName);
-											if (unknownClass.ElementType == ElementType.Composite)
+											else if (unknownClass.ElementType == ElementType.Composite)
 												unknownComposits.Add(unknownClass.TableName);
-											if (unknownClass.ElementType == ElementType.Table)
+											else if (unknownClass.ElementType == ElementType.Table)
 												unknownTables.Add(unknownClass.TableName);
 										}
 
@@ -788,7 +796,7 @@ select a.attname as columnname,
 											}
 										}
 
-										message.Append(".\r\n\r\n:You cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
+										message.Append(".\r\n\r\nYou cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
 
 										var answer = MessageBox.Show(message.ToString(), "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
 
@@ -843,7 +851,8 @@ ORDER BY c.ORDINAL_POSITION;
 
 									var dbColumn = new DBColumn
 									{
-										ColumnName = reader.GetString(0),
+										ColumnName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(0))),
+										EntityName = reader.GetString(0),
 										DataType = DBHelper.ConvertMySqlDataType(reader.GetString(1)),
 										dbDataType = reader.GetString(1),
 										Length = Convert.ToInt64(reader.GetValue(2)),
@@ -919,7 +928,8 @@ select c.name as column_name,
 								{
 									var dbColumn = new DBColumn
 									{
-										ColumnName = reader.GetString(0),
+										ColumnName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(0))),
+										EntityName = reader.GetString(0),
 										dbDataType = reader.GetString(1),
 										DataType = DBHelper.ConvertSqlServerDataType(reader.GetString(1)),
 										Length = Convert.ToInt64(reader.GetValue(2)),
@@ -1220,15 +1230,13 @@ select c.name as column_name,
 			}
 
 			Save();
-			DatabaseTable = (DBTable)_tableList.SelectedItem;
 
 			var server = (DBServer)_serverList.SelectedItem;
-			var db = (string)_dbList.SelectedItem;
+			DatabaseTable = (DBTable) _tableList.SelectedItem;
 
 			if (server.DBType == DBServerType.POSTGRESQL)
 			{
-				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
-				UndefinedClassList = Utilities.LoadDetailEntityClassList(UndefinedClassList, ClassList, ReplacementsDictionary["$solutionDirectory$"], connectionString);
+				UndefinedClassList = StandardUtils.GenerateDetailEntityClassList(UndefinedClassList, ClassList, EntityModelsFolder.Folder, ConnectionString);
 			}
 
 			DialogResult = DialogResult.OK;

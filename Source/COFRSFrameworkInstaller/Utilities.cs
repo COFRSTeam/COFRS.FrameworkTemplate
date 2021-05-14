@@ -855,49 +855,6 @@ namespace COFRS.Template
 			return theList;
 		}
 
-		public static List<EntityDetailClassFile> LoadDetailEntityClassList(List<EntityDetailClassFile> UndefinedClassList, List<EntityDetailClassFile> DefinedClassList, string solutionFolder, string connectionString)
-        {
-			List<EntityDetailClassFile> resultList = new List<EntityDetailClassFile>();
-
-			foreach (var classFile in UndefinedClassList)
-			{
-				var newClassFile = LoadDetailEntityClass(classFile, connectionString);
-				resultList.Add(newClassFile);
-
-				if (newClassFile.ElementType != ElementType.Enum)
-				{
-					foreach (var column in newClassFile.Columns)
-					{
-						if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
-						{
-							if (DefinedClassList.FirstOrDefault(c => string.Equals(c.TableName, column.EntityName, StringComparison.OrdinalIgnoreCase)) == null)
-							{
-								var aList = new List<EntityDetailClassFile>();
-								var bList = new List<EntityDetailClassFile>();
-
-								var aClassFile = new EntityDetailClassFile()
-								{
-									ClassName = SolutionUtil.NormalizeClassName(column.EntityName),
-									TableName = column.EntityName,
-									SchemaName = classFile.SchemaName,
-									FileName = Path.Combine(LoadBaseFolder(solutionFolder), $"Models\\EntityModels\\{SolutionUtil.NormalizeClassName(column.EntityName)}.cs"),
-									ClassNameSpace = classFile.ClassNameSpace,
-									ElementType = DBHelper.GetElementType(classFile.SchemaName, column.EntityName, DefinedClassList, connectionString)
-								};
-								aList.Add(aClassFile);
-								bList.AddRange(DefinedClassList);
-								bList.AddRange(UndefinedClassList);
-
-								resultList.AddRange(LoadDetailEntityClassList(aList, bList, solutionFolder, connectionString));
-							}
-						}
-					}
-				}
-			}
-
-			return resultList;
-		}
-
 		public static List<EntityDetailClassFile> LoadDetailEntityClassList(string folder, string connectionString)
 		{
 			var theList = new List<EntityDetailClassFile>();
@@ -1070,17 +1027,6 @@ namespace COFRS.Template
 			return null;
 		}
 
-		private static EntityDetailClassFile LoadDetailEntityClass(EntityDetailClassFile classFile, string connectionString)
-        {
-			classFile.ElementType = DBHelper.GetElementType(classFile.SchemaName, classFile.TableName, null, connectionString);
-
-			if ( classFile.ElementType == ElementType.Enum)
-				LoadEnumColumns(connectionString, classFile);
-			else
-				LoadColumns(connectionString, classFile);
-
-			return classFile;
-		}
 
 		private static EntityDetailClassFile LoadDetailEntityClass(string file, string ConnectionString)
 		{
@@ -1282,45 +1228,6 @@ namespace COFRS.Template
 			}
 		}
 
-		private static void LoadEnumColumns(string connectionString, EntityDetailClassFile classFile)
-        {
-			classFile.Columns = new List<DBColumn>();
-			string query = @"
-select e.enumlabel as enum_value
-from pg_type t 
-   join pg_enum e on t.oid = e.enumtypid  
-   join pg_catalog.pg_namespace n ON n.oid = t.typnamespace
-where t.typname = @dataType
-  and n.nspname = @schema";
-
-			using (var connection = new NpgsqlConnection(connectionString))
-			{
-				connection.Open();
-				using (var command = new NpgsqlCommand(query, connection))
-				{
-					command.Parameters.AddWithValue("@dataType", classFile.TableName);
-					command.Parameters.AddWithValue("@schema", classFile.SchemaName);
-
-					using (var reader = command.ExecuteReader())
-					{
-						while (reader.Read())
-						{
-							var element = reader.GetString(0);
-							var elementName = SolutionUtil.NormalizeClassName(element);
-
-							var column = new DBColumn()
-							{
-								ColumnName = elementName,
-								EntityName = element
-							};	
-
-							classFile.Columns.Add(column);
-						}
-					}
-				}
-			}
-		}
-
 		private static void LoadColumns(string connectionString, EntityDetailClassFile classFile)
 		{
 			if (File.Exists(classFile.FileName))
@@ -1453,7 +1360,7 @@ select a.attname as columnname,
                             {
 								dbColumn = new DBColumn();
 								dbColumn.EntityName = reader.GetString(0);
-								dbColumn.ColumnName = SolutionUtil.NormalizeClassName(reader.GetString(0));
+								dbColumn.ColumnName = StandardUtils.NormalizeClassName(reader.GetString(0));
 								classFile.Columns.Add(dbColumn);
 							}
 							
