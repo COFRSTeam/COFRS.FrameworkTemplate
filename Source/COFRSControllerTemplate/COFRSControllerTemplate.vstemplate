@@ -20,6 +20,6 @@
   </TemplateContent>
   <WizardExtension>
     <Assembly>COFRSFrameworkInstaller, Version=1.0.0.0, Culture=neutral, PublicKeyToken=5946b1f14e385125</Assembly>
-    <FullClassName>COFRSFrameworkInstaller.ControllerWizard</FullClassName>
+    <FullClassName>COFRS.Template.Common.Wizards.ControllerWizard</FullClassName>
   </WizardExtension>
 </VSTemplate>

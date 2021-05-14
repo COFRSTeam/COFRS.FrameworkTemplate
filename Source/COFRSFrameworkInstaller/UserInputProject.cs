@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace COFRSFrameworkInstaller
+namespace COFRS.Template
 {
 	public partial class UserInputProject : Form
 	{
