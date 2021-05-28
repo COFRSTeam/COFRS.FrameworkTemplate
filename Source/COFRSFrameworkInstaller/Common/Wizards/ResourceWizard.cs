@@ -2,18 +2,16 @@
 using COFRS.Template.Common.Models;
 using COFRS.Template.Common.ServiceUtilities;
 using EnvDTE;
+using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.TemplateWizard;
-using NpgsqlTypes;
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.IO;
-using System.Text;
 using System.Windows.Forms;
 
 namespace COFRS.Template.Common.Wizards
 {
-	public class ResourceWizard : IWizard
+    public class ResourceWizard : IWizard
 	{
 		private bool Proceed = false;
 
@@ -35,54 +33,76 @@ namespace COFRS.Template.Common.Wizards
 
 		public void RunStarted(object automationObject, Dictionary<string, string> replacementsDictionary, WizardRunKind runKind, object[] customParams)
 		{
-			var solutionDirectory = replacementsDictionary["$solutiondirectory$"];
-			var rootNamespace = replacementsDictionary["$rootnamespace$"];
+			ThreadHelper.ThrowIfNotOnUIThread();
+			DTE2 _appObject = Package.GetGlobalService(typeof(DTE)) as DTE2;
+			ProgressDialog progressDialog = null;
 
-			var namespaceParts = rootNamespace.Split(new char[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
-
-			var filePath = solutionDirectory;
-
-			for (int i = 0; i < namespaceParts.Length; i++)
+			try
 			{
-				if (i == 0)
-				{
-					var candidate = Path.Combine(filePath, namespaceParts[i]);
+				//	Show the user that we are busy doing things...
+				progressDialog = new ProgressDialog("Loading classes and preparing project...");
+				progressDialog.Show(new WindowClass((IntPtr)_appObject.ActiveWindow.HWnd));
+				_appObject.StatusBar.Animate(true, vsStatusAnimation.vsStatusAnimationBuild);
 
-					if (Directory.Exists(candidate))
-						filePath = candidate;
+				HandleMessages();
+				var programfiles = StandardUtils.LoadProgramDetail(_appObject.Solution);
+				HandleMessages();
+
+				var classList = StandardUtils.LoadClassList(programfiles);
+				HandleMessages();
+
+				var form = new UserInputResource()
+				{
+					ClassList = classList
+				};
+
+				HandleMessages();
+
+				progressDialog.Close();
+				_appObject.StatusBar.Animate(false, vsStatusAnimation.vsStatusAnimationBuild);
+
+				if (form.ShowDialog() == DialogResult.OK)
+				{
+					var entityClassFile = (EntityClassFile)form._entityClassList.SelectedItem;
+					var classMembers = StandardUtils.LoadEntityClassMembers(entityClassFile);
+
+					var standardEmitter = new StandardEmitter();
+					var model = standardEmitter.EmitResourceModel(entityClassFile, 
+						                                          form.ClassList, 
+																  classMembers, 
+																  replacementsDictionary["$safeitemname$"], 
+																  replacementsDictionary,
+																  out ResourceClassFile resourceClass);
+
+					replacementsDictionary.Add("$model$", model);
+					replacementsDictionary.Add("$entitynamespace$", entityClassFile.ClassNameSpace);
+					Proceed = true;
 				}
 				else
-					filePath = Path.Combine(filePath, namespaceParts[i]);
+					Proceed = false;
 			}
+			catch ( Exception error)
+            {
+				if (progressDialog != null)
+					if (progressDialog.IsHandleCreated)
+						progressDialog.Close();
 
-			if (!Directory.Exists(filePath))
-				Directory.CreateDirectory(filePath);
-
-			var form = new UserInputResource()
-			{
-				SolutionFolder = replacementsDictionary["$solutiondirectory$"]
-			};
-
-			if (form.ShowDialog() == DialogResult.OK)
-			{
-				var connectionString = form.ConnectionString;
-				var entityClassFile = (EntityDetailClassFile)form._entityClassList.SelectedItem;
-				var entityClassMembers = Utilities.LoadEntityClassMembers(entityClassFile.FileName, form.ServerType, form.DatabaseColumns);
-
-				var standardEmitter = new StandardEmitter();
-				var model = standardEmitter.EmitResourceModel(form.ServerType, entityClassMembers, replacementsDictionary["$safeitemname$"], entityClassFile.ClassName, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary, connectionString);
-
-				replacementsDictionary.Add("$model$", model);
-				replacementsDictionary.Add("$entitynamespace$", entityClassFile.ClassNameSpace);
-				Proceed = true;
-			}
-			else
+				_appObject.StatusBar.Animate(false, vsStatusAnimation.vsStatusAnimationBuild);
+				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
 				Proceed = false;
+			}
 		}
 
 		public bool ShouldAddProjectItem(string filePath)
 		{
 			return Proceed;
+		}
+		private void HandleMessages()
+		{
+			while (WinNative.PeekMessage(out WinNative.NativeMessage msg, IntPtr.Zero, 0, (uint)0xFFFFFFFF, 1) != 0)
+			{
+				WinNative.SendMessage(msg.handle, msg.msg, msg.wParam, msg.lParam);
+			}
 		}
 	}
 }

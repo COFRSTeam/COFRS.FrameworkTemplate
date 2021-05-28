@@ -2,7 +2,6 @@
 using COFRS.Template.Common.ServiceUtilities;
 using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using Npgsql;
 using NpgsqlTypes;
 using System;
@@ -12,12 +11,11 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Windows.Forms;
 
 namespace COFRS.Template.Common.Forms
 {
-	public partial class UserInputEntity : Form
+    public partial class UserInputEntity : Form
 	{
 		#region Variables
 		private ServerConfig _serverConfig;
@@ -27,10 +25,12 @@ namespace COFRS.Template.Common.Forms
 		public string ConnectionString { get; set; }
 		public ProjectFolder EntityModelsFolder { get; set; }
 		public string DefaultConnectionString { get; set; }
-		public List<EntityDetailClassFile> ClassList { get; set; }
+		public List<ClassFile> ClassList { get; set; }
 		public Dictionary<string, string> ReplacementsDictionary { get; set; }
-		public List<EntityDetailClassFile> UndefinedClassList { get; set; }
+		public List<ClassFile> UndefinedClassList { get; set; }
+		public Dictionary<string, MemberInfo> Members { get; set; }
 		public DBServerType ServerType { get; set; }
+		public ElementType eType { get; set; }
 
 		#endregion
 
@@ -52,7 +52,7 @@ namespace COFRS.Template.Common.Forms
 		{
 			_portNumber.Location = new Point(93, 60);
 			DatabaseColumns = new List<DBColumn>();
-			UndefinedClassList = new List<EntityDetailClassFile>();
+			UndefinedClassList = new List<ClassFile>();
 			ReadServerList();
 		}
 		#endregion
@@ -376,9 +376,9 @@ select s.name, t.name
 					string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
 
 					UndefinedClassList.Clear();
-					var elementType = DBHelper.GetElementType(table.Schema, table.Table, ClassList, connectionString);
+					eType = DBHelper.GetElementType(table.Schema, table.Table, ClassList, connectionString);
 
-					switch (elementType)
+					switch (eType)
 					{
 						case ElementType.Enum:
 							break;
@@ -452,30 +452,30 @@ select a.attname as columnname,
 										{
 											while (reader.Read())
 											{
-												NpgsqlDbType dataType = NpgsqlDbType.Unknown;
+												NpgsqlDbType dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
 
-												try
+												if ( dataType == NpgsqlDbType.Unknown)
 												{
-													dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
-												}
-												catch (InvalidCastException)
-												{
-													var unknownClass = ClassList.FirstOrDefault(c =>
-														string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
-														string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
+													var entity = ClassList.FirstOrDefault(ent =>
+														ent.GetType() == typeof(EntityClassFile) &&
+														string.Equals(((EntityClassFile)ent).SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
+														string.Equals(((EntityClassFile)ent).TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
 
-													if (unknownClass == null)
+													if (entity == null)
 													{
-														unknownClass = new EntityDetailClassFile()
+														var entityName = reader.GetString(1);
+														var className = Members[entityName].ClassName; 
+
+														entity = new EntityClassFile()
 														{
 															SchemaName = table.Schema,
-															ClassName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(1))),
-															TableName = reader.GetString(1),
-															FileName = Path.Combine(EntityModelsFolder.Folder, $"{StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(1)))}.cs"),
+															ClassName = className,
+															TableName = entityName,
+															FileName = Path.Combine(EntityModelsFolder.Folder, $"{className}.cs"),
 															ClassNameSpace = EntityModelsFolder.Namespace
 														};
 
-														UndefinedClassList.Add(unknownClass);
+														UndefinedClassList.Add(entity);
 													}
 												}
 
@@ -505,91 +505,7 @@ select a.attname as columnname,
 
 								if (UndefinedClassList.Count > 0)
 								{
-									var message = new StringBuilder();
-									message.Append($"The composite {table.Table} uses ");
-
-									var unknownEnums = new List<string>();
-									var unknownComposits = new List<string>();
-									var unknownTables = new List<string>();
-
-									foreach (var unknownClass in UndefinedClassList)
-									{
-										unknownClass.ElementType = DBHelper.GetElementType(unknownClass.SchemaName, unknownClass.TableName, ClassList, connectionString);
-
-										if (unknownClass.ElementType == ElementType.Enum)
-											unknownEnums.Add(unknownClass.TableName);
-										else if (unknownClass.ElementType == ElementType.Composite)
-											unknownComposits.Add(unknownClass.TableName);
-										else if (unknownClass.ElementType == ElementType.Table)
-											unknownTables.Add(unknownClass.TableName);
-									}
-
-									if (unknownEnums.Count > 0)
-									{
-										if (unknownEnums.Count > 1)
-											message.Append("enum types of ");
-										else
-											message.Append("an enum type of ");
-
-										for (int index = 0; index < unknownEnums.Count(); index++)
-										{
-											if (index == unknownEnums.Count() - 1 && unknownEnums.Count > 1)
-												message.Append($" and {unknownEnums[index]}");
-											else if (index > 0)
-												message.Append($", {unknownEnums[index]}");
-											else if (index == 0)
-												message.Append(unknownEnums[index]);
-										}
-									}
-
-									if (unknownComposits.Count > 0)
-									{
-										if (unknownEnums.Count > 0)
-											message.Append("and ");
-
-										if (unknownComposits.Count > 1)
-											message.Append("composite types of ");
-										else
-											message.Append("a composite type of ");
-
-										for (int index = 0; index < unknownComposits.Count(); index++)
-										{
-											if (index == unknownComposits.Count() - 1 && unknownComposits.Count > 1)
-												message.Append($" and {unknownComposits[index]}");
-											else if (index > 0)
-												message.Append($", {unknownComposits[index]}");
-											else if (index == 0)
-												message.Append(unknownComposits[index]);
-										}
-									}
-
-									if (unknownTables.Count > 0)
-									{
-										if (unknownEnums.Count > 0 || unknownComposits.Count > 0)
-											message.Append("and ");
-
-										if (unknownTables.Count > 1)
-											message.Append("table types of ");
-										else
-											message.Append("a table type of ");
-
-										for (int index = 0; index < unknownTables.Count(); index++)
-										{
-											if (index == unknownTables.Count() - 1 && unknownTables.Count > 1)
-												message.Append($" and {unknownTables[index]}");
-											else if (index > 0)
-												message.Append($", {unknownTables[index]}");
-											else if (index == 0)
-												message.Append(unknownTables[index]);
-										}
-									}
-
-									message.Append(".\r\n\r\nYou cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
-
-									var answer = MessageBox.Show(message.ToString(), "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-
-									if (answer == DialogResult.No)
-										_okButton.Enabled = false;
+									WarnUndefinedContent(table, connectionString);
 								}
 							}
 							break;
@@ -663,38 +579,39 @@ select a.attname as columnname,
 										{
 											while (reader.Read())
 											{
-												NpgsqlDbType dataType = NpgsqlDbType.Unknown;
 												var entityName = reader.GetString(0);
+												var columnName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(0)));
 
-												try
-												{
-													dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
-												}
-												catch (InvalidCastException)
-												{
-													var unknownClass = ClassList.FirstOrDefault(c =>
-														string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
-														string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
+												NpgsqlDbType dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
 
-													if (unknownClass == null)
+												if (dataType == NpgsqlDbType.Unknown)
+												{
+													var entity = ClassList.FirstOrDefault(ent =>
+													    ent.GetType() == typeof(EntityClassFile) && 
+														string.Equals(((EntityClassFile)ent).SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
+														string.Equals(((EntityClassFile)ent).TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
+
+													if (entity == null)
 													{
 														entityName = reader.GetString(1);
-														unknownClass = new EntityDetailClassFile()
+														var className = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(entityName));
+
+														entity = new EntityClassFile()
 														{
 															SchemaName = table.Schema,
-															ClassName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(1))),
-															TableName = reader.GetString(1),
-															FileName = Path.Combine(EntityModelsFolder.Folder, $"{StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(1)))}.cs"),
+															ClassName = className,
+															TableName = entityName,
+															FileName = Path.Combine(EntityModelsFolder.Folder, $"{className}.cs"),
 															ClassNameSpace = EntityModelsFolder.Namespace
 														};
 
-														UndefinedClassList.Add(unknownClass);
+														UndefinedClassList.Add(entity);
 													}
 												}
 
 												var dbColumn = new DBColumn
 												{
-													ColumnName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(0))),
+													ColumnName = columnName,
 													EntityName = entityName,
 													DataType = dataType,
 													dbDataType = reader.GetString(1),
@@ -716,94 +633,10 @@ select a.attname as columnname,
 									}
 
 									if (UndefinedClassList.Count > 0)
-									{
-										var message = new StringBuilder();
-										message.Append($"The composite {table.Table} uses ");
-
-										var unknownEnums = new List<string>();
-										var unknownComposits = new List<string>();
-										var unknownTables = new List<string>();
-
-										foreach (var unknownClass in UndefinedClassList)
-										{
-											unknownClass.ElementType = DBHelper.GetElementType(unknownClass.SchemaName, unknownClass.TableName, ClassList, connectionString);
-
-											if (unknownClass.ElementType == ElementType.Enum)
-												unknownEnums.Add(unknownClass.TableName);
-											else if (unknownClass.ElementType == ElementType.Composite)
-												unknownComposits.Add(unknownClass.TableName);
-											else if (unknownClass.ElementType == ElementType.Table)
-												unknownTables.Add(unknownClass.TableName);
-										}
-
-										if (unknownEnums.Count > 0)
-										{
-											if (unknownEnums.Count > 1)
-												message.Append("enum types of ");
-											else
-												message.Append("an enum type of ");
-
-											for (int index = 0; index < unknownEnums.Count(); index++)
-											{
-												if (index == unknownEnums.Count() - 1 && unknownEnums.Count > 1)
-													message.Append($" and {unknownEnums[index]}");
-												else if (index > 0)
-													message.Append($", {unknownEnums[index]}");
-												else if (index == 0)
-													message.Append(unknownEnums[index]);
-											}
-										}
-
-										if (unknownComposits.Count > 0)
-										{
-											if (unknownEnums.Count > 0)
-												message.Append("and ");
-
-											if (unknownComposits.Count > 1)
-												message.Append("composite types of ");
-											else
-												message.Append("a composite type of ");
-
-											for (int index = 0; index < unknownComposits.Count(); index++)
-											{
-												if (index == unknownComposits.Count() - 1 && unknownComposits.Count > 1)
-													message.Append($" and {unknownComposits[index]}");
-												else if (index > 0)
-													message.Append($", {unknownComposits[index]}");
-												else if (index == 0)
-													message.Append(unknownComposits[index]);
-											}
-										}
-
-										if (unknownTables.Count > 0)
-										{
-											if (unknownEnums.Count > 0 || unknownComposits.Count > 0)
-												message.Append("and ");
-
-											if (unknownTables.Count > 1)
-												message.Append("table types of ");
-											else
-												message.Append("a table type of ");
-
-											for (int index = 0; index < unknownTables.Count(); index++)
-											{
-												if (index == unknownTables.Count() - 1 && unknownTables.Count > 1)
-													message.Append($" and {unknownTables[index]}");
-												else if (index > 0)
-													message.Append($", {unknownTables[index]}");
-												else if (index == 0)
-													message.Append(unknownTables[index]);
-											}
-										}
-
-										message.Append(".\r\n\r\nYou cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
-
-										var answer = MessageBox.Show(message.ToString(), "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-
-										if (answer == DialogResult.No)
-											_okButton.Enabled = false;
-									}
-								}
+                                    {
+                                        WarnUndefinedContent(table, connectionString);
+                                    }
+                                }
 							}
 							break;
 					}
@@ -978,7 +811,96 @@ select c.name as column_name,
 			}
 		}
 
-		private void OnUserNameChanged(object sender, EventArgs e)
+        private void WarnUndefinedContent(DBTable table, string connectionString)
+        {
+			var message = new StringBuilder();
+            message.Append($"The composite {table.Table} uses ");
+
+            var unknownEnums = new List<string>();
+            var unknownComposits = new List<string>();
+            var unknownTables = new List<string>();
+
+            foreach (var unknownClass in UndefinedClassList)
+            {
+                unknownClass.ElementType = DBHelper.GetElementType(((EntityClassFile)unknownClass).SchemaName, ((EntityClassFile)unknownClass).TableName, ClassList, connectionString);
+
+                if (unknownClass.ElementType == ElementType.Enum)
+                    unknownEnums.Add(((EntityClassFile)unknownClass).TableName);
+                else if (unknownClass.ElementType == ElementType.Composite)
+                    unknownComposits.Add(((EntityClassFile)unknownClass).TableName);
+                else if (unknownClass.ElementType == ElementType.Table)
+                    unknownTables.Add(((EntityClassFile)unknownClass).TableName);
+            }
+
+            if (unknownEnums.Count > 0)
+            {
+                if (unknownEnums.Count > 1)
+                    message.Append("enum types of ");
+                else
+                    message.Append("an enum type of ");
+
+                for (int index = 0; index < unknownEnums.Count(); index++)
+                {
+                    if (index == unknownEnums.Count() - 1 && unknownEnums.Count > 1)
+                        message.Append($" and {unknownEnums[index]}");
+                    else if (index > 0)
+                        message.Append($", {unknownEnums[index]}");
+                    else if (index == 0)
+                        message.Append(unknownEnums[index]);
+                }
+            }
+
+            if (unknownComposits.Count > 0)
+            {
+                if (unknownEnums.Count > 0)
+                    message.Append("and ");
+
+                if (unknownComposits.Count > 1)
+                    message.Append("composite types of ");
+                else
+                    message.Append("a composite type of ");
+
+                for (int index = 0; index < unknownComposits.Count(); index++)
+                {
+                    if (index == unknownComposits.Count() - 1 && unknownComposits.Count > 1)
+                        message.Append($" and {unknownComposits[index]}");
+                    else if (index > 0)
+                        message.Append($", {unknownComposits[index]}");
+                    else if (index == 0)
+                        message.Append(unknownComposits[index]);
+                }
+            }
+
+            if (unknownTables.Count > 0)
+            {
+                if (unknownEnums.Count > 0 || unknownComposits.Count > 0)
+                    message.Append("and ");
+
+                if (unknownTables.Count > 1)
+                    message.Append("table types of ");
+                else
+                    message.Append("a table type of ");
+
+                for (int index = 0; index < unknownTables.Count(); index++)
+                {
+                    if (index == unknownTables.Count() - 1 && unknownTables.Count > 1)
+                        message.Append($" and {unknownTables[index]}");
+                    else if (index > 0)
+                        message.Append($", {unknownTables[index]}");
+                    else if (index == 0)
+                        message.Append(unknownTables[index]);
+                }
+            }
+
+            message.Append(".\r\n\r\nYou cannot generate this class until all the dependencies have been generated. Would you like to generate the undefined entities as part of generating this class?");
+
+            var answer = MessageBox.Show(message.ToString(), "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+
+            if (answer == DialogResult.No)
+                _okButton.Enabled = false;
+        }
+
+        private void OnUserNameChanged(object sender, EventArgs e)
 		{
 			try
 			{
@@ -1236,7 +1158,11 @@ select c.name as column_name,
 
 			if (server.DBType == DBServerType.POSTGRESQL)
 			{
-				UndefinedClassList = StandardUtils.GenerateDetailEntityClassList(UndefinedClassList, ClassList, EntityModelsFolder.Folder, ConnectionString);
+				UndefinedClassList = StandardUtils.GenerateEntityClassList(UndefinedClassList, 
+					                                                       ClassList, 
+																		   Members, 
+																		   EntityModelsFolder.Folder, 
+																		   ConnectionString);
 			}
 
 			DialogResult = DialogResult.OK;

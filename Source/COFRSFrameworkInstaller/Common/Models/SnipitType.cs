@@ -11,6 +11,7 @@ namespace COFRS.Template.Common.Models
         TYPE_NAMESPACE,
         TYPE_COMPOSITE,
         TYPE_TABLE,
-        TYPE_ENUM
+        TYPE_ENUM,
+        TYPE_RESOURCE
     }
 }

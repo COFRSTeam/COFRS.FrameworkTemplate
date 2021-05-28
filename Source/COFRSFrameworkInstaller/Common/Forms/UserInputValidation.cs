@@ -27,7 +27,7 @@ namespace COFRS.Template.Common.Forms
 		public List<DBColumn> DatabaseColumns { get; set; }
 		public JObject Examples { get; set; }
 		public string DefaultConnectionString { get; set; }
-		public List<EntityDetailClassFile> ClassList { get; set; }
+		public List<ClassFile> ClassList { get; set; }
 		#endregion
 
 		#region Utility Functions
@@ -47,18 +47,15 @@ namespace COFRS.Template.Common.Forms
 			LoadAppSettings();
 			ReadServerList();
 
-			ClassList = Utilities.LoadEntityClassList(SolutionFolder);
-
 			_entityModelList.Items.Clear();
 
-			foreach (var entityClass in ClassList)
-				if (entityClass.ElementType == ElementType.Table)
-					_entityModelList.Items.Add(entityClass);
-
-			var resourceClasses = Utilities.LoadResourceClassList(SolutionFolder);
-
-			foreach (var resourceClass in resourceClasses)
-				_resourceModelList.Items.Add(resourceClass);
+			foreach (var classFile in ClassList)
+			{
+				if (classFile.ElementType == ElementType.Table)
+					_entityModelList.Items.Add((EntityClassFile)classFile);
+				else if (classFile.ElementType == ElementType.Resource)
+					_resourceModelList.Items.Add((ResourceClassFile)classFile);
+			}
 
 			if (_entityModelList.Items.Count == 0)
 			{
@@ -437,7 +434,7 @@ namespace COFRS.Template.Common.Forms
 			{
 				if (_entityModelList.SelectedIndex != -1 && !Populating)
 				{
-					var classFile = (EntityDetailClassFile)_entityModelList.SelectedItem;
+					var classFile = (EntityClassFile)_entityModelList.SelectedItem;
 					var foundIt = false;
 
 					for (int index = 0; index < _tableList.Items.Count; index++)
@@ -502,7 +499,7 @@ namespace COFRS.Template.Common.Forms
 
 					for (int index = 0; index < _entityModelList.Items.Count; index++)
 					{
-						var entityClassFile = (EntityDetailClassFile)_entityModelList.Items[index];
+						var entityClassFile = (EntityClassFile)_entityModelList.Items[index];
 
 						if (string.Equals(resourceClassFile.EntityClass, entityClassFile.ClassName, StringComparison.OrdinalIgnoreCase))
 						{
@@ -521,7 +518,7 @@ namespace COFRS.Template.Common.Forms
 						return;
 					}
 
-					var entity = _entityModelList.SelectedItem as EntityDetailClassFile;
+					var entity = _entityModelList.SelectedItem as EntityClassFile;
 					foundIt = false;
 
 					for (int index = 0; index < _tableList.Items.Count; index++)
@@ -737,7 +734,7 @@ select s.name, t.name
 
 				for (int i = 0; i < _entityModelList.Items.Count; i++)
 				{
-					var entity = (EntityDetailClassFile)_entityModelList.Items[i];
+					var entity = (EntityClassFile)_entityModelList.Items[i];
 
 					if (entity.TableName == table.Table)
 					{
@@ -750,8 +747,6 @@ select s.name, t.name
 							if (string.Equals(resource.EntityClass, entity.ClassName, StringComparison.OrdinalIgnoreCase))
 							{
 								_resourceModelList.SelectedIndex = j;
-
-								PopulateDatabaseColumns(server, db, table);
 								foundit = true;
 								break;
 							}
@@ -774,273 +769,6 @@ select s.name, t.name
 			catch (Exception error)
 			{
 				MessageBox.Show(error.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-			}
-		}
-
-		private void PopulateDatabaseColumns(DBServer server, string db, DBTable table)
-		{
-			DatabaseColumns.Clear();
-
-			if (server.DBType == DBServerType.POSTGRESQL)
-			{
-				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
-				List<EntityDetailClassFile> _undefinedElements = new List<EntityDetailClassFile>();
-
-				using (var connection = new NpgsqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = @"
-select a.attname as columnname,
-	   t.typname as datatype,
-	   case when t.typname = 'varchar' then a.atttypmod-4
-	        when t.typname = 'bpchar' then a.atttypmod-4
-			when t.typname = '_varchar' then a.atttypmod-4
-			when t.typname = '_bpchar' then a.atttypmod-4
-	        when a.atttypmod > -1 then a.atttypmod
-	        else a.attlen end as max_len,
-	   not a.attnotnull as is_nullable,
-
-	   case when ( a.attgenerated = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
-                 || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
-                 || '''::regclass)')
-	        then true else false end as is_computed,
-
-	   case when ( a.attidentity = 'a' ) or  ( pg_get_expr(ad.adbin, ad.adrelid) = 'nextval('''
-                 || (pg_get_serial_sequence (a.attrelid::regclass::text, a.attname))::regclass
-                 || '''::regclass)')
-	        then true else false end as is_identity,
-
-	   case when (select indrelid from pg_index as px where px.indisprimary = true and px.indrelid = c.oid and a.attnum = ANY(px.indkey)) = c.oid then true else false end as is_primary,
-	   case when (select indrelid from pg_index as ix where ix.indrelid = c.oid and a.attnum = ANY(ix.indkey)) = c.oid then true else false end as is_indexed,
-	   case when (select conrelid from pg_constraint as cx where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) = c.oid then true else false end as is_foreignkey,
-       (  select cc.relname from pg_constraint as cx inner join pg_class as cc on cc.oid = cx.confrelid where cx.conrelid = c.oid and cx.contype = 'f' and a.attnum = ANY(cx.conkey)) as foeigntablename
-  from pg_class as c
-  inner join pg_namespace as ns on ns.oid = c.relnamespace
-  inner join pg_attribute as a on a.attrelid = c.oid and not a.attisdropped and attnum > 0
-  inner join pg_type as t on t.oid = a.atttypid
-  left outer join pg_attrdef as ad on ad.adrelid = a.attrelid and ad.adnum = a.attnum 
-  where ns.nspname = @schema
-    and c.relname = @tablename
- order by a.attnum
-";
-
-
-					using (var command = new NpgsqlCommand(query, connection))
-					{
-						command.Parameters.AddWithValue("@schema", table.Schema);
-						command.Parameters.AddWithValue("@tablename", table.Table);
-						using (var reader = command.ExecuteReader())
-						{
-							while (reader.Read())
-							{
-								NpgsqlDbType dataType = NpgsqlDbType.Unknown;
-
-								try
-								{
-									dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
-								}
-								catch (InvalidCastException)
-								{
-									var entityFile = ClassList.FirstOrDefault(c =>
-										string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
-										string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
-
-									if (entityFile == null)
-									{
-										entityFile = new EntityDetailClassFile()
-										{
-											SchemaName = table.Schema,
-											TableName = reader.GetString(1),
-											ClassName = StandardUtils.NormalizeClassName(reader.GetString(1))
-										};
-
-										_undefinedElements.Add(entityFile);
-									}
-								}
-
-								var dbColumn = new DBColumn
-								{
-									ColumnName = reader.GetString(0),
-									DataType = dataType,
-									dbDataType = reader.GetString(1),
-									Length = Convert.ToInt64(reader.GetValue(2)),
-									IsNullable = Convert.ToBoolean(reader.GetValue(3)),
-									IsComputed = Convert.ToBoolean(reader.GetValue(4)),
-									IsIdentity = Convert.ToBoolean(reader.GetValue(5)),
-									IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6)),
-									IsIndexed = Convert.ToBoolean(reader.GetValue(7)),
-									IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
-								};
-
-								DatabaseColumns.Add(dbColumn);
-							}
-						}
-					}
-				}
-
-				_okButton.Enabled = true;
-
-				foreach (var candidate in _undefinedElements)
-				{
-					candidate.ElementType = DBHelper.GetElementType(candidate.SchemaName, candidate.TableName, ClassList, connectionString);
-
-					if (candidate.ElementType == ElementType.Enum)
-					{
-						MessageBox.Show($"The composite {table.Table} uses an enum type of {candidate.TableName}.\r\n\r\nNo enum class corresponding to {candidate.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding enum definition for {candidate.TableName}.\r\n\r\nPlease generate the enum before generating this class.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-						_okButton.Enabled = false;
-					}
-					else if (candidate.ElementType == ElementType.Composite)
-					{
-						MessageBox.Show($"The composite {table.Table} uses a composite of {candidate.TableName}.\r\n\r\nNo composite class corresponding to {candidate.TableName} was found in your solution. An entity class for {table.Table} cannot be generated without a corresponding composite definition for {candidate.TableName}.\r\n\r\nPlease generate the composite class before generating this class.", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-						_okButton.Enabled = false;
-					}
-				}
-			}
-			else if (server.DBType == DBServerType.MYSQL)
-			{
-				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};UID={server.Username};PWD={_password.Text};";
-
-				using (var connection = new MySqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = @"
-SELECT c.COLUMN_NAME as 'columnName',
-       c.COLUMN_TYPE as 'datatype',
-       case when c.CHARACTER_MAXIMUM_LENGTH is null then -1 else c.CHARACTER_MAXIMUM_LENGTH end as 'max_len',
-       case when c.GENERATION_EXPRESSION != '' then 1 else 0 end as 'is_computed',
-       case when c.EXTRA = 'auto_increment' then 1 else 0 end as 'is_identity',
-       case when c.COLUMN_KEY = 'PRI' then 1 else 0 end as 'is_primary',
-       case when c.COLUMN_KEY != '' then 1 else 0 end as 'is_indexed',
-       case when c.IS_NULLABLE = 'no' then 0 else 1 end as 'is_nullable',
-       case when cu.REFERENCED_TABLE_NAME is not null then 1 else 0 end as 'is_foreignkey',
-       cu.REFERENCED_TABLE_NAME as 'foreigntablename'
-  FROM `INFORMATION_SCHEMA`.`COLUMNS` as c
-left outer join information_schema.KEY_COLUMN_USAGE as cu on cu.CONSTRAINT_SCHEMA = c.TABLE_SCHEMA
-                                                         and cu.TABLE_NAME = c.TABLE_NAME
-														 and cu.COLUMN_NAME = c.COLUMN_NAME
-                                                         and cu.REFERENCED_TABLE_NAME is not null
- WHERE c.TABLE_SCHEMA=@schema
-  AND c.TABLE_NAME=@tablename
-ORDER BY c.ORDINAL_POSITION;
-";
-					using (var command = new MySqlCommand(query, connection))
-					{
-						command.Parameters.AddWithValue("@schema", db);
-						command.Parameters.AddWithValue("@tablename", table.Table);
-						using (var reader = command.ExecuteReader())
-						{
-							while (reader.Read())
-							{
-								var x = reader.GetValue(8);
-
-								var dbColumn = new DBColumn
-								{
-									ColumnName = reader.GetString(0),
-									DataType = DBHelper.ConvertMySqlDataType(reader.GetString(1)),
-									dbDataType = reader.GetString(1),
-									Length = Convert.ToInt64(reader.GetValue(2)),
-									IsComputed = Convert.ToBoolean(reader.GetValue(3)),
-									IsIdentity = Convert.ToBoolean(reader.GetValue(4)),
-									IsPrimaryKey = Convert.ToBoolean(reader.GetValue(5)),
-									IsIndexed = Convert.ToBoolean(reader.GetValue(6)),
-									IsNullable = Convert.ToBoolean(reader.GetValue(7)),
-									IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
-								};
-
-								DatabaseColumns.Add(dbColumn);
-
-							}
-						}
-					}
-				}
-			}
-			else
-			{
-				string connectionString;
-
-				if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
-					connectionString = $"Server={server.ServerName};Database={db};Trusted_Connection=True;";
-				else
-					connectionString = $"Server={server.ServerName};Database={db};uid={server.Username};pwd={_password.Text};";
-
-				using (var connection = new SqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = @"
-select c.name as column_name, 
-       x.name as datatype, 
-	   case when x.name = 'nchar' then c.max_length / 2
-	        when x.name = 'nvarchar' then c.max_length / 2
-			when x.name = 'text' then -1
-			when x.name = 'ntext' then -1
-			else c.max_length 
-			end as max_length,
-	   c.is_nullable, 
-	   c.is_computed, 
-	   c.is_identity,
-	   case when ( select i.is_primary_key from sys.indexes as i inner join sys.index_columns as ic on ic.object_id = i.object_id and ic.index_id = i.index_id and i.is_primary_key = 1 where i.object_id = t.object_id and ic.column_id = c.column_id ) is not null  
-	        then 1 
-			else 0
-			end as is_primary_key,
-       case when ( select count(*) from sys.index_columns as ix where ix.object_id = c.object_id and ix.column_id = c.column_id ) > 0 then 1 else 0 end as is_indexed,
-	   case when ( select count(*) from sys.foreign_key_columns as f where f.parent_object_id = c.object_id and f.parent_column_id = c.column_id ) > 0 then 1 else 0 end as is_foreignkey,
-	   ( select t.name from sys.foreign_key_columns as f inner join sys.tables as t on t.object_id = f.referenced_object_id where f.parent_object_id = c.object_id and f.parent_column_id = c.column_id ) as foreigntablename
-  from sys.columns as c
- inner join sys.tables as t on t.object_id = c.object_id
- inner join sys.schemas as s on s.schema_id = t.schema_id
- inner join sys.types as x on x.system_type_id = c.system_type_id and x.user_type_id = c.user_type_id
- where t.name = @tablename
-   and s.name = @schema
-   and x.name != 'sysname'
- order by t.name, c.column_id
-";
-
-					using (var command = new SqlCommand(query, connection))
-					{
-						command.Parameters.AddWithValue("@schema", table.Schema);
-						command.Parameters.AddWithValue("@tablename", table.Table);
-
-						using (var reader = command.ExecuteReader())
-						{
-							while (reader.Read())
-							{
-								var dbColumn = new DBColumn
-								{
-									ColumnName = reader.GetString(0),
-									dbDataType = reader.GetString(1),
-									DataType = DBHelper.ConvertSqlServerDataType(reader.GetString(1)),
-									Length = Convert.ToInt64(reader.GetValue(2)),
-									IsNullable = Convert.ToBoolean(reader.GetValue(3)),
-									IsComputed = Convert.ToBoolean(reader.GetValue(4)),
-									IsIdentity = Convert.ToBoolean(reader.GetValue(5)),
-									IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6)),
-									IsIndexed = Convert.ToBoolean(reader.GetValue(7)),
-									IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
-									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
-								};
-
-								if (string.Equals(dbColumn.dbDataType, "geometry", StringComparison.OrdinalIgnoreCase))
-								{
-									_tableList.SelectedIndex = -1;
-									throw new Exception("COFRS .NET Core does not support the SQL Server geometry data type.");
-								}
-
-								if (string.Equals(dbColumn.dbDataType, "geography", StringComparison.OrdinalIgnoreCase))
-								{
-									_tableList.SelectedIndex = -1;
-									throw new Exception("COFRS .NET Core does not support the SQL Server geography data type.");
-								}
-
-								DatabaseColumns.Add(dbColumn);
-							}
-						}
-					}
-				}
 			}
 		}
 

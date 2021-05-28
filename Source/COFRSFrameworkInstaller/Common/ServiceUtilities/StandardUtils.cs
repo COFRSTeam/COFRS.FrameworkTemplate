@@ -1,24 +1,114 @@
-﻿using COFRS.Template.Common.Models;
+﻿using COFRS.Template.Common.Extensions;
+using COFRS.Template.Common.Models;
 using EnvDTE;
+using EnvDTE80;
 using Microsoft.VisualStudio.Shell;
+using MySql.Data.MySqlClient;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Npgsql;
 using NpgsqlTypes;
 using System;
 using System.Collections.Generic;
+using System.Data;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.Caching;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using VSLangProj;
 
 namespace COFRS.Template.Common.ServiceUtilities
 {
     public static class StandardUtils
     {
+		public static string FindValidatorNamespace(Solution solution, ResourceClassFile resourceClass, EntityClassFile entityClass, out string validatorInterface)
+		{
+            ThreadHelper.ThrowIfNotOnUIThread();
+			validatorInterface = string.Empty;
+
+            var candidate = $"{resourceClass.ClassName}Validator.cs";
+            var projectItem = solution.FindProjectItem(candidate);
+
+			if ( projectItem == null )
+            {
+				foreach (Project project in solution.Projects)
+                {
+					projectItem = FindValidator(project.ProjectItems, resourceClass, entityClass);
+                }
+            }
+
+			if (projectItem != null)
+			{
+				var code = projectItem.FileCodeModel;
+
+				foreach (CodeNamespace namespaceElement in code.CodeElements.GetTypes<CodeNamespace>())
+				{
+					foreach (CodeClass classElement in namespaceElement.Children.GetTypes<CodeClass>())
+					{
+						foreach (CodeClass baseClass in classElement.Bases.GetTypes<CodeClass>())
+						{
+							if (baseClass.FullName.Contains(resourceClass.ClassName))
+							{
+								foreach (CodeInterface childCandidate in classElement.ImplementedInterfaces.GetTypes<CodeInterface>())
+								{
+									validatorInterface = childCandidate.Name;
+								}
+
+								return namespaceElement.Name;
+							}
+						}
+					}
+				}
+			}
+
+			return "none";
+		}
+
+		private static ProjectItem FindValidator(ProjectItems projectItems, ResourceClassFile resourceClass, EntityClassFile entityClass)
+		{
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach (ProjectItem projectItem in projectItems)
+			{
+				if (projectItem.Kind == EnvDTE.Constants.vsProjectItemKindPhysicalFolder ||
+					projectItem.Kind == EnvDTE.Constants.vsProjectItemKindVirtualFolder)
+				{
+					var validator = FindValidator(projectItem.ProjectItems, resourceClass, entityClass);
+
+					if (validator != null)
+						return validator;
+				}
+				else if (projectItem.Kind == Constants.vsProjectItemKindPhysicalFile &&
+						 projectItem.FileCodeModel != null &&
+						 projectItem.FileCodeModel.Language == CodeModelLanguageConstants.vsCMLanguageCSharp &&
+						 Convert.ToInt32(projectItem.Properties.Item("BuildAction").Value) == 1)
+				{
+					FileCodeModel code = projectItem.FileCodeModel;
+
+					foreach (CodeNamespace namespaceElement in code.CodeElements.GetTypes<CodeNamespace>())
+					{
+						foreach (CodeInterface candidateInterface in namespaceElement.Children.GetTypes<CodeInterface>())
+						{
+							var theName = $"IValidator<{resourceClass.ClassName}>";
+
+							foreach (CodeInterface childCandidate in candidateInterface.Bases.GetTypes<CodeInterface>())
+							{
+								if (string.Equals(childCandidate.Name, "IValidator", StringComparison.OrdinalIgnoreCase))
+								{
+									if (childCandidate.FullName.Contains(resourceClass.ClassName))
+										return projectItem;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			return null;
+        }
+
 		public static string CorrectForReservedNames(string columnName)
 		{
 			if (string.Equals(columnName, "abstract", StringComparison.OrdinalIgnoreCase) ||
@@ -172,13 +262,13 @@ namespace COFRS.Template.Common.ServiceUtilities
 			return normalizedName.ToString();
 		}
 
-		public static List<EntityDetailClassFile> GenerateDetailEntityClassList(List<EntityDetailClassFile> UndefinedClassList, List<EntityDetailClassFile> DefinedClassList, string baseFolder, string connectionString)
+		public static List<ClassFile> GenerateEntityClassList(List<ClassFile> UndefinedClassList, List<ClassFile> DefinedClassList, Dictionary<string, MemberInfo> Members, string baseFolder, string connectionString)
 		{
-			List<EntityDetailClassFile> resultList = new List<EntityDetailClassFile>();
+			List<ClassFile> resultList = new List<ClassFile>();
 
 			foreach (var classFile in UndefinedClassList)
 			{
-				var newClassFile = GenerateDetailEntityClass(classFile, connectionString);
+				var newClassFile = GenerateEntityClass((EntityClassFile) classFile, DefinedClassList, connectionString);
 				resultList.Add(newClassFile);
 
 				if (newClassFile.ElementType != ElementType.Enum)
@@ -187,25 +277,30 @@ namespace COFRS.Template.Common.ServiceUtilities
 					{
 						if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
 						{
-							if (DefinedClassList.FirstOrDefault(c => string.Equals(c.TableName, column.EntityName, StringComparison.OrdinalIgnoreCase)) == null)
+							if (UndefinedClassList.FirstOrDefault(c => c.GetType() == typeof(EntityClassFile) && 
+							                                      string.Equals(((EntityClassFile)c).TableName, column.EntityName, StringComparison.OrdinalIgnoreCase)) == null)
 							{
-								var aList = new List<EntityDetailClassFile>();
-								var bList = new List<EntityDetailClassFile>();
+								var aList = new List<ClassFile>();
+								var bList = new List<ClassFile>();
+								var className = CorrectForReservedNames(NormalizeClassName(column.EntityName));
 
-								var aClassFile = new EntityDetailClassFile()
+								var elementType = DBHelper.GetElementType(((EntityClassFile)classFile).SchemaName, column.dbDataType, DefinedClassList, connectionString);
+
+								var aClassFile = new EntityClassFile()
 								{
-									ClassName = CorrectForReservedNames(NormalizeClassName(column.EntityName)),
-									TableName = column.EntityName,
-									SchemaName = classFile.SchemaName,
-									FileName = Path.Combine(baseFolder, $"{CorrectForReservedNames(NormalizeClassName(column.EntityName))}.cs"),
+									ClassName = className,
+									TableName = column.dbDataType,
+									SchemaName = ((EntityClassFile)classFile).SchemaName,
+									FileName = Path.Combine(baseFolder, $"{className}.cs"),
 									ClassNameSpace = classFile.ClassNameSpace,
-									ElementType = DBHelper.GetElementType(classFile.SchemaName, column.EntityName, DefinedClassList, connectionString)
+									ElementType = elementType
 								};
+
 								aList.Add(aClassFile);
 								bList.AddRange(DefinedClassList);
 								bList.AddRange(UndefinedClassList);
 
-								resultList.AddRange(GenerateDetailEntityClassList(aList, bList, baseFolder, connectionString));
+								resultList.AddRange(GenerateEntityClassList(aList, bList, Members, baseFolder, connectionString));
 							}
 						}
 					}
@@ -215,10 +310,8 @@ namespace COFRS.Template.Common.ServiceUtilities
 			return resultList;
 		}
 
-		private static EntityDetailClassFile GenerateDetailEntityClass(EntityDetailClassFile classFile, string connectionString)
+		private static EntityClassFile GenerateEntityClass(EntityClassFile classFile, List<ClassFile> definedClassList, string connectionString)
 		{
-			classFile.ElementType = DBHelper.GetElementType(classFile.SchemaName, classFile.TableName, null, connectionString);
-
 			if (classFile.ElementType == ElementType.Enum)
 				GenerateEnumColumns(connectionString, classFile);
 			else
@@ -227,7 +320,7 @@ namespace COFRS.Template.Common.ServiceUtilities
 			return classFile;
 		}
 
-		private static void GenerateEnumColumns(string connectionString, EntityDetailClassFile classFile)
+		private static void GenerateEnumColumns(string connectionString, EntityClassFile classFile)
 		{
 			classFile.Columns = new List<DBColumn>();
 			string query = @"
@@ -266,80 +359,17 @@ where t.typname = @dataType
 			}
 		}
 
-		private static void GenerateColumns(string connectionString, EntityDetailClassFile classFile)
+		private static void GenerateColumns(string connectionString, EntityClassFile classFile)
 		{
-			if (File.Exists(classFile.FileName))
+			if (classFile.Columns == null || classFile.Columns.Count() == 0)
 			{
-				var contents = File.ReadAllText(classFile.FileName);
 				classFile.Columns = new List<DBColumn>();
 
-				var lines = contents.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
-				var tableName = classFile.TableName;
-				var schema = classFile.SchemaName;
-				var entityName = string.Empty;
-
-				foreach (var line in lines)
+				using (var connection = new NpgsqlConnection(connectionString))
 				{
-					//	Is this a member annotation?
-					if (line.Trim().StartsWith("[PgName", StringComparison.OrdinalIgnoreCase))
-					{
-						var match = Regex.Match(line, "\\[PgName[ \\t]*\\([ \\t]*\\\"(?<columnName>[a-zA-Z_][a-zA-Z0-9_]*)\\\"\\)\\]");
+					connection.Open();
 
-						//	If the entity specified a different column name than the member name, remember it.
-						if (match.Success)
-							entityName = match.Groups["columnName"].Value;
-					}
-
-					//	Is this a member?
-					else if (line.Trim().StartsWith("public", StringComparison.OrdinalIgnoreCase))
-					{
-						//	The following will recoginze these types of data types:
-						//	
-						//	Simple data types:  int, long, string, Guid, Datetime, etc.
-						//	Typed data types:  List<T>, IEnumerable<int>
-						//	Embedded Typed Data types: IEnumerable<ValueTuple<string, int>>
-
-						var whitespace = "[ \\t]*";
-						var space = "[ \\t]+";
-						var variableName = "[a-zA-Z_][a-zA-Z0-9_]*[\\?]?(\\[\\])?";
-						var singletype = $"\\<{whitespace}{variableName}({whitespace}\\,{whitespace}{variableName})*{whitespace}\\>";
-						var multitype = $"<{whitespace}{variableName}{whitespace}{singletype}{whitespace}\\>";
-						var typedecl = $"{variableName}(({singletype})|({multitype}))*";
-						var pattern = $"{whitespace}public{space}(?<datatype>{typedecl})[ \\t]+(?<columnname>{variableName})[ \\t]+{{{whitespace}get{whitespace}\\;{whitespace}set{whitespace}\\;{whitespace}\\}}";
-						var match2 = Regex.Match(line, pattern);
-
-						if (match2.Success)
-						{
-							//	Okay, we got a column. Get the member name can call it the entityName.
-							var className = match2.Groups["columnname"].Value;
-
-							if (string.IsNullOrWhiteSpace(entityName))
-								entityName = className;
-
-							var entityColumn = new DBColumn()
-							{
-								ColumnName = className,
-								EntityName = entityName,
-								EntityType = match2.Groups["datatype"].Value
-							};
-
-							classFile.Columns.Add(entityColumn);
-
-							entityName = string.Empty;
-						}
-					}
-				}
-			}
-			else
-			{
-				classFile.Columns = new List<DBColumn>();
-			}
-
-			using (var connection = new NpgsqlConnection(connectionString))
-			{
-				connection.Open();
-
-				var query = @"
+					var query = @"
 select a.attname as columnname,
 	   t.typname as datatype,
 	   case when t.typname = 'varchar' then a.atttypmod-4
@@ -374,69 +404,92 @@ select a.attname as columnname,
  order by a.attnum
 ";
 
-				using (var command = new NpgsqlCommand(query, connection))
-				{
-					command.Parameters.AddWithValue("@schema", classFile.SchemaName);
-					command.Parameters.AddWithValue("@tablename", classFile.TableName);
-					using (var reader = command.ExecuteReader())
+					using (var command = new NpgsqlCommand(query, connection))
 					{
-						while (reader.Read())
+						command.Parameters.AddWithValue("@schema", classFile.SchemaName);
+						command.Parameters.AddWithValue("@tablename", classFile.TableName);
+
+						using (var reader = command.ExecuteReader())
 						{
-							NpgsqlDbType dataType = NpgsqlDbType.Unknown;
-
-							try
+							while (reader.Read())
 							{
-								dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
-							}
-							catch (InvalidCastException)
-							{
-							}
+								var dbColumn = new DBColumn
+								{
+									EntityName = reader.GetString(0),
+									ColumnName = CorrectForReservedNames(NormalizeClassName(reader.GetString(0))),
+									DataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1)),
+									dbDataType = reader.GetString(1),
+									Length = Convert.ToInt64(reader.GetValue(2)),
+									IsNullable = Convert.ToBoolean(reader.GetValue(3)),
+									IsComputed = Convert.ToBoolean(reader.GetValue(4)),
+									IsIdentity = Convert.ToBoolean(reader.GetValue(5)),
+									IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6)),
+									IsIndexed = Convert.ToBoolean(reader.GetValue(7)),
+									IsForeignKey = Convert.ToBoolean(reader.GetValue(8)),
+									ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
+								};
 
-							var dbColumn = classFile.Columns.FirstOrDefault(c => string.Equals(c.EntityName, reader.GetString(0), StringComparison.OrdinalIgnoreCase));
-
-							if (dbColumn == null)
-							{
-								dbColumn = new DBColumn();
-								dbColumn.EntityName = reader.GetString(0);
-								dbColumn.ColumnName = StandardUtils.NormalizeClassName(reader.GetString(0));
 								classFile.Columns.Add(dbColumn);
 							}
-
-							dbColumn.DataType = dataType;
-							dbColumn.dbDataType = reader.GetString(1);
-							dbColumn.Length = Convert.ToInt64(reader.GetValue(2));
-							dbColumn.IsNullable = Convert.ToBoolean(reader.GetValue(3));
-							dbColumn.IsComputed = Convert.ToBoolean(reader.GetValue(4));
-							dbColumn.IsIdentity = Convert.ToBoolean(reader.GetValue(5));
-							dbColumn.IsPrimaryKey = Convert.ToBoolean(reader.GetValue(6));
-							dbColumn.IsIndexed = Convert.ToBoolean(reader.GetValue(7));
-							dbColumn.IsForeignKey = Convert.ToBoolean(reader.GetValue(8));
-							dbColumn.ForeignTableName = reader.IsDBNull(9) ? string.Empty : reader.GetString(9);
 						}
 					}
 				}
 			}
 		}
 
-
-
 		#region Solution functions
 		/// <summary>
 		/// Loads all the entity models in a solution
 		/// </summary>
-		/// <param name="solution"></param>
-		/// <returns></returns>
-		public static List<EntityDetailClassFile> LoadEntityDetailClassList(Solution solution)
+		/// <param name="solution">The open solution</param>
+		/// <returns>The list of <see cref="MemberInfo"/> objects that describe all members in the solution</returns>
+		public static Dictionary<string, MemberInfo> LoadProgramDetail(Solution solution)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
-			var classList = new List<EntityDetailClassFile>();
+			Dictionary<string, MemberInfo> members = new Dictionary<string, MemberInfo>();
 
 			foreach (Project project in solution.Projects)
 			{
 				if (project.Kind == PrjKind.prjKindCSharpProject)
 				{
-					classList.AddRange(ScanProject(project.ProjectItems));
+					foreach (var element in ScanProject(project.ProjectItems))
+						members.Add(element.Key, element.Value);
 				}
+			}
+
+			return members;
+		}
+
+		/// <summary>
+		/// Loads all the entity models in a solution
+		/// </summary>
+		/// <param name="solution"></param>
+		/// <returns></returns>
+		public static List<ClassFile> LoadClassList(Dictionary<string, MemberInfo> members)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			var classList = new List<ClassFile>();
+
+			foreach (var item in members)
+			{
+				if ( item.Value.ElementType == ElementType.Composite ||
+					 item.Value.ElementType == ElementType.Enum)
+				{
+					classList.AddRange(LoadClassFile(item.Value, classList, members));
+				}
+			}
+
+			foreach (var item in members)
+			{
+				if (item.Value.ElementType == ElementType.Table )
+					classList.AddRange(LoadClassFile(item.Value, classList, members));
+			}
+
+			foreach (var item in members)
+			{
+				if (item.Value.ElementType == ElementType.Resource)
+					classList.AddRange(LoadClassFile(item.Value, classList, members));
 			}
 
 			return classList;
@@ -447,23 +500,147 @@ select a.attname as columnname,
 		/// </summary>
 		/// <param name="projectItems"></param>
 		/// <returns></returns>
-		private static List<EntityDetailClassFile> ScanProject(ProjectItems projectItems)
+		private static Dictionary<string, MemberInfo> ScanProject(ProjectItems projectItems)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
-			var results = new List<EntityDetailClassFile>();
+			var results = new Dictionary<string, MemberInfo>();
 
 			foreach (ProjectItem projectItem in projectItems)
 			{
-				if (projectItem.FileCodeModel != null)
+				if (projectItem.Kind == EnvDTE.Constants.vsProjectItemKindPhysicalFolder ||
+					projectItem.Kind == EnvDTE.Constants.vsProjectItemKindVirtualFolder)
 				{
-					int buildAction = Convert.ToInt32(projectItem.Properties.Item("BuildAction").Value);
+					foreach (var element in ScanProject(projectItem.ProjectItems))
+						results.Add(element.Key, element.Value);
+				}
+				else if (projectItem.Kind == Constants.vsProjectItemKindPhysicalFile &&
+					     projectItem.FileCodeModel != null &&
+						 projectItem.FileCodeModel.Language == CodeModelLanguageConstants.vsCMLanguageCSharp &&
+						 Convert.ToInt32(projectItem.Properties.Item("BuildAction").Value) == 1 )
+				{
+					foreach (var element in ScanClassFile(projectItem))
+						results.Add(element.Key, element.Value);
+				}
+			}
 
-                    if (projectItem.Name.Contains(".cs") && buildAction == 1)
-                        results.AddRange(LoadEntityFile(projectItem));
-                }
-				else
+			return results;
+		}
+
+		private static Dictionary<string, MemberInfo> ScanClassFile(ProjectItem projectItem)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			var results = new Dictionary<string, MemberInfo>();
+
+			foreach (CodeNamespace namespaceElement in projectItem.FileCodeModel.CodeElements.GetTypes<CodeNamespace>())
+			{
+				foreach (CodeElement childElement in namespaceElement.Members)
 				{
-					results.AddRange(ScanProject(projectItem.ProjectItems));
+					if (childElement.Kind == vsCMElement.vsCMElementClass)
+					{
+						CodeAttribute tableAttribute = null;
+						CodeAttribute compositeAttribute = null;
+						CodeAttribute entityAttribute = null;
+
+						try { tableAttribute = (CodeAttribute)childElement.Children.Item("Table"); } catch (Exception) { }
+						try { compositeAttribute = (CodeAttribute)childElement.Children.Item("PgComposite"); } catch (Exception) { }
+						try { entityAttribute = (CodeAttribute)childElement.Children.Item("Entity"); } catch (Exception) { }
+
+						if (tableAttribute != null)
+						{
+							var entityName = string.Empty;
+
+							var match = Regex.Match(tableAttribute.Value, "\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}([ \t]*\\,[ \t]*DBType[ \t]*=[ \t]*\"(?<dbtype>[A-Za-z][A-Za-z0-9_]*)\"){0,1}");
+
+							if (match.Success)
+							{
+								entityName = match.Groups["tableName"].Value;
+							}
+
+							var item = new MemberInfo
+							{
+								ClassName = childElement.Name,
+								EntityName = entityName,
+								ElementType = ElementType.Table,
+								Namespace = namespaceElement,
+								Member = childElement
+							};
+
+							results.Add(item.ClassName, item);
+						}
+						else if (compositeAttribute != null)
+						{
+							var entityName = string.Empty;
+							var match = Regex.Match(compositeAttribute.Value, "\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}");
+
+							if (match.Success)
+							{
+								entityName = match.Groups["tableName"].Value;
+							}
+
+							var item = new MemberInfo
+							{
+								ClassName = childElement.Name,
+								EntityName = entityName,
+								ElementType = ElementType.Composite,
+								Namespace = namespaceElement,
+								Member = childElement
+							};
+
+							results.Add(item.ClassName, item);
+						}
+						else if (entityAttribute != null)
+						{
+							var entityName = string.Empty;
+
+							var match = Regex.Match(entityAttribute.Value, "\"(?<entityName>[A-Za-z][A-Za-z0-9_]*)\"");
+
+							if (match.Success)
+							{
+								entityName = match.Groups["entityName"].Value;
+							}
+
+							var item = new MemberInfo
+							{
+								ClassName = childElement.Name,
+								EntityName = entityName,
+								ElementType = ElementType.Resource,
+								Namespace = namespaceElement,
+								Member = childElement
+							};
+
+							results.Add(item.ClassName, item);
+						}
+					}
+					else if (childElement.Kind == vsCMElement.vsCMElementEnum)
+					{
+						CodeAttribute attributeElement = null;
+
+						try { attributeElement = (CodeAttribute)childElement.Children.Item("PgEnum"); } catch (Exception) { }
+
+						if (attributeElement != null)
+						{
+							var entityName = string.Empty;
+
+							var match = Regex.Match(attributeElement.Value, "\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}");
+
+							if (match.Success)
+							{
+								entityName = match.Groups["tableName"].Value;
+							}
+
+							var item = new MemberInfo
+							{
+								ClassName = childElement.Name,
+								EntityName = entityName,
+								ElementType = ElementType.Enum,
+								Namespace = namespaceElement,
+								Member = childElement
+							};
+
+							results.Add(item.ClassName, item);
+						}
+					}
 				}
 			}
 
@@ -475,462 +652,614 @@ select a.attname as columnname,
 		/// </summary>
 		/// <param name="projectItem"></param>
 		/// <returns></returns>
-		private static List<EntityDetailClassFile> LoadEntityFile(ProjectItem projectItem)
+		private static List<ClassFile> LoadClassFile(MemberInfo member, List<ClassFile> classFiles, Dictionary<string, MemberInfo> members)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
+			
+			var results = new List<ClassFile>();
 
-			var results = new List<EntityDetailClassFile>();
-
-			//	Open file and save context
-			var wasOpen = projectItem.IsOpen[Constants.vsViewKindAny];
-
-			if (!wasOpen)
-				projectItem.Open(Constants.vsViewKindCode);
-
-			var doc = projectItem.Document;
-			var sel = (TextSelection)doc.Selection;
-
-			var anchorPoint = sel.AnchorPoint;
-			var activePoint = sel.ActivePoint;
-
-			//	Get the list of namespaces in the file
-			var namespaceList = LoadSnipit(sel, SnipitType.TYPE_NAMESPACE);
-			var compositeList = LoadSnipit(sel, SnipitType.TYPE_COMPOSITE);
-			var tableList = LoadSnipit(sel, SnipitType.TYPE_TABLE);
-			var enumList = LoadSnipit(sel, SnipitType.TYPE_ENUM);
-
-			foreach (var ns in namespaceList)
+			if (member.ElementType == ElementType.Composite)
 			{
-				foreach (var cl in compositeList.Where(c => c.Start < ns.End))
+				try
 				{
-					var classEntity = ParseClass(projectItem, ns, cl, sel);
+					var entity = new EntityClassFile
+					{
+						ClassName = member.ClassName,
+						ClassNameSpace = member.Namespace.Name,
+						ElementType = member.ElementType,
+						FileName = member.Member.ProjectItem.FileNames[0]
+					};
 
-					if (classEntity != null)
-						results.Add(classEntity);
+					CodeAttribute attribute = (CodeAttribute)member.Member.Children.Item("PgComposite");
+
+					var match = Regex.Match(attribute.Value, "\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}");
+
+					if (match.Success)
+					{
+						entity.ServerType = DBServerType.POSTGRESQL;
+						entity.TableName = match.Groups["tableName"].Value;
+						entity.SchemaName = match.Groups["schemaName"].Value;
+						entity.Columns = new List<DBColumn>();
+
+						foreach (CodeElement element in member.Member.Children)
+						{
+							if (element.Kind == vsCMElement.vsCMElementProperty)
+							{
+								CodeProperty property = (CodeProperty)element;
+								CodeAttribute memberAttribute = (CodeAttribute)property.Children.Item("Member");
+
+								var strCodeTypeParts = property.Type.AsString.Split(new char[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
+								var dataType = strCodeTypeParts[strCodeTypeParts.Length - 1];
+
+								bool isPrimaryKey = false;
+								bool isAutoField = false;
+								bool isIdentity = false;
+								bool isIndexed = false;
+								bool isForeignKey = false;
+								bool isNullable = false;
+								bool isFixed = false;
+								string nativeDataType = string.Empty;
+								long dataLength = 0;
+								int precision = 0;
+								int scale = 0;
+								string entityName = string.Empty;
+
+								var match3 = Regex.Match(memberAttribute.Value, "IsPrimaryKey[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+								if (match3.Success)
+									isPrimaryKey = bool.Parse(match3.Groups["boolValue"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, "AutoField[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+								if (match3.Success)
+									isAutoField = bool.Parse(match3.Groups["boolValue"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, "IsIdentity[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+								if (match3.Success)
+									isIdentity = bool.Parse(match3.Groups["boolValue"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, "IsIndexed[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+								if (match3.Success)
+									isIndexed = bool.Parse(match3.Groups["boolValue"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, "IsForeignKey[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+								if (match3.Success)
+									isForeignKey = bool.Parse(match3.Groups["boolValue"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, "IsNullable[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+								if (match3.Success)
+									isNullable = bool.Parse(match3.Groups["boolValue"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, "IsFixed[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+								if (match3.Success)
+									isFixed = bool.Parse(match3.Groups["boolValue"].Value);
+
+								var whitespace = "[ \\t]*";
+								var variableName = "[a-zA-Z_][a-zA-Z0-9_]*[\\?]?(\\[\\])?";
+								var singletype = $"\\<{whitespace}{variableName}({whitespace}\\,{whitespace}{variableName})*{whitespace}\\>";
+								var multitype = $"<{whitespace}{variableName}{whitespace}{singletype}{whitespace}\\>";
+								var typedecl = $"{variableName}(({singletype})|({multitype}))*";
+
+								match3 = Regex.Match(memberAttribute.Value, $"NativeDataType[ \t]*=[ \t]*\"(?<nativeType>{typedecl})\"");
+
+								if (match3.Success)
+									nativeDataType = match3.Groups["nativeType"].Value;
+
+								match3 = Regex.Match(memberAttribute.Value, $"Length[ \t]*=[ \t]*(?<length>[0-9]+)");
+
+								if (match3.Success)
+									dataLength = Convert.ToInt64(match3.Groups["length"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, $"Precision[ \t]*=[ \t]*(?<precision>[0-9]+)");
+
+								if (match3.Success)
+									precision = Convert.ToInt32(match3.Groups["precision"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, $"Scale[ \t]*=[ \t]*(?<scale>[0-9]+)");
+
+								if (match3.Success)
+									scale = Convert.ToInt32(match3.Groups["scale"].Value);
+
+								match3 = Regex.Match(memberAttribute.Value, $"ColumnName[ \t]*=[ \t]*(?<entityName>[_a-zA-Z][_a-zA-Z0-9]*)");
+
+								if (match3.Success)
+									entityName = match3.Groups["entityName"].Value;
+
+								var className = property.Name;
+
+								if (string.IsNullOrWhiteSpace(entityName))
+									entityName = className;
+
+								try
+								{
+									CodeAttribute pgNameAttribute = (CodeAttribute)property.Children.Item("PgName");
+									var match4 = Regex.Match(pgNameAttribute.Value, "\\\"(?<entityName>[A-Za-z][A-Za-z0-9_]*)\"");
+
+									if (match4.Success)
+										entityName = match4.Groups["entityName"].Value;
+								
+								}
+								catch (Exception) { }
+
+								var entityColumn = new DBColumn()
+								{
+									ColumnName = className,
+									EntityName = entityName,
+									EntityType = dataType,
+									IsIdentity = isIdentity,
+									IsPrimaryKey = isPrimaryKey,
+									IsComputed = isAutoField,
+									IsIndexed = isIndexed,
+									IsForeignKey = isForeignKey,
+									IsNullable = isNullable,
+									IsFixed = isFixed,
+									dbDataType = nativeDataType,
+									Length = dataLength,
+									NumericPrecision = precision,
+									NumericScale = scale,
+								};
+
+								if (entity.ServerType == DBServerType.MYSQL)
+									entityColumn.DataType = DBHelper.ConvertMySqlDataType(entityColumn.dbDataType);
+								else if (entity.ServerType == DBServerType.POSTGRESQL)
+									entityColumn.DataType = DBHelper.ConvertPostgresqlDataType(entityColumn.dbDataType);
+								else if (entity.ServerType == DBServerType.SQLSERVER)
+									entityColumn.DataType = DBHelper.ConvertSqlServerDataType(entityColumn.dbDataType);
+
+								entity.Columns.Add(entityColumn);
+							}
+						}
+					}
+
+					results.Add(entity);
 				}
-
-				foreach (var cl in tableList.Where(c => c.Start < ns.End))
+				catch (Exception) { }
+			}
+			else if (member.ElementType == ElementType.Table)
+			{
+				try
 				{
-					var classEntity = ParseClass(projectItem, ns, cl, sel);
+					var entity = new EntityClassFile
+					{
+						ClassName = member.ClassName,
+						ClassNameSpace = member.Namespace.Name,
+						ElementType = member.ElementType,
+						FileName = member.Member.ProjectItem.FileNames[0]
+					};
 
-					if (classEntity != null)
-						results.Add(classEntity);
+					CodeAttribute attribute = (CodeAttribute)member.Member.Children.Item("Table");
+					var match = Regex.Match(attribute.Value, "\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}([ \t]*\\,[ \t]*DBType[ \t]*=[ \t]*\"(?<dbtype>[A-Za-z][A-Za-z0-9_]*)\"){0,1}");
+
+					if (match.Success)
+					{
+						entity.TableName = match.Groups["tableName"].Value;
+						entity.SchemaName = match.Groups["schemaName"].Value;
+						entity.ServerType = (DBServerType)Enum.Parse(typeof(DBServerType), match.Groups["dbtype"].Value);
+						entity.Columns = new List<DBColumn>();
+
+						foreach (CodeElement element in member.Member.Children)
+						{
+							if (element.Kind == vsCMElement.vsCMElementProperty)
+							{
+								CodeProperty property = (CodeProperty)element;
+								CodeAttribute memberAttribute = (CodeAttribute)property.Children.Item("Member");
+
+								var strCodeTypeParts = property.Type.AsString.Split(new char[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
+								var dataType = strCodeTypeParts[strCodeTypeParts.Length - 1];
+
+                                bool isPrimaryKey = false;
+                                bool isAutoField = false;
+                                bool isIdentity = false;
+                                bool isIndexed = false;
+                                bool isForeignKey = false;
+                                bool isNullable = false;
+                                bool isFixed = false;
+                                string nativeDataType = string.Empty;
+                                long dataLength = 0;
+                                int precision = 0;
+                                int scale = 0;
+                                string entityName = string.Empty;
+
+                                var match3 = Regex.Match(memberAttribute.Value, "IsPrimaryKey[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+                                if (match3.Success)
+                                    isPrimaryKey = bool.Parse(match3.Groups["boolValue"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, "AutoField[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+                                if (match3.Success)
+                                    isAutoField = bool.Parse(match3.Groups["boolValue"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, "IsIdentity[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+                                if (match3.Success)
+                                    isIdentity = bool.Parse(match3.Groups["boolValue"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, "IsIndexed[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+                                if (match3.Success)
+                                    isIndexed = bool.Parse(match3.Groups["boolValue"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, "IsForeignKey[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+                                if (match3.Success)
+                                    isForeignKey = bool.Parse(match3.Groups["boolValue"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, "IsNullable[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+                                if (match3.Success)
+                                    isNullable = bool.Parse(match3.Groups["boolValue"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, "IsFixed[ \t]*=[ \t]*(?<boolValue>true|false)");
+
+                                if (match3.Success)
+                                    isFixed = bool.Parse(match3.Groups["boolValue"].Value);
+
+								var whitespace = "[ \\t]*";
+								var variableName = "[a-zA-Z_][a-zA-Z0-9_]*[\\?]?(\\[\\])?";
+								var singletype = $"\\<{whitespace}{variableName}({whitespace}\\,{whitespace}{variableName})*{whitespace}\\>";
+								var multitype = $"<{whitespace}{variableName}{whitespace}{singletype}{whitespace}\\>";
+								var typedecl = $"{variableName}(({singletype})|({multitype}))*";
+
+								match3 = Regex.Match(memberAttribute.Value, $"NativeDataType[ \t]*=[ \t]*\"(?<nativeType>{typedecl})\"");
+
+                                if (match3.Success)
+                                    nativeDataType = match3.Groups["nativeType"].Value;
+
+                                match3 = Regex.Match(memberAttribute.Value, $"Length[ \t]*=[ \t]*(?<length>[0-9]+)");
+
+                                if (match3.Success)
+                                    dataLength = Convert.ToInt64(match3.Groups["length"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, $"Precision[ \t]*=[ \t]*(?<precision>[0-9]+)");
+
+                                if (match3.Success)
+                                    precision = Convert.ToInt32(match3.Groups["precision"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, $"Scale[ \t]*=[ \t]*(?<scale>[0-9]+)");
+
+                                if (match3.Success)
+                                    scale = Convert.ToInt32(match3.Groups["scale"].Value);
+
+                                match3 = Regex.Match(memberAttribute.Value, $"ColumnName[ \t]*=[ \t]*(?<entityName>[_a-zA-Z][_a-zA-Z0-9]*)");
+
+                                if (match3.Success)
+                                    entityName = match3.Groups["entityName"].Value;
+
+								var className = property.Name;
+
+                                if (string.IsNullOrWhiteSpace(entityName))
+                                    entityName = className;
+
+                                var entityColumn = new DBColumn()
+                                {
+                                    ColumnName = className,
+                                    EntityName = entityName,
+                                    EntityType = dataType,
+                                    IsIdentity = isIdentity,
+                                    IsPrimaryKey = isPrimaryKey,
+                                    IsComputed = isAutoField,
+                                    IsIndexed = isIndexed,
+                                    IsForeignKey = isForeignKey,
+                                    IsNullable = isNullable,
+                                    IsFixed = isFixed,
+                                    dbDataType = nativeDataType,
+                                    Length = dataLength,
+                                    NumericPrecision = precision,
+                                    NumericScale = scale,
+                                };
+
+                                if (entity.ServerType == DBServerType.MYSQL)
+                                    entityColumn.DataType = DBHelper.ConvertMySqlDataType(entityColumn.dbDataType);
+                                else if (entity.ServerType == DBServerType.POSTGRESQL)
+                                    entityColumn.DataType = DBHelper.ConvertPostgresqlDataType(entityColumn.dbDataType);
+                                else if (entity.ServerType == DBServerType.SQLSERVER)
+                                    entityColumn.DataType = DBHelper.ConvertSqlServerDataType(entityColumn.dbDataType);
+
+                                entity.Columns.Add(entityColumn);
+                            }
+                        }
+					}
+				
+					results.Add(entity);
 				}
-
-				foreach (var en in enumList.Where(e => e.Start < ns.End))
+				catch (Exception) { }
+			}
+			else if (member.ElementType == ElementType.Resource)
+			{
+				try
 				{
-					var enumEntity = ParseEnum(projectItem, ns, en, sel);
+					var entity = new ResourceClassFile
+					{
+						ClassName = member.ClassName,
+						ClassNameSpace = member.Namespace.Name,
+						ElementType = member.ElementType,
+						FileName = member.Member.ProjectItem.FileNames[0]
+					};
 
-					if ( enumEntity != null )
-						results.Add(enumEntity);
+					CodeAttribute attribute = (CodeAttribute) member.Member.Children.Item("Entity");
+					var match = Regex.Match(attribute.Value, "typeof[ \t]*\\([ \t]*(?<entityName>[_A-Za-z][A-Za-z0-9_]*[ \t]*)\\)");
+
+					if (match.Success)
+					{
+						entity.EntityClass = match.Groups["entityName"].Value;
+						entity.Members = new List<ClassMember>();
+
+						var entityClass = (EntityClassFile) classFiles.FirstOrDefault(e =>
+							e.GetType() == typeof(EntityClassFile) &&
+							string.Equals(e.ClassName, entity.EntityClass, StringComparison.OrdinalIgnoreCase));
+
+						if (entityClass != null)
+						{
+							foreach (CodeProperty property in member.Member.Children.GetTypes<CodeProperty>())
+							{
+								var strCodeTypeParts = property.Type.AsString.Split(new char[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
+								var dataType = strCodeTypeParts[strCodeTypeParts.Length - 1];
+
+								var childMember = new ClassMember()
+								{
+									ResourceMemberName = property.Name,
+									ResourceMemberType = dataType,
+									EntityNames = new List<DBColumn>(),
+									ChildMembers = new List<ClassMember>()
+								};
+
+								LoadChildMembers(entityClass.ServerType, childMember, classFiles);
+
+								entity.Members.Add(childMember);
+							}
+
+							var columnName = string.Empty;
+
+							foreach (var column in entityClass.Columns)
+							{
+								if (column.IsPrimaryKey)
+								{
+									var theMember = entity.Members.FirstOrDefault(m => string.Equals(m.ResourceMemberName, "href", StringComparison.OrdinalIgnoreCase));
+
+									if (theMember == null)
+									{
+										theMember = new ClassMember()
+										{
+											ResourceMemberName = string.Empty,
+											ResourceMemberType = string.Empty,
+											EntityNames = new List<DBColumn>(),
+											ChildMembers = new List<ClassMember>()
+										};
+
+										entity.Members.Add(theMember);
+									}
+
+									var entityColumn = new DBColumn()
+									{
+										EntityName = column.EntityName,
+										EntityType = column.EntityType,
+										ColumnName = column.ColumnName,
+										DataType = column.DataType,
+										dbDataType = column.dbDataType,
+										ForeignTableName = column.ForeignTableName,
+										IsComputed = column.IsComputed,
+										IsForeignKey = column.IsForeignKey,
+										IsIdentity = column.IsIdentity,
+										IsIndexed = column.IsIndexed,
+										IsNullable = column.IsNullable,
+										IsPrimaryKey = column.IsPrimaryKey,
+										IsFixed = column.IsFixed,
+										Length = column.Length
+									};
+
+									theMember.EntityNames.Add(entityColumn);
+								}
+								else if (column.IsForeignKey)
+								{
+									string shortColumnName;
+
+									if (string.Equals(column.ForeignTableName, entityClass.TableName, StringComparison.OrdinalIgnoreCase))
+									{
+										shortColumnName = column.ColumnName;
+										if (column.ColumnName.EndsWith("ID", StringComparison.OrdinalIgnoreCase))
+											shortColumnName = column.ColumnName.Substring(0, column.ColumnName.Length - 2);
+									}
+									else
+										shortColumnName = column.ForeignTableName;
+
+									var normalizer = new NameNormalizer(shortColumnName);
+									var resourceName = normalizer.SingleForm;
+
+									var theMember = entity.Members.FirstOrDefault(m => string.Equals(m.ResourceMemberName, resourceName, StringComparison.OrdinalIgnoreCase));
+
+									if (theMember == null)
+									{
+										theMember = new ClassMember()
+										{
+											ResourceMemberName = string.Empty,
+											ResourceMemberType = string.Empty,
+											EntityNames = new List<DBColumn>(),
+											ChildMembers = new List<ClassMember>()
+										};
+
+										entity.Members.Add(theMember);
+									}
+
+									var entityColumn = new DBColumn()
+									{
+										EntityName = column.EntityName,
+										EntityType = column.EntityType,
+										ColumnName = column.ColumnName,
+										DataType = column.DataType,
+										dbDataType = column.dbDataType,
+										ForeignTableName = column.ForeignTableName,
+										IsComputed = column.IsComputed,
+										IsForeignKey = column.IsForeignKey,
+										IsIdentity = column.IsIdentity,
+										IsIndexed = column.IsIndexed,
+										IsNullable = column.IsNullable,
+										IsPrimaryKey = column.IsPrimaryKey,
+										IsFixed = column.IsFixed,
+										Length = column.Length
+									};
+
+									theMember.EntityNames.Add(entityColumn);
+								}
+								else
+								{
+									var theMember = entity.Members.FirstOrDefault(m => string.Equals(m.ResourceMemberName, column.EntityName, StringComparison.OrdinalIgnoreCase));
+
+									if (theMember == null)
+									{
+										var potentialMember = entity.Members.FirstOrDefault(m => column.EntityName.Length > m.ResourceMemberName.Length && string.Equals(m.ResourceMemberName, column.EntityName.Substring(0, m.ResourceMemberName.Length), StringComparison.OrdinalIgnoreCase));
+
+										if (potentialMember != null)
+										{
+											var childMember = potentialMember.ChildMembers.FirstOrDefault(c => string.Equals(c.ResourceMemberName, column.EntityName.Substring(potentialMember.ResourceMemberName.Length), StringComparison.OrdinalIgnoreCase));
+
+											if (childMember != null)
+												theMember = childMember;
+										}
+									}
+
+									if (theMember == null)
+									{
+										theMember = new ClassMember()
+										{
+											ResourceMemberName = string.Empty,
+											ResourceMemberType = string.Empty,
+											EntityNames = new List<DBColumn>(),
+											ChildMembers = new List<ClassMember>()
+										};
+
+										entity.Members.Add(theMember);
+									}
+
+									var entityColumn = new DBColumn()
+									{
+										EntityName = column.EntityName,
+										EntityType = column.EntityType,
+										ColumnName = column.ColumnName,
+										DataType = column.DataType,
+										dbDataType = column.dbDataType,
+										ForeignTableName = column.ForeignTableName,
+										IsComputed = column.IsComputed,
+										IsForeignKey = column.IsForeignKey,
+										IsIdentity = column.IsIdentity,
+										IsFixed = column.IsFixed,
+										IsIndexed = column.IsIndexed,
+										IsNullable = column.IsNullable,
+										IsPrimaryKey = column.IsPrimaryKey,
+										Length = column.Length
+									};
+
+									theMember.EntityNames.Add(entityColumn);
+								}
+							}
+
+							results.Add(entity);
+						}
+					}
 				}
+				catch (Exception) { }
+			}
+			else if (member.ElementType == ElementType.Enum)
+			{
+				try
+				{
+					var entity = new EntityClassFile
+					{
+						ClassName = member.ClassName,
+						ClassNameSpace = member.Namespace.Name,
+						ElementType = member.ElementType,
+						FileName = member.Member.ProjectItem.FileNames[0]
+					};
+					var attribute = (CodeAttribute) member.Member.Children.Item("PgEnum"); 
+					var match = Regex.Match(attribute.Value, "\\\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}");
+
+					if (match.Success)
+					{
+						entity.ServerType = DBServerType.POSTGRESQL;
+						entity.TableName = match.Groups["tableName"].Value;
+						entity.SchemaName = match.Groups["schemaName"].Value;
+						entity.Columns = new List<DBColumn>();
+
+						foreach (CodeElement property in member.Member.Children)
+						{
+							if (property.Kind == vsCMElement.vsCMElementVariable)
+							{
+								CodeAttribute pgNameAttribute = (CodeAttribute)property.Children.Item("PgName");
+								var match2 = Regex.Match(pgNameAttribute.Value, "\\\"(?<entityName>[A-Za-z][A-Za-z0-9_]*)\"");
+
+								if (match2.Success)
+								{
+									var column = new DBColumn
+									{
+										ColumnName = property.Name,
+										EntityName = match2.Groups["entityName"].Value
+									};
+
+									entity.Columns.Add(column);
+								}
+							}
+						}
+
+						results.Add(entity);
+					}
+				}
+				catch (Exception) { }
 			}
 
 			return results;
 		}
-
-		public static EntityDetailClassFile ParseClass(ProjectItem projectItem, Snipit ns, Snipit cl, TextSelection sel)
-        {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            var entity = new EntityDetailClassFile();
-
-			sel.GotoLine(cl.Start);
-			sel.SelectLine();
-
-			var match = Regex.Match(sel.Text, "\\[PgComposite[ \t]*\\([ \t]*\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}\\)\\]");
-			
-			if (match.Success)
-			{
-				bool notFound = true;
-
-				while (notFound)
-				{
-					sel.SelectLine();
-					var match2 = Regex.Match(sel.Text, "class[ \t]+(?<classname>[_a-zA-Z][_a-zA-Z0-9]*)");
-
-					if (match2.Success)
-					{
-						notFound = false;
-						entity.ClassName = match2.Groups["classname"].Value;
-					}
-				}
-
-				entity.FileName = projectItem.FileNames[0];
-				entity.TableName = match.Groups["tableName"].Value;
-				entity.SchemaName = match.Groups["schemaName"].Value;
-				entity.ClassNameSpace = ns.Name;
-				entity.ElementType = ElementType.Composite;
-				entity.Columns = LoadColumns(DBServerType.POSTGRESQL, ns, cl, sel);
-			}
-			else 
-			{
-				match = Regex.Match(sel.Text, "\\[Table[ \t]*\\([ \t]*\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}([ \t]*\\,[ \t]*DBType[ \t]*=[ \t]*\"(?<dbtype>[A-Za-z][A-Za-z0-9_]*)\"){0,1}\\)\\]");
-
-				if (match.Success)
-				{
-					bool notFound = true;
-
-					while (notFound)
-					{
-						sel.SelectLine();
-						var match2 = Regex.Match(sel.Text, "class[ \t]+(?<classname>[_a-zA-Z][_a-zA-Z0-9]*)");
-
-						if ( match2.Success )
-                        {
-							notFound = false;
-							entity.ClassName = match2.Groups["classname"].Value;
-                        }
-					}
-
-					entity.FileName = projectItem.FileNames[0];
-					entity.TableName = match.Groups["tableName"].Value;
-					entity.SchemaName = match.Groups["schemaName"].Value;
-					entity.ClassNameSpace = ns.Name;
-					entity.ElementType = ElementType.Composite;
-					entity.Columns = LoadColumns((DBServerType) Enum.Parse(typeof(DBServerType), match.Groups["dbtype"].Value), ns, cl, sel);
-				}
-				else 
-				{
-					return null;
-				}
-			}
-
-			return entity;
-        }
-
-		public static EntityDetailClassFile ParseEnum(ProjectItem projectItem, Snipit ns, Snipit cl, TextSelection sel)
+		
+		private static void LoadChildMembers(DBServerType dbType, ClassMember member, List<ClassFile> classFiles)
 		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-			var entity = new EntityDetailClassFile();
+			string memberProperName = string.Empty;
 
-			sel.GotoLine(cl.Start);
-			sel.SelectLine();
+			if (member.ResourceMemberType.Contains("<"))
+				return;
 
-			var match = Regex.Match(sel.Text, "\\[PgEnum[ \t]*\\([ \t]*\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}\\)\\]");
+			if (member.ResourceMemberType.Contains(">"))
+				return;
 
-			if (match.Success)
-			{
-				bool notFound = true;
-
-				while (notFound)
-				{
-					sel.LineDown();
-					sel.SelectLine();
-					var match2 = Regex.Match(sel.Text, "enum[ \t]+(?<classname>[_a-zA-Z][_a-zA-Z0-9]*)");
-
-					if (match2.Success)
-					{
-						notFound = false;
-						entity.ClassName = match2.Groups["classname"].Value;
-					}
-				}
-
-				entity.FileName = projectItem.FileNames[0];
-				entity.TableName = match.Groups["tableName"].Value;
-				entity.SchemaName = match.Groups["schemaName"].Value;
-				entity.ClassNameSpace = ns.Name;
-				entity.ElementType = ElementType.Enum;
-			}
+			if (member.ResourceMemberType.EndsWith("?"))
+				memberProperName = member.ResourceMemberType.Substring(0, member.ResourceMemberType.Length - 1);
 			else
-				return null;
+				memberProperName = member.ResourceMemberType;
 
+			var childClass = classFiles.FirstOrDefault(c => string.Equals(c.ClassName, memberProperName, StringComparison.OrdinalIgnoreCase));
 
-			return entity;
-		}
-
-        private static List<Snipit> LoadSnipit(TextSelection sel, SnipitType codeType)
-        {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            var codeList = new List<Snipit>();
-            sel.StartOfDocument();
-            bool found = true;
-
-			if (codeType == SnipitType.TYPE_NAMESPACE)
+			if (childClass != null && childClass.ElementType != ElementType.Enum )
 			{
-				while (found)
+				var entityClass = childClass as EntityClassFile;
+
+				foreach ( var column in entityClass.Columns )
 				{
-					if (sel.FindText("namespace"))
+					var memberName = column.ColumnName;
+					var dataType = "Unknown";
+
+					if (dbType == DBServerType.MYSQL)
+						dataType = DBHelper.GetMySqlDataType(column);
+					else if (dbType == DBServerType.POSTGRESQL)
+						dataType = DBHelper.GetPostgresDataType(column, classFiles);
+					else if (dbType == DBServerType.SQLSERVER)
+						dataType = DBHelper.GetSQLServerDataType(column);
+
+					var childMember = new ClassMember()
 					{
-						sel.SelectLine();
-						var match = Regex.Match(sel.Text, $"namespace[ \t]+(?<name>[_a-zA-Z][_a-zA-Z0-9]*)");
+						ResourceMemberName = memberName,
+						ResourceMemberType = dataType,
+						EntityNames = new List<DBColumn>(),
+						ChildMembers = new List<ClassMember>()
+					};
 
-						var entry = new Snipit
-						{
-							Name = match.Groups["name"].Value,
-							Start = sel.ActivePoint.Line - 1,
-							End = int.MaxValue
-						};
+					LoadChildMembers(dbType, childMember, classFiles);
 
-						if (codeList.Count > 0)
-						{
-							var prev = codeList[codeList.Count - 1];
-							prev.End = sel.ActivePoint.Line - 1;
-						}
-
-						codeList.Add(entry);
-					}
-					else
-						found = false;
+					member.ChildMembers.Add(childMember);
 				}
 			}
-			else if (codeType == SnipitType.TYPE_COMPOSITE)
-			{
-				while (found)
-				{
-					if (sel.FindText("[PgComposite"))
-					{
-						sel.SelectLine();
-						var match = Regex.Match(sel.Text, "\\[PgComposite[ \t]*\\([ \t]*\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}\\)\\]");
-
-						var entry = new Snipit
-						{
-							Name = match.Groups["tableName"].Value,
-							Start = sel.ActivePoint.Line - 1,
-							End = int.MaxValue
-						};
-
-						if (codeList.Count > 0)
-						{
-							var prev = codeList[codeList.Count - 1];
-							prev.End = sel.ActivePoint.Line - 1;
-						}
-
-						codeList.Add(entry);
-					}
-					else
-						found = false;
-				}
-			}
-			else if (codeType == SnipitType.TYPE_TABLE)
-			{
-				while (found)
-				{
-					if (sel.FindText("[Table"))
-					{
-						sel.SelectLine();
-						var match = Regex.Match(sel.Text, "\\[Table[ \t]*\\([ \t]*\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}([ \t]*\\,[ \t]*DBType[ \t]*=[ \t]*\"(?<dbtype>[A-Za-z][A-Za-z0-9_]*)\"){0,1}\\)\\]");
-
-						var entry = new Snipit
-						{
-							Name = match.Groups["tableName"].Value,
-							Start = sel.ActivePoint.Line - 1,
-							End = int.MaxValue
-						};
-
-						if (codeList.Count > 0)
-						{
-							var prev = codeList[codeList.Count - 1];
-							prev.End = sel.ActivePoint.Line - 1;
-						}
-
-						codeList.Add(entry);
-					}
-					else
-						found = false;
-				}
-			}
-			else if (codeType == SnipitType.TYPE_ENUM)
-			{
-				while (found)
-				{
-					if (sel.FindText("[PgEnum"))
-					{
-						sel.SelectLine();
-						var match = Regex.Match(sel.Text, "\\[PgEnum[ \t]*\\([ \t]*\"(?<tableName>[A-Za-z][A-Za-z0-9_]*)\"([ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[A-Za-z][A-Za-z0-9_]*)\"){0,1}\\)\\]");
-
-						var entry = new Snipit
-						{
-							Name = match.Groups["tableName"].Value,
-							Start = sel.ActivePoint.Line - 1,
-							End = int.MaxValue
-						};
-
-						if (codeList.Count > 0)
-						{
-							var prev = codeList[codeList.Count - 1];
-							prev.End = sel.ActivePoint.Line - 1;
-						}
-
-						codeList.Add(entry);
-					}
-					else
-						found = false;
-				}
-			}
-
-			return codeList;
-        }
-
-        private static List<DBColumn> LoadColumns(DBServerType dbType, Snipit ns, Snipit cl, TextSelection sel)
-		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-
-			sel.SelectAll();
-			var lines = sel.Text.Split(new string[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
-			var columns = new List<DBColumn>();
-
-			var entityName = string.Empty;
-			var isPrimaryKey = false;
-			var isAutoField = false;
-			var isIdentity = false;
-			var isIndexed = false;
-			var isNullable = false;
-			var isForeignKey = false;
-			var isFixed = false;
-			string nativeDataType = string.Empty;
-			long dataLength = 0;
-			int precision = 0;
-			int scale = 0;
-
-			int start = cl.Start;
-			int end = cl.End == int.MaxValue ? lines.Count() - 1 : cl.End;
-			
-			for ( int index = start-1; index < end; index++)
-			{
-				var line = lines[index];
-
-				//	Is this a member annotation?
-				if (line.Trim().StartsWith("[PgName", StringComparison.OrdinalIgnoreCase))
-				{
-					var match = Regex.Match(line, "\\[PgName[ \\t]*\\([ \\t]*\\\"(?<columnName>[a-zA-Z_][a-zA-Z0-9_]*)\\\"\\)\\]");
-
-					//	If the entity specified a different column name than the member name, remember it.
-					if (match.Success)
-						entityName = match.Groups["columnName"].Value;
-				}
-
-				else if (line.Trim().StartsWith("[Member", StringComparison.OrdinalIgnoreCase))
-				{
-					var match = Regex.Match(line, "IsPrimaryKey[ \t]*=[ \t]*(?<boolValue>true|false)");
-
-					if (match.Success)
-						isPrimaryKey = bool.Parse(match.Groups["boolValue"].Value);
-
-					match = Regex.Match(line, "AutoField[ \t]*=[ \t]*(?<boolValue>true|false)");
-
-					if (match.Success)
-						isAutoField = bool.Parse(match.Groups["boolValue"].Value);
-
-					match = Regex.Match(line, "IsIdentity[ \t]*=[ \t]*(?<boolValue>true|false)");
-
-					if (match.Success)
-						isIdentity = bool.Parse(match.Groups["boolValue"].Value);
-
-					match = Regex.Match(line, "IsIndexed[ \t]*=[ \t]*(?<boolValue>true|false)");
-
-					if (match.Success)
-						isIndexed = bool.Parse(match.Groups["boolValue"].Value);
-
-					match = Regex.Match(line, "IsForeignKey[ \t]*=[ \t]*(?<boolValue>true|false)");
-
-					if (match.Success)
-						isForeignKey = bool.Parse(match.Groups["boolValue"].Value);
-
-					match = Regex.Match(line, "IsNullable[ \t]*=[ \t]*(?<boolValue>true|false)");
-
-					if (match.Success)
-						isNullable = bool.Parse(match.Groups["boolValue"].Value);
-
-					match = Regex.Match(line, "IsFixed[ \t]*=[ \t]*(?<boolValue>true|false)");
-
-					if (match.Success)
-						isFixed = bool.Parse(match.Groups["boolValue"].Value);
-
-					var whitespace = "[ \\t]*";
-					var variableName = "[a-zA-Z_][a-zA-Z0-9_]*[\\?]?(\\[\\])?";
-					var singletype = $"\\<{whitespace}{variableName}({whitespace}\\,{whitespace}{variableName})*{whitespace}\\>";
-					var multitype = $"<{whitespace}{variableName}{whitespace}{singletype}{whitespace}\\>";
-					var typedecl = $"{variableName}(({singletype})|({multitype}))*";
-
-					match = Regex.Match(line, $"NativeDataType[ \t]*=[ \t]*\"(?<nativeType>{typedecl})\"");
-
-					if (match.Success)
-						nativeDataType = match.Groups["nativeType"].Value;
-
-					match = Regex.Match(line, $"Length[ \t]*=[ \t]*(?<length>[0-9]+)");
-
-					if (match.Success)
-						dataLength = Convert.ToInt64(match.Groups["length"].Value);
-
-					match = Regex.Match(line, $"Precision[ \t]*=[ \t]*(?<precision>[0-9]+)");
-
-					if (match.Success)
-						precision = Convert.ToInt32(match.Groups["precision"].Value);
-
-					match = Regex.Match(line, $"Scale[ \t]*=[ \t]*(?<scale>[0-9]+)");
-
-					if (match.Success)
-						scale = Convert.ToInt32(match.Groups["scale"].Value);
-
-					match = Regex.Match(line, $"ColumnName[ \t]*=[ \t]*(?<entityName>[_a-zA-Z][_a-zA-Z0-9]*)");
-
-					if (match.Success)
-						entityName = match.Groups["entityName"].Value;
-				}
-
-				//	Is this a member?
-				else if (line.Trim().StartsWith("public", StringComparison.OrdinalIgnoreCase))
-				{
-					//	The following will recoginze these types of data types:
-					//	
-					//	Simple data types:  int, long, string, Guid, Datetime, etc.
-					//	Typed data types:  List<T>, IEnumerable<int>
-					//	Embedded Typed Data types: IEnumerable<ValueTuple<string, int>>
-
-					var whitespace = "[ \\t]*";
-					var space = "[ \\t]+";
-					var variableName = "[a-zA-Z_][a-zA-Z0-9_]*[\\?]?(\\[\\])?";
-					var singletype = $"\\<{whitespace}{variableName}({whitespace}\\,{whitespace}{variableName})*{whitespace}\\>";
-					var multitype = $"<{whitespace}{variableName}{whitespace}{singletype}{whitespace}\\>";
-					var typedecl = $"{variableName}(({singletype})|({multitype}))*";
-					var pattern = $"{whitespace}public{space}(?<datatype>{typedecl})[ \\t]+(?<columnname>{variableName})[ \\t]+{{{whitespace}get{whitespace}\\;{whitespace}set{whitespace}\\;{whitespace}\\}}";
-					var match2 = Regex.Match(line, pattern);
-
-					if (match2.Success)
-					{
-						//	Okay, we got a column. Get the member name can call it the entityName.
-						var className = match2.Groups["columnname"].Value;
-
-						if (string.IsNullOrWhiteSpace(entityName))
-							entityName = className;
-
-						var entityColumn = new DBColumn()
-						{
-							ColumnName = className,
-							EntityName = entityName,
-							EntityType = match2.Groups["datatype"].Value,
-							IsIdentity = isIdentity,
-							IsPrimaryKey = isPrimaryKey,
-							IsComputed = isAutoField,
-							IsIndexed = isIndexed,
-							IsForeignKey = isForeignKey,
-							IsNullable = isNullable,
-							IsFixed = isFixed,
-							dbDataType = nativeDataType,
-							Length = dataLength,
-							NumericPrecision = precision,
-							NumericScale = scale
-						};
-
-						columns.Add(entityColumn);
-
-						entityName = string.Empty;
-						isPrimaryKey = false;
-						isAutoField = false;
-						isIdentity = false;
-						isIndexed = false;
-						isNullable = false;
-						isForeignKey = false;
-						isFixed = false;
-						nativeDataType = string.Empty;
-						dataLength = 0;
-						precision = 0;
-						scale = 0;
-					}
-				}
-			}
-
-			return columns;
 		}
 
 		public static List<string> LoadPolicies(Solution solution)
@@ -940,10 +1269,10 @@ select a.attname as columnname,
 			var results = new List<string>();
 			var appSettings = FindProjectItem(solution, "appSettings.json");
 
-			var wasOpen = appSettings.IsOpen[Constants.vsViewKindAny];
+			var wasOpen = appSettings.IsOpen[EnvDTE.Constants.vsViewKindAny];
 
 			if (!wasOpen)
-				appSettings.Open(Constants.vsViewKindTextView);
+				appSettings.Open(EnvDTE.Constants.vsViewKindTextView);
 
 			var doc = appSettings.Document;
 			var sel = (TextSelection)doc.Selection;
@@ -978,56 +1307,6 @@ select a.attname as columnname,
 				doc.Close();
 
 			return results;
-		}
-
-		private static string ExtractEnumName(TextSelection sel)
-		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-
-			sel.StartOfDocument();
-			sel.FindText("class");
-			sel.SelectLine();
-
-			var match = Regex.Match(sel.Text, "enum[ \t]+(?<className>[A-Za-z][A-Za-z0-9_]*)");
-
-			if (match.Success)
-				return match.Groups["className"].Value;
-
-			return string.Empty;
-		}
-
-		private static string ExtractClassName(TextSelection sel)
-		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-
-			sel.StartOfDocument();
-			sel.FindText("class");
-			sel.SelectLine();
-
-			var match = Regex.Match(sel.Text, "class[ \t]+(?<className>[A-Za-z][A-Za-z0-9_]*)");
-
-			if (match.Success)
-				return match.Groups["className"].Value;
-
-			return string.Empty;
-		}
-
-		private static string ExtractNamespace(TextSelection sel)
-		{
-			ThreadHelper.ThrowIfNotOnUIThread();
-
-			sel.StartOfDocument();
-			sel.FindText("namespace");
-			sel.SelectLine();
-
-			var match = Regex.Match(sel.Text, "namespace[ \t]+(?<namespaceName>[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*)");
-
-			if (match.Success)
-			{
-				return match.Groups["namespaceName"].Value;
-			}
-
-			return string.Empty;
 		}
 
 		/// <summary>
@@ -1082,6 +1361,22 @@ select a.attname as columnname,
 			modelsFolder = project.ProjectItems.AddFolder("Models");
 			modelsFolder.ProjectItems.AddFolder("EntityModels");
 			return FindProjectFolder(solution, "EntityModels");
+		}
+
+		public static string FindOrchestrationNamespace(Solution solution)
+        {
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			var projectItem = solution.FindProjectItem("ServiceOrchestrator.cs");
+			var code = projectItem.FileCodeModel;
+
+			foreach (CodeElement c in code.CodeElements)
+			{
+				if (c.Kind == vsCMElement.vsCMElementNamespace)
+					return c.Name;
+			}
+
+			return string.Empty;
 		}
 
 		public static ProjectItem FindProjectItem(Solution solution, string itemName)
@@ -1193,11 +1488,7 @@ select a.attname as columnname,
 			//	The first thing we need to do, is we need to load the appSettings.local.json file
 			ProjectItem settingsFile = GetProjectItem(solution, "appSettings.json");
 
-			var wasOpen = settingsFile.IsOpen[Constants.vsViewKindAny];
-
-			if (!wasOpen)
-				settingsFile.Open(Constants.vsViewKindTextView);
-
+			var window = settingsFile.Open(Constants.vsViewKindTextView);
 			Document doc = settingsFile.Document;
 			TextSelection sel = (TextSelection)doc.Selection;
 
@@ -1212,8 +1503,7 @@ select a.attname as columnname,
 					return match.Groups["policy"].Value;
 			}
 
-			if (!wasOpen)
-				doc.Close(vsSaveChanges.vsSaveChangesYes);
+			window.Close();
 
 			return string.Empty;
 		}
@@ -1225,11 +1515,7 @@ select a.attname as columnname,
 			//	The first thing we need to do, is we need to load the appSettings.local.json file
 			ProjectItem settingsFile = GetProjectItem(solution, "appSettings.json");
 
-			var wasOpen = settingsFile.IsOpen[Constants.vsViewKindAny];
-
-			if (!wasOpen)
-				settingsFile.Open(Constants.vsViewKindTextView);
-
+			var window = settingsFile.Open(Constants.vsViewKindTextView);
 			Document doc = settingsFile.Document;
 			TextSelection sel = (TextSelection)doc.Selection;
 			string moniker = string.Empty;
@@ -1245,8 +1531,7 @@ select a.attname as columnname,
 					moniker = match.Groups["moniker"].Value;
 			}
 
-			if (!wasOpen)
-				doc.Close(vsSaveChanges.vsSaveChangesYes);
+			window.Close();
 
 			return moniker;
 		}
@@ -1254,26 +1539,34 @@ select a.attname as columnname,
 		public static string GetConnectionString(Solution solution)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
-			var connectionString = string.Empty;
 
-			//	The first thing we need to do, is we need to load the appSettings.local.json file
-			ProjectItem settingsFile = GetProjectItem(solution, "appsettings.local.json");
+			DTE2 _appObject = Package.GetGlobalService(typeof(DTE)) as DTE2;
+
+			ProjectItem settingsFile = _appObject.Solution.FindProjectItem("appsettings.Local.json");
 
 			var wasOpen = settingsFile.IsOpen[Constants.vsViewKindAny];
-
-			if (!wasOpen)
-				settingsFile.Open(Constants.vsViewKindTextView);
+			Window window = settingsFile.Open(Constants.vsViewKindTextView);
 
 			Document doc = settingsFile.Document;
-			TextSelection sel = (TextSelection)doc.Selection;
+			TextSelection sel = doc.Selection as TextSelection;
+
+			VirtualPoint activePoint = sel.ActivePoint;
+			VirtualPoint anchorPoint = sel.AnchorPoint;
 
 			sel.SelectAll();
 			var settings = JObject.Parse(sel.Text);
 			var connectionStrings = settings["ConnectionStrings"].Value<JObject>();
-			connectionString = connectionStrings["DefaultConnection"].Value<string>();
+			string connectionString = connectionStrings["DefaultConnection"].Value<string>();
 
 			if (!wasOpen)
-				doc.Close(vsSaveChanges.vsSaveChangesYes);
+				window.Close();
+			else
+			{
+				sel.Mode = vsSelectionMode.vsSelectionModeStream;
+				sel.MoveToPoint(anchorPoint);
+				sel.SwapAnchor();
+				sel.MoveToPoint(activePoint);
+			}
 
 			return connectionString;
 		}
@@ -1285,23 +1578,20 @@ select a.attname as columnname,
 			//	The first thing we need to do, is we need to load the appSettings.local.json file
 			ProjectItem settingsFile = GetProjectItem(solution, "appsettings.local.json");
 
-			var wasOpen = settingsFile.IsOpen[Constants.vsViewKindAny];
-
-			if (!wasOpen)
-				settingsFile.Open(Constants.vsViewKindTextView);
-
+			var window = settingsFile.Open(Constants.vsViewKindTextView);
 			Document doc = settingsFile.Document;
 			TextSelection sel = (TextSelection)doc.Selection;
 
 			sel.StartOfDocument();
+
 			if (sel.FindText("Server=developmentdb;Database=master;Trusted_Connection=True;"))
 			{
 				sel.SelectLine();
 				sel.Text = $"\t\t\"DefaultConnection\": \"{connectionString}\"";
+				doc.Save();
 			}
 
-			if (!wasOpen)
-				doc.Close(vsSaveChanges.vsSaveChangesYes);
+			window.Close();
 		}
 
 		public static void RegisterValidationModel(Solution solution, string validationClass, string validationNamespace)
@@ -1309,14 +1599,16 @@ select a.attname as columnname,
 			ThreadHelper.ThrowIfNotOnUIThread();
 
 			ProjectItem serviceConfig = GetProjectItem(solution, "ServicesConfig.cs");
+			var window = serviceConfig.Open(EnvDTE.Constants.vsViewKindTextView);
 
-			var wasOpen = serviceConfig.IsOpen[Constants.vsViewKindAny];
+			bool wasOpen = serviceConfig.IsOpen[Constants.vsViewKindAny];
 
 			if (!wasOpen)
 				serviceConfig.Open(Constants.vsViewKindCode);
 
 			Document doc = serviceConfig.Document;
 			TextSelection sel = (TextSelection)doc.Selection;
+			var activePoint = sel.ActivePoint;
 
 			sel.StartOfDocument();
 			var hasValidationUsing = sel.FindText($"using {validationNamespace}");
@@ -1336,17 +1628,16 @@ select a.attname as columnname,
 			if (!sel.FindText($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>();", (int)vsFindOptions.vsFindOptionsFromStart))
 			{
 				sel.StartOfDocument();
-				sel.FindText("services.InitializeFactories();");
-				sel.LineUp();
-				sel.LineUp();
-
+				sel.FindText("services.AddSingleton<IApiOptions>(ApiOptions)");
+				sel.SelectLine();
+				sel.LineDown();
 				sel.SelectLine();
 
-				if (sel.Text.Contains("services.AddTransientWithParameters<IServiceOrchestrator"))
+				if (sel.Text.Contains("Configure Translation options"))
 				{
+					sel.LineUp();
 					sel.EndOfLine();
-					sel.NewLine();
-					sel.Insert($"//\tRegister Validators");
+					sel.Insert($"\r\n\t\t\t//\tRegister Validators");
 					sel.NewLine();
 					sel.Insert($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>();");
 					sel.NewLine();
@@ -1354,29 +1645,34 @@ select a.attname as columnname,
 				else
 				{
 					sel.EndOfLine();
-					sel.Insert($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>();");
-					sel.NewLine();
+					sel.Insert($"\r\n\t\t\tservices.AddTransientWithParameters<I{validationClass}, {validationClass}>();");
 				}
 			}
 
-			if (!wasOpen)
-				doc.Close(vsSaveChanges.vsSaveChangesYes);
+			doc.Save();
+
+			if ( wasOpen )
+            {
+				sel.MoveToPoint(activePoint);
+			}
+			else
+				window.Close();
 		}
 
-		public static void RegisterComposite(Solution solution, EntityDetailClassFile classFile)
+		public static void RegisterComposite(Solution solution, ClassFile classFile)
 		{
-			Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+			ThreadHelper.ThrowIfNotOnUIThread();
 
-			if (classFile.ElementType == ElementType.Undefined || classFile.ElementType == ElementType.Table)
+			if (classFile.ElementType == ElementType.Undefined || 
+				classFile.ElementType == ElementType.Table ||
+				classFile.ElementType == ElementType.Resource)
 				return;
+
+			var entityFile = (EntityClassFile)classFile;
 
 			ProjectItem serviceConfig = GetProjectItem(solution, "ServicesConfig.cs");
 
-			var wasOpen = serviceConfig.IsOpen[Constants.vsViewKindAny];
-
-			if (!wasOpen)
-				serviceConfig.Open(Constants.vsViewKindCode);
-
+			var window = serviceConfig.Open(EnvDTE.Constants.vsViewKindTextView);
 			Document doc = serviceConfig.Document;
 			TextSelection sel = (TextSelection)doc.Selection;
 
@@ -1384,7 +1680,7 @@ select a.attname as columnname,
 			var hasNpgsql = sel.FindText($"using Npgsql;");
 
 			sel.StartOfDocument();
-			var hasClassNamespace = sel.FindText($"using {classFile.ClassNameSpace};");
+			var hasClassNamespace = sel.FindText($"using {entityFile.ClassNameSpace};");
 
 			if (!hasNpgsql || !hasClassNamespace)
 			{
@@ -1404,11 +1700,11 @@ select a.attname as columnname,
 				if (!hasClassNamespace)
 				{
 					sel.NewLine();
-					sel.Insert($"using {classFile.ClassNameSpace};");
+					sel.Insert($"using {entityFile.ClassNameSpace};");
 				}
 			}
 
-			if (!sel.FindText($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{classFile.ClassName}>(\"{classFile.TableName}\");", (int)vsFindOptions.vsFindOptionsFromStart))
+			if (!sel.FindText($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{entityFile.ClassName}>(\"{entityFile.TableName}\");", (int)vsFindOptions.vsFindOptionsFromStart))
 			{
 				sel.StartOfDocument();
 				sel.FindText("var myAssembly = Assembly.GetExecutingAssembly();");
@@ -1424,24 +1720,24 @@ select a.attname as columnname,
 					sel.Insert($"//\tRegister Postgresql Composits and Enums");
 					sel.NewLine();
 					if (classFile.ElementType == ElementType.Composite)
-						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapComposite<{classFile.ClassName}>(\"{classFile.TableName}\");");
+						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapComposite<{entityFile.ClassName}>(\"{entityFile.TableName}\");");
 					else
-						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{classFile.ClassName}>(\"{classFile.TableName}\");");
+						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{entityFile.ClassName}>(\"{entityFile.TableName}\");");
 					sel.NewLine();
 				}
 				else
 				{
 					sel.EndOfLine();
 					if (classFile.ElementType == ElementType.Composite)
-						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapComposite<{classFile.ClassName}>(\"{classFile.TableName}\");");
+						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapComposite<{entityFile.ClassName}>(\"{entityFile.TableName}\");");
 					else
-						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{classFile.ClassName}>(\"{classFile.TableName}\");");
+						sel.Insert($"NpgsqlConnection.GlobalTypeMapper.MapEnum<{entityFile.ClassName}>(\"{entityFile.TableName}\");");
 					sel.NewLine();
 				}
 			}
 
-			if (!wasOpen)
-				doc.Close(vsSaveChanges.vsSaveChangesYes);
+			doc.Save();
+			window.Close();
 		}
 
 		public static ProjectItem GetProjectItem(Solution solution, string name)
@@ -1483,6 +1779,228 @@ select a.attname as columnname,
 			}
 
 			return null;
+		}
+
+		public static List<ClassMember> LoadEntityClassMembers(EntityClassFile entityClass)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			List<ClassMember> members = new List<ClassMember>();
+			string tableName = string.Empty;
+
+			foreach (var column in entityClass.Columns)
+			{
+				if (column.IsPrimaryKey)
+				{
+					var member = members.FirstOrDefault(m => string.Equals(m.ResourceMemberName, "Href", StringComparison.OrdinalIgnoreCase));
+
+					if (member == null)
+					{
+						member = new ClassMember()
+						{
+							ResourceMemberName = "Href",
+							ResourceMemberType = "Uri",
+							EntityNames = new List<DBColumn>(),
+							ChildMembers = new List<ClassMember>()
+						};
+
+						members.Add(member);
+					}
+
+					var entityColumn = new DBColumn()
+					{
+						EntityName = column.EntityName,
+						EntityType = column.dbDataType,
+						ColumnName = column.ColumnName,
+						DataType = column.DataType,
+						dbDataType = column.dbDataType,
+						ForeignTableName = column.ForeignTableName,
+						IsComputed = column.IsComputed,
+						IsForeignKey = column.IsForeignKey,
+						IsIdentity = column.IsIdentity,
+						IsIndexed = column.IsIndexed,
+						IsNullable = column.IsNullable,
+						IsPrimaryKey = column.IsPrimaryKey,
+						Length = column.Length
+					};
+
+					SetFixed(entityClass.ServerType, column, entityColumn);
+					member.EntityNames.Add(entityColumn);
+				}
+				else if (column.IsForeignKey)
+				{
+					string shortColumnName;
+
+					if (string.Equals(column.ForeignTableName, tableName, StringComparison.OrdinalIgnoreCase))
+					{
+						shortColumnName = CorrectForReservedNames(NormalizeClassName(column.ColumnName));
+						if (column.ColumnName.EndsWith("ID", StringComparison.OrdinalIgnoreCase))
+							shortColumnName = column.ColumnName.Substring(0, column.ColumnName.Length - 2);
+					}
+					else
+						shortColumnName = column.ForeignTableName;
+
+					var normalizer = new NameNormalizer(shortColumnName);
+					var domainName = normalizer.SingleForm;
+
+					var member = members.FirstOrDefault(m => string.Equals(m.ResourceMemberName, domainName, StringComparison.OrdinalIgnoreCase));
+
+					if (member == null)
+					{
+						member = new ClassMember()
+						{
+							ResourceMemberName = domainName,
+							ResourceMemberType = "Uri",
+							EntityNames = new List<DBColumn>(),
+							ChildMembers = new List<ClassMember>()
+						};
+
+						members.Add(member);
+					}
+
+					var entityColumn = new DBColumn()
+					{
+						EntityName = column.EntityName,
+						EntityType = column.dbDataType,
+						ColumnName = column.ColumnName,
+						DataType = column.DataType,
+						dbDataType = column.dbDataType,
+						ForeignTableName = column.ForeignTableName,
+						IsComputed = column.IsComputed,
+						IsForeignKey = column.IsForeignKey,
+						IsIdentity = column.IsIdentity,
+						IsIndexed = column.IsIndexed,
+						IsNullable = column.IsNullable,
+						IsPrimaryKey = column.IsPrimaryKey,
+						Length = column.Length
+					};
+
+					SetFixed(entityClass.ServerType, column, entityColumn);
+					member.EntityNames.Add(entityColumn);
+				}
+				else
+				{
+					var normalizer = new NameNormalizer(column.EntityName);
+					var resourceName = normalizer.PluralForm;
+
+					if (string.Equals(column.EntityName, normalizer.SingleForm, StringComparison.OrdinalIgnoreCase))
+						resourceName = normalizer.SingleForm;
+
+					var member = members.FirstOrDefault(m => string.Equals(m.ResourceMemberName, resourceName, StringComparison.OrdinalIgnoreCase));
+
+					if (member == null)
+					{
+						ClassMember potentialMember = null;
+
+						potentialMember = members.FirstOrDefault(m => resourceName.Length > m.ResourceMemberName.Length && string.Equals(m.ResourceMemberName, resourceName.Substring(0, m.ResourceMemberName.Length), StringComparison.OrdinalIgnoreCase));
+
+						if (potentialMember != null)
+						{
+							var childMember = potentialMember.ChildMembers.FirstOrDefault(c => string.Equals(c.ResourceMemberName, resourceName.Substring(potentialMember.ResourceMemberName.Length), StringComparison.OrdinalIgnoreCase));
+
+							if (childMember != null)
+								member = childMember;
+						}
+					}
+
+					if (member == null)
+					{
+						member = new ClassMember()
+						{
+							ResourceMemberName = resourceName,
+							ResourceMemberType = string.Empty,
+							EntityNames = new List<DBColumn>(),
+							ChildMembers = new List<ClassMember>()
+						};
+
+						members.Add(member);
+					}
+
+					var entityColumn = new DBColumn()
+					{
+						EntityName = column.EntityName,
+						EntityType = column.dbDataType,
+						ColumnName = column.ColumnName,
+						DataType = column.DataType,
+						dbDataType = column.dbDataType,
+						ForeignTableName = column.ForeignTableName,
+						IsComputed = column.IsComputed,
+						IsForeignKey = column.IsForeignKey,
+						IsIdentity = column.IsIdentity,
+						IsIndexed = column.IsIndexed,
+						IsNullable = column.IsNullable,
+						IsPrimaryKey = column.IsPrimaryKey,
+						Length = column.Length
+					};
+
+					SetFixed(entityClass.ServerType, column, entityColumn);
+					member.EntityNames.Add(entityColumn);
+					member.ResourceMemberName = entityColumn.ColumnName;
+				}
+			}
+
+			return members;
+		}
+
+		private static void SetFixed(DBServerType serverType, DBColumn column, DBColumn entityColumn)
+		{
+			if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NVarChar)
+			{
+				entityColumn.IsFixed = false;
+			}
+			else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Binary) ||
+					  (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Binary))
+			{
+				entityColumn.IsFixed = true;
+			}
+			else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Char) ||
+					  (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Char))
+			{
+				entityColumn.IsFixed = true;
+			}
+			else if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NChar)
+			{
+				entityColumn.IsFixed = true;
+			}
+			else if (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.String)
+			{
+				if (column.Length > 1)
+					entityColumn.IsFixed = true;
+			}
+			else if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Image)
+			{
+				entityColumn.IsFixed = false;
+				entityColumn.Length = -1;
+			}
+			else if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.NText)
+			{
+				entityColumn.IsFixed = true;
+			}
+			else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Text) ||
+					 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Text) ||
+					 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.Text) ||
+					 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.MediumText) ||
+					 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.LongText) ||
+					 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.TinyText))
+			{
+				entityColumn.IsFixed = false;
+			}
+			else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.VarBinary) ||
+					 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Bytea) ||
+					 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarBinary))
+			{
+				entityColumn.IsFixed = false;
+			}
+			else if ((serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.VarChar) ||
+					 (serverType == DBServerType.POSTGRESQL && (NpgsqlDbType)column.DataType == NpgsqlDbType.Varchar) ||
+					 (serverType == DBServerType.MYSQL && (MySqlDbType)column.DataType == MySqlDbType.VarChar))
+			{
+				entityColumn.IsFixed = false;
+			}
+			else if (serverType == DBServerType.SQLSERVER && (SqlDbType)column.DataType == SqlDbType.Timestamp)
+			{
+				entityColumn.IsFixed = true;
+			}
 		}
 		#endregion
 	}

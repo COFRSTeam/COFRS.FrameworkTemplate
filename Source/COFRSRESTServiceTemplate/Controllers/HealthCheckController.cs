@@ -15,14 +15,14 @@ namespace $safeprojectname$.Controllers
 	///	Heartbeat controller
 	///	</summary>
 	[ApiVersion("1.0")]
-	public class HeartbeatController : COFRSController
+	public class HealthCheckController : COFRSController
 	{
-		private readonly ILogger<HeartbeatController> Logger;
+		private readonly ILogger<HealthCheckController> Logger;
 
 		/// <summary>
 		/// Constructor
 		/// </summary>
-		public HeartbeatController(ILogger<HeartbeatController> logger)
+		public HealthCheckController(ILogger<HealthCheckController> logger)
 		{
 			Logger = logger;
 		}
@@ -33,13 +33,13 @@ namespace $safeprojectname$.Controllers
 		///	<remarks>This method is used to supply "I am alive" messages to monitoring systems.</remarks>
 		[HttpGet]
 		[MapToApiVersion("1.0")]
-		[Route("heartbeat")]
+		[Route("health_check")]
 		[SwaggerResponse(HttpStatusCode.OK, Type = typeof(Heartbeat))]
 		[SwaggerResponseExample(HttpStatusCode.OK, typeof(HeartbeatExample))]
 		public IHttpActionResult Get()
 		{
 			Logger.LogInformation($"{Request.Method} {Request.RequestUri.PathAndQuery}");
-			return Ok(new Heartbeat() { Message = "$safeprojectname$ is running" });
+			return Ok(new HealthCheck() { Message = "$safeprojectname$ is running" });
 		}
 	}
 }
