@@ -58,7 +58,7 @@ namespace COFRS.Template.Common.Wizards
 				}
 
 				//	Show the user that we are busy doing things...
-				var parent = new WindowClass((IntPtr) _appObject.ActiveWindow.HWnd);
+				var parent = new WindowClass((IntPtr)_appObject.ActiveWindow.HWnd);
 
 				progressDialog = new ProgressDialog("Loading classes and preparing project...");
 				progressDialog.Show(parent);
@@ -67,14 +67,30 @@ namespace COFRS.Template.Common.Wizards
 
 				_appObject.StatusBar.Animate(true, vsStatusAnimation.vsStatusAnimationBuild);
 
+
+				var entityModelsFolder = StandardUtils.FindEntityModelsFolder(_appObject.Solution);
+				HandleMessages();
+
+				var connectionString = StandardUtils.GetConnectionString(_appObject.Solution);
+				HandleMessages();
+
+				var programfiles = StandardUtils.LoadProgramDetail(_appObject.Solution);
+				HandleMessages();
+
+				var classList = StandardUtils.LoadClassList(programfiles);
+				HandleMessages();
+
+				var policies = StandardUtils.LoadPolicies(_appObject.Solution);
+				HandleMessages();
+
 				//	Get folders and namespaces
 				var rootNamespace = replacementsDictionary["$rootnamespace$"];
 				replacementsDictionary["$entitynamespace$"] = $"{rootNamespace}.Models.EntityModels";
 				replacementsDictionary["$resourcenamespace$"] = $"{rootNamespace}.Models.ResourceModels";
+				replacementsDictionary["$mappingnamespace$"] = $"{rootNamespace}.Mapping";
 				replacementsDictionary["$orchestrationnamespace$"] = $"{rootNamespace}.Orchestration";
 				replacementsDictionary["$validatornamespace$"] = $"{rootNamespace}.Validation";
 				replacementsDictionary["$validationnamespace$"] = $"{rootNamespace}.Validation";
-				replacementsDictionary["$singleexamplenamespace$"] = $"{rootNamespace}.Models.SwaggerExamples";
 				
 				var candidateName = replacementsDictionary["$safeitemname$"];
 
@@ -91,17 +107,16 @@ namespace COFRS.Template.Common.Wizards
 					PluralResourceName = resourceName.PluralForm,
 					RootNamespace = rootNamespace,
 					ReplacementsDictionary = replacementsDictionary,
-					ClassList = StandardUtils.LoadEntityDetailClassList(_appObject.Solution),
-					EntityModelsFolder = StandardUtils.FindEntityModelsFolder(_appObject.Solution),
-					Policies = StandardUtils.LoadPolicies(_appObject.Solution),
-					DefaultConnectionString = StandardUtils.GetConnectionString(_appObject.Solution)
+					ClassList = classList,
+					EntityModelsFolder = entityModelsFolder,
+					Policies = policies,
+					DefaultConnectionString = connectionString
 				};
 
 				HandleMessages();
 
 				progressDialog.Close();
 				_appObject.StatusBar.Animate(false, vsStatusAnimation.vsStatusAnimationBuild);
-
 
 				if (form.ShowDialog() == DialogResult.OK)
 				{
@@ -113,22 +128,17 @@ namespace COFRS.Template.Common.Wizards
 					HandleMessages();
 
 					//	Replace the ConnectionString
-					var connectionString = form.ConnectionString;
-					StandardUtils.ReplaceConnectionString(_appObject.Solution, connectionString);
+					StandardUtils.ReplaceConnectionString(_appObject.Solution, form.ConnectionString);
 					HandleMessages();
 
 					var entityClassName = $"E{form.SingularResourceName}";
 					var resourceClassName = form.SingularResourceName;
 					var mappingClassName = $"{form.PluralResourceName}Profile";
-					var exampleClassName = $"{form.PluralResourceName}Example";
-					var exampleCollectionClassName = $"Collection{form.PluralResourceName}Example";
 					var validationClassName = $"{form.PluralResourceName}Validator";
 					var controllerClassName = $"{form.PluralResourceName}Controller";
 
 					replacementsDictionary["$entityClass$"] = entityClassName;
 					replacementsDictionary["$resourceClass$"] = resourceClassName;
-					replacementsDictionary["$swaggerClass$"] = exampleClassName;
-					replacementsDictionary["$swaggerCollectionClass$"] = exampleCollectionClassName;
 					replacementsDictionary["$mapClass$"] = mappingClassName;
 					replacementsDictionary["$validatorClass$"] = validationClassName;
 					replacementsDictionary["$controllerClass$"] = controllerClassName;
@@ -141,79 +151,77 @@ namespace COFRS.Template.Common.Wizards
 					replacementsDictionary.Add("$securitymodel$", string.IsNullOrWhiteSpace(policy) ? "none" : "OAuth");
 					replacementsDictionary.Add("$policy$", string.IsNullOrWhiteSpace(policy) ? "none" : "using");
 
-					List<EntityDetailClassFile> composits = form.UndefinedClassList;
+					List<ClassFile> composits = form.UndefinedClassList;
 
 					var emitter = new Emitter();
 					var standardEmitter = new StandardEmitter();
 
 					if (form.ServerType == DBServerType.POSTGRESQL)
 					{
-						standardEmitter.GenerateComposites(composits, connectionString, replacementsDictionary, form.ClassList);
+						//	Generate any undefined composits before we construct our entity model (because, 
+						//	the entity model depends upon them)
+
+						var definedList = new List<ClassFile>();
+						definedList.AddRange(classList);
+						definedList.AddRange(composits);
+
+						standardEmitter.GenerateComposites(composits,
+							                               form.ConnectionString, 
+														   replacementsDictionary, 
+														   definedList,
+														   entityModelsFolder.Folder);
 						HandleMessages();
 
 						foreach (var composite in composits)
 						{
+							//	TO DO: This is incorret - the item could reside in another project
 							var pj = (VSProject)_appObject.Solution.Projects.Item(1).Object;
 							pj.Project.ProjectItems.AddFromFile(composite.FileName);
 
-							StandardUtils.RegisterComposite(_appObject.Solution, composite);
+							StandardUtils.RegisterComposite(_appObject.Solution, (EntityClassFile)composite);
 						}
+
+						classList.AddRange(composits);
 					}
 
 					//	Emit Entity Model
-					var entityModel = standardEmitter.EmitEntityModel(form.ServerType, form.DatabaseTable, entityClassName, form.DatabaseColumns, replacementsDictionary, connectionString);
+					var entityModel = standardEmitter.EmitEntityModel(form.ServerType, 
+						                                              form.DatabaseTable, 
+																	  entityClassName,
+																	  classList, 
+																	  form.DatabaseColumns, 
+																	  replacementsDictionary, 
+																	  out EntityClassFile entityClassFile);
+
+					classList.Add(entityClassFile);
+
 					replacementsDictionary.Add("$entityModel$", entityModel);
 					HandleMessages();
 
-					List<ClassMember> classMembers = LoadClassMembers(form.ServerType, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary["$solutiondirectory$"], connectionString);
-					List<EntityDetailClassFile> ClassList = null;
-
-					if (form.ServerType == DBServerType.POSTGRESQL)
-					{
-						ClassList = Utilities.LoadDetailEntityClassList(replacementsDictionary["$solutiondirectory$"], connectionString);
-						HandleMessages();
-					}
+					var classMembers = StandardUtils.LoadEntityClassMembers(entityClassFile);
 
 					//	Emit Resource Model
-					var resourceModel = standardEmitter.EmitResourceModel(form.ServerType, classMembers, resourceClassName, entityClassName, form.DatabaseTable, form.DatabaseColumns, replacementsDictionary, connectionString);
+					var resourceModel = standardEmitter.EmitResourceModel(entityClassFile, 
+						                                                  classList, 
+																		  classMembers, 
+																		  resourceClassName, 
+																		  replacementsDictionary,
+																		  out ResourceClassFile resourceClassFile);
 					replacementsDictionary.Add("$resourceModel$", resourceModel);
 					HandleMessages();
 
 					//	Emit Mapping Model
-					var mappingModel = emitter.EmitMappingModel(form.ServerType, classMembers, resourceClassName, entityClassName, mappingClassName, form.DatabaseColumns, replacementsDictionary);
+					var mappingModel = standardEmitter.EmitMappingModel(entityClassFile,
+									 resourceClassFile,
+									 mappingClassName,
+									 replacementsDictionary);
+
 					replacementsDictionary.Add("$mappingModel$", mappingModel);
 					HandleMessages();
 
-					//	Emit Example Model
-					var exampleModel = emitter.EmitExampleModel(
-											form.ServerType,
-											form.DatabaseTable.Schema,
-											connectionString,
-											classMembers,
-											entityClassName,
-											resourceClassName,
-											exampleClassName,
-											form.DatabaseColumns, form.Examples, replacementsDictionary,
-											ClassList);
-					replacementsDictionary.Add("$exampleModel$", exampleModel);
-					HandleMessages();
-
-
-					var exampleCollectionModel = emitter.EmitExampleCollectionModel(
-						form.ServerType,
-						form.DatabaseTable.Schema,
-						connectionString,
-						classMembers,
-						entityClassName,
-						resourceClassName,
-						exampleCollectionClassName,
-						form.DatabaseColumns, form.Examples, replacementsDictionary,
-						ClassList);
-					replacementsDictionary.Add("$exampleCollectionModel$", exampleCollectionModel);
-					HandleMessages();
 
 					//	Emit Validation Model
-					var validationModel = emitter.EmitValidationModel(resourceClassName, validationClassName);
+					var validationModel = standardEmitter.EmitValidationModel(resourceClassName, validationClassName, out string validatorInterface);
 					replacementsDictionary.Add("$validationModel$", validationModel);
 					HandleMessages();
 
@@ -224,15 +232,13 @@ namespace COFRS.Template.Common.Wizards
 													  replacementsDictionary["$validatornamespace$"]);
 
 					//	Emit Controller
-					var controllerModel = emitter.EmitController(form.ServerType, classMembers,
-								   true,
-								   moniker,
-								   resourceClassName,
-								   controllerClassName,
-								   validationClassName,
-								   exampleClassName,
-								   exampleCollectionClassName,
-								   policy);
+					var controllerModel = emitter.EmitController(entityClassFile,
+													   resourceClassFile,
+	                                                   moniker,
+	                                                   replacementsDictionary["$safeitemname$"],
+	                                                   validatorInterface,
+	                                                   policy);
+
 					replacementsDictionary.Add("$controllerModel$", controllerModel);
 					HandleMessages();
 
@@ -263,87 +269,11 @@ namespace COFRS.Template.Common.Wizards
 			return Proceed;
 		}
 
-		private List<ClassMember> LoadClassMembers(DBServerType serverType, DBTable table, List<DBColumn> columns, string solutionFolder, string connectionString)
-		{
-			var members = new List<ClassMember>();
-
-			var member = new ClassMember()
-			{
-				ResourceMemberName = "Href",
-				ResourceMemberType = string.Empty,
-				EntityNames = new List<DBColumn>(),
-				ChildMembers = new List<ClassMember>()
-			};
-
-			foreach (var column in columns)
-			{
-				if (column.IsPrimaryKey)
-					member.EntityNames.Add(column);
-			}
-
-			members.Add(member);
-
-			foreach (var column in columns)
-			{
-				if (serverType == DBServerType.POSTGRESQL)
-					column.EntityType = DBHelper.GetPostgresDataType(table.Schema, column, connectionString, solutionFolder);
-				else if (serverType == DBServerType.MYSQL)
-					column.EntityType = DBHelper.GetMySqlDataType(column);
-				else if (serverType == DBServerType.SQLSERVER)
-					column.EntityType = DBHelper.GetSQLServerDataType(column);
-
-				if (!column.IsPrimaryKey)
-				{
-					if (!column.IsForeignKey)
-					{
-						var childMember = new ClassMember()
-						{
-							ResourceMemberName = column.ColumnName,
-							ResourceMemberType = string.Empty,
-							EntityNames = new List<DBColumn>() { column },
-							ChildMembers = new List<ClassMember>()
-						};
-
-						members.Add(childMember);
-					}
-					else
-					{
-						string shortColumnName;
-
-						if (string.Equals(column.ForeignTableName, table.Table, StringComparison.OrdinalIgnoreCase))
-						{
-							shortColumnName = column.ColumnName;
-							if (column.ColumnName.EndsWith("ID", StringComparison.OrdinalIgnoreCase))
-								shortColumnName = column.ColumnName.Substring(0, column.ColumnName.Length - 2);
-						}
-						else
-							shortColumnName = column.ForeignTableName;
-
-						var normalizer = new NameNormalizer(shortColumnName);
-
-						var childMember = new ClassMember()
-						{
-							ResourceMemberName = normalizer.SingleForm,
-							ResourceMemberType = string.Empty,
-							EntityNames = new List<DBColumn>() { column },
-							ChildMembers = new List<ClassMember>()
-						};
-
-						members.Add(childMember);
-					}
-				}
-			}
-
-			return members;
-		}
-
 		private void HandleMessages()
         {
-			WinNative.NativeMessage msg;
-
-			while ( WinNative.PeekMessage(out msg, IntPtr.Zero, 0, (uint) 0xFFFFFFFF, 1) != 0)
+            while (WinNative.PeekMessage(out WinNative.NativeMessage msg, IntPtr.Zero, 0, (uint)0xFFFFFFFF, 1) != 0)
             {
-				WinNative.SendMessage(msg.handle, msg.msg, msg.wParam, msg.lParam);
+                WinNative.SendMessage(msg.handle, msg.msg, msg.wParam, msg.lParam);
             }
         }
 	}

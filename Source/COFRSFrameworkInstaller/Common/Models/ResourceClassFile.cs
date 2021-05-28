@@ -1,11 +1,12 @@
-﻿namespace COFRS.Template.Common.Models
+﻿using System.Collections.Generic;
+
+namespace COFRS.Template.Common.Models
 {
-    public class ResourceClassFile
+    public class ResourceClassFile : ClassFile
 	{
-		public string ClassName { get; set; }
-		public string FileName { get; set; }
 		public string EntityClass { get; set; }
-		public string ClassNamespace { get; set; }
+
+		public List<ClassMember> Members { get; set; }
 
 		public override string ToString()
 		{

@@ -53,12 +53,16 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Common\Extensions\CodeElementsExtensions.cs" />
     <Compile Include="Common\Forms\AddConnection.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Common\Forms\AddConnection.Designer.cs">
       <DependentUpon>AddConnection.cs</DependentUpon>
     </Compile>
+    <Compile Include="Common\Models\ClassFile.cs" />
+    <Compile Include="Common\Models\MemberInfo.cs" />
+    <Compile Include="Common\Models\ProjectItemInfo.cs" />
     <Compile Include="Common\Models\Snipit.cs" />
     <Compile Include="Common\Models\SnipitType.cs" />
     <Compile Include="Common\ServiceUtilities\StandardUtils.cs" />
@@ -68,7 +72,7 @@
     <Compile Include="Common\Models\ClassMember.cs" />
     <Compile Include="Common\Models\ElementType.cs" />
     <Compile Include="Emitter.cs" />
-    <Compile Include="Common\Models\EntityDetailClassFile.cs" />
+    <Compile Include="Common\Models\EntityClassFile.cs" />
     <Compile Include="Common\Forms\ProgressDialog.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -104,7 +108,6 @@
       <DependentUpon>UserInputEntity.cs</DependentUpon>
     </Compile>
     <Compile Include="Common\Wizards\EntityWizard.cs" />
-    <Compile Include="Common\Wizards\ExampleWizard.cs" />
     <Compile Include="Common\Forms\UserInputGeneral.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -134,7 +137,6 @@
     <Compile Include="Common\Forms\UserInputValidation.Designer.cs">
       <DependentUpon>UserInputValidation.cs</DependentUpon>
     </Compile>
-    <Compile Include="Utilities.cs" />
     <Compile Include="Common\Wizards\ValidationWizard.cs" />
     <Compile Include="Common\ServiceUtilities\WindowClass.cs" />
     <Compile Include="Common\ServiceUtilities\WinNative.cs" />

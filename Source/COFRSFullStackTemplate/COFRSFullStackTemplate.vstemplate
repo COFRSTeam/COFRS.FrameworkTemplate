@@ -16,15 +16,15 @@
         <Assembly>System</Assembly>
       </Reference>
     </References>
+    <Folder Name="Mapping">
+      <ProjectItem ReplaceParameters="true" TargetFileName="$mapClass$.cs">Map.cs</ProjectItem>
+    </Folder>
     <Folder Name="Models">
       <Folder Name="EntityModels">
         <ProjectItem ReplaceParameters="true" TargetFileName="$entityClass$.cs">Emodel.cs</ProjectItem>
       </Folder>
       <Folder Name="ResourceModels">
         <ProjectItem ReplaceParameters="true" TargetFileName="$resourceClass$.cs">Model.cs</ProjectItem>
-      </Folder>
-      <Folder Name="Mapping">
-        <ProjectItem ReplaceParameters="true" TargetFileName="$mapClass$.cs">Map.cs</ProjectItem>
       </Folder>
       <Folder Name="SwaggerExamples">
         <ProjectItem ReplaceParameters="true" TargetFileName="$swaggerClass$.cs">Example.cs</ProjectItem>

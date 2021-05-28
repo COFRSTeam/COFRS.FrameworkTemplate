@@ -16,6 +16,212 @@ namespace COFRS.Template.Common.ServiceUtilities
 	{
 		public static MemoryCache _cache = new MemoryCache("ClassCache");
 
+		public static string GetPostgresqlExampleValue(DBColumn column)
+        {
+			if ( string.Equals(column.dbDataType, "bpchar", StringComparison.OrdinalIgnoreCase))
+            {
+				if (column.Length == 1)
+					return "a";
+				else
+					return "string";
+            }
+			else if (string.Equals(column.dbDataType, "char", StringComparison.OrdinalIgnoreCase))
+			{
+				if (column.Length == 1)
+					return "a";
+				else
+					return "string";
+			}
+			else if (string.Equals(column.dbDataType, "int2", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "int4", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "int8", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "oid", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "xid", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "cid", StringComparison.OrdinalIgnoreCase))
+			{
+				return "123";
+			}
+			else if (string.Equals(column.dbDataType, "text", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "varchar", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "name", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "citext", StringComparison.OrdinalIgnoreCase))
+			{
+				return "string";
+			}
+			else if (string.Equals(column.dbDataType, "bool", StringComparison.OrdinalIgnoreCase))
+			{
+				return "true";
+			}
+			else if (string.Equals(column.dbDataType, "date", StringComparison.OrdinalIgnoreCase))
+			{
+				return DateTime.Now.ToString("yyyy-MM-dd");
+			}
+			else if (string.Equals(column.dbDataType, "timestamp", StringComparison.OrdinalIgnoreCase))
+			{
+				return DateTime.Now.ToString("s");
+			}
+			else if (string.Equals(column.dbDataType, "timestamptz", StringComparison.OrdinalIgnoreCase))
+			{
+				return DateTimeOffset.Now.ToString("yyyy-MM-ddThh:mm:ss.fffffzzz");
+			}
+			else if (string.Equals(column.dbDataType, "float4", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "float8", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "numeric", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "money", StringComparison.OrdinalIgnoreCase))
+			{
+				return "123.45";
+			}
+			else if (string.Equals(column.dbDataType, "bytea", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "varbit", StringComparison.OrdinalIgnoreCase))
+			{
+				return "VGhpcyBpcyBhbiBleGFtcGxlIHZhbHVl";
+			}
+			else if (string.Equals(column.dbDataType, "uuid", StringComparison.OrdinalIgnoreCase))
+			{
+				return Guid.NewGuid().ToString();
+			}
+			else if (string.Equals(column.dbDataType, "inet", StringComparison.OrdinalIgnoreCase))
+			{
+				return "184.241.2.54";
+			}
+
+			return "example";
+		}
+
+		public static string GetMySqlExampleValue(DBColumn column)
+		{
+			if (string.Equals(column.dbDataType, "text", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(column.dbDataType, "varchar", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(column.dbDataType, "sysname", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(column.dbDataType, "nvarchar", StringComparison.OrdinalIgnoreCase))
+			{
+				return "string";
+			}
+			if (string.Equals(column.dbDataType, "year", StringComparison.OrdinalIgnoreCase))
+			{
+				return DateTime.Now.ToString("yyyy");
+			}
+			else if (string.Equals(column.dbDataType, "char", StringComparison.OrdinalIgnoreCase) ||
+			         string.Equals(column.dbDataType, "nchar", StringComparison.OrdinalIgnoreCase))
+					{
+						if (column.Length == 1)
+					return "a";
+				else
+					return "string";
+			}
+			else if (string.Equals(column.dbDataType, "tinyint", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "tinyint(1)", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "tinyint unsigned", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "int", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "int unsigned", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "smallint", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "smallint unsigned", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "mediumint", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "mediumint unsigned", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "bigint", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "bigint unsigned", StringComparison.OrdinalIgnoreCase))
+			{
+				return "123";
+			}
+			else if (string.Equals(column.dbDataType, "bit", StringComparison.OrdinalIgnoreCase))
+			{
+				return "true";
+			}
+			else if (string.Equals(column.dbDataType, "date", StringComparison.OrdinalIgnoreCase))
+			{
+				return DateTime.Now.ToString("yyyy-MM-dd");
+			}
+			else if (string.Equals(column.dbDataType, "datetime", StringComparison.OrdinalIgnoreCase))
+			{
+				return DateTimeOffset.Now.ToString("yyyy-MM-ddThh:mm:ss.fffffzzz");
+			}
+			else if (string.Equals(column.dbDataType, "decimal", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "double", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "float", StringComparison.OrdinalIgnoreCase))
+			{
+				return "123.45";
+			}
+			else if (string.Equals(column.dbDataType, "binary", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "varbinary", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "blob", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "tinyblob", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "mediumblob", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "longblob", StringComparison.OrdinalIgnoreCase))
+			{
+				return "VGhpcyBpcyBhbiBleGFtcGxlIHZhbHVl";
+			}
+			else if (string.Equals(column.dbDataType, "uuid", StringComparison.OrdinalIgnoreCase))
+			{
+				return Guid.NewGuid().ToString();
+			}
+			else if (string.Equals(column.dbDataType, "inet", StringComparison.OrdinalIgnoreCase))
+			{
+				return "184.241.2.54";
+			}
+
+			return "example";
+		}
+		public static string GetSqlServerExampleValue(DBColumn column)
+		{
+			if (string.Equals(column.dbDataType, "text", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(column.dbDataType, "ntext", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(column.dbDataType, "varchar", StringComparison.OrdinalIgnoreCase) ||
+				string.Equals(column.dbDataType, "nvarchar", StringComparison.OrdinalIgnoreCase) )
+			{
+				return "string";
+			}
+			else if (string.Equals(column.dbDataType, "char", StringComparison.OrdinalIgnoreCase))
+			{
+				if (column.Length == 1)
+					return "a";
+				else
+					return "string";
+			}
+			else if (string.Equals(column.dbDataType, "tinyint", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "smallint)", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "int)", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "bigint", StringComparison.OrdinalIgnoreCase))
+			{
+				return "123";
+			}
+			else if (string.Equals(column.dbDataType, "bit", StringComparison.OrdinalIgnoreCase))
+			{
+				return "true";
+			}
+			else if (string.Equals(column.dbDataType, "date", StringComparison.OrdinalIgnoreCase))
+			{
+				return DateTime.Now.ToString("yyyy-MM-dd");
+			}
+			else if (string.Equals(column.dbDataType, "datetime", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "datetime2", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "smalldatetime", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "datetimeoffset", StringComparison.OrdinalIgnoreCase))
+			{
+				return DateTimeOffset.Now.ToString("yyyy-MM-ddThh:mm:ss.fffffzzz");
+			}
+			else if (string.Equals(column.dbDataType, "real", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "money", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "double", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "decimal", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "numeric", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "smallmoney", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "float", StringComparison.OrdinalIgnoreCase))
+			{
+				return "123.45";
+			}
+			else if (string.Equals(column.dbDataType, "binary", StringComparison.OrdinalIgnoreCase) ||
+					 string.Equals(column.dbDataType, "varbinary", StringComparison.OrdinalIgnoreCase))
+			{
+				return "VGhpcyBpcyBhbiBleGFtcGxlIHZhbHVl";
+			}
+			else if (string.Equals(column.dbDataType, "uniqueidentifier", StringComparison.OrdinalIgnoreCase))
+			{
+				return Guid.NewGuid().ToString();
+			}
+
+			return "example";
+		}
+
 
 		/// <summary>
 		/// Convers a Postgresql data type into its corresponding standard SQL data type
@@ -193,7 +399,7 @@ namespace COFRS.Template.Common.ServiceUtilities
 			else if (string.Equals(dataType, "_macaddr8", StringComparison.OrdinalIgnoreCase))
 				return NpgsqlDbType.Array | NpgsqlDbType.MacAddr8;
 
-			throw new InvalidCastException($"Unrecognized data type: {dataType}");
+			return NpgsqlDbType.Unknown;
 		}
 
 		public static MySqlDbType ConvertMySqlDataType(string dataType)
@@ -648,7 +854,7 @@ namespace COFRS.Template.Common.ServiceUtilities
 			return "Unknown";
 		}
 
-		public static string GetPostgresDataType(string schema, DBColumn column, string connectionString, string SolutionFolder)
+		public static string GetPostgresDataType(DBColumn column, List<ClassFile> classList)
 		{
 			switch ((NpgsqlDbType)column.DataType)
 			{
@@ -969,33 +1175,15 @@ namespace COFRS.Template.Common.ServiceUtilities
 					return "IEnumerable<PhysicalAddress>";
 
 				case NpgsqlDbType.Unknown:
-					{
-						if (string.IsNullOrWhiteSpace(connectionString))
-						{
-							return StandardUtils.NormalizeClassName(column.dbDataType);
-						}
-						else
-						{
-							var etype = GetElementType(schema, column.dbDataType, null, connectionString);
+                    {
+						var entity = classList.FirstOrDefault(e =>
+							e.GetType() == typeof(EntityClassFile) &&
+							string.Equals(((EntityClassFile)e).TableName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
 
-							if (etype == ElementType.Enum)
-							{
-								var entityFile = SearchForEnum(schema, column.dbDataType, SolutionFolder);
-
-								if (entityFile != null)
-									return entityFile.ClassName;
-							}
-
-							else if (etype == ElementType.Composite)
-							{
-								var entityFile = SearchForComposite(schema, column.dbDataType, SolutionFolder);
-
-								if (entityFile != null)
-									return entityFile.ClassName;
-							}
-						}
-					}
-					break;
+						if (entity != null)
+							return entity.ClassName;
+                    }					
+					return StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(column.dbDataType));
 			}
 
 			return "Unknown";
@@ -1145,7 +1333,7 @@ namespace COFRS.Template.Common.ServiceUtilities
 			return "Unknown";
 		}
 
-		public static string GetPostgresqlResourceDataType(DBColumn column, string connectionString, string schema, string SolutionFolder)
+		public static string GetPostgresqlResourceDataType(DBColumn column, List<ClassFile> classList)
 		{
 			switch ((NpgsqlDbType)column.DataType)
 			{
@@ -1468,23 +1656,14 @@ namespace COFRS.Template.Common.ServiceUtilities
 
 				case NpgsqlDbType.Unknown:
 					{
-						var etype = GetElementType(schema, column.dbDataType, null, connectionString);
-
-						if (etype == ElementType.Enum)
+						var entity = classList.FirstOrDefault(e =>
 						{
-							var entityFile = SearchForEnum(schema, column.dbDataType, SolutionFolder);
+							return e.GetType() == typeof(EntityClassFile) &&
+							string.Equals(((EntityClassFile)e).TableName, column.dbDataType, StringComparison.OrdinalIgnoreCase);
+						});
 
-							if (entityFile != null)
-								return entityFile.ClassName;
-						}
-
-						else if (etype == ElementType.Composite)
-						{
-							var entityFile = SearchForComposite(schema, column.dbDataType, SolutionFolder);
-
-							if (entityFile != null)
-								return entityFile.ClassName;
-						}
+						if (entity != null)
+							return entity.ClassName;
 					}
 					break;
 			}
@@ -1748,11 +1927,14 @@ namespace COFRS.Template.Common.ServiceUtilities
 		}
 
 		#region Postgrsql Helper Functions
-		public static ElementType GetElementType(string schema, string datatype, List<EntityDetailClassFile> ClassList, string connectionString)
+		public static ElementType GetElementType(string schema, string datatype, List<ClassFile> ClassList, string connectionString)
 		{
 			if (ClassList != null)
 			{
-				var classFile = ClassList.FirstOrDefault(c => string.Equals(c.SchemaName, schema, StringComparison.OrdinalIgnoreCase) && string.Equals(c.TableName, datatype, StringComparison.OrdinalIgnoreCase));
+				var classFile = ClassList.FirstOrDefault(c =>
+					c.GetType() == typeof(EntityClassFile) &&
+					string.Equals(((EntityClassFile)c).SchemaName, schema, StringComparison.OrdinalIgnoreCase) && 
+					string.Equals(((EntityClassFile)c).TableName, datatype, StringComparison.OrdinalIgnoreCase));
 
 				if (classFile != null)
 					return classFile.ElementType;
@@ -1794,163 +1976,6 @@ select t.typtype
 			}
 
 			return ElementType.Table;
-		}
-
-		public static EntityDetailClassFile SearchForEnum(string schema, string datatype, string folder)
-		{
-			var className = string.Empty;
-			var entityName = string.Empty;
-			var schemaName = string.Empty;
-			var theNamespace = string.Empty;
-			EntityDetailClassFile entityClassFile = (EntityDetailClassFile) _cache.Get($"{schema}.{datatype}");
-
-			if ( entityClassFile != null )
-				return entityClassFile;
-
-			foreach (var file in Directory.GetFiles(folder))
-			{
-				var content = File.ReadAllText(file);
-
-				if (content.Contains("PgEnum"))
-				{
-					var lines = content.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-
-					foreach (var line in lines)
-					{
-						var match = Regex.Match(line, "enum[ \t]+(?<classname>[a-zA-Z_][a-zA-Z0-9_]+)");
-
-						if (match.Success)
-						{
-							className = match.Groups["classname"].Value;
-
-							if (!string.IsNullOrWhiteSpace(entityName) &&
-								!string.IsNullOrWhiteSpace(schemaName) &&
-								string.Equals(entityName, datatype, StringComparison.OrdinalIgnoreCase))
-							{
-								entityClassFile = new EntityDetailClassFile()
-								{
-									ClassName = className,
-									FileName = file,
-									TableName = entityName,
-									SchemaName = schemaName,
-									ClassNameSpace = theNamespace
-								};
-
-
-								_cache.Add($"{schemaName}.{entityName}", entityClassFile, new CacheItemPolicy 
-									{
-										AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(10)
-									});
-
-								return entityClassFile;
-							}
-						}
-
-						match = Regex.Match(line, "\\[PgEnum[ \t]*\\([ \t]*\"(?<enumName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\)[ \t]*\\]");
-
-						if (match.Success)
-						{
-							entityName = match.Groups["enumName"].Value;
-							schemaName = match.Groups["schemaName"].Value;
-						}
-
-						match = Regex.Match(line, "namespace[ \t]+(?<namespace>[a-zA-Z_][a-zA-Z0-9_\\.]+)");
-
-						if (match.Success)
-						{
-							theNamespace = match.Groups["namespace"].Value;
-						}
-					}
-				}
-			}
-
-			foreach (var subfolder in Directory.GetDirectories(folder))
-			{
-				var theFile = SearchForEnum(schema, datatype, subfolder);
-
-				if (theFile != null)
-					return theFile;
-			}
-
-			return null;
-		}
-
-		public static EntityDetailClassFile SearchForComposite(string schema, string datatype, string folder)
-		{
-			var className = string.Empty;
-			var entityName = string.Empty;
-			var schemaName = string.Empty;
-			var theNamespace = string.Empty;
-			EntityDetailClassFile entityClassFile = (EntityDetailClassFile)_cache.Get($"{schema}.{datatype}");
-
-			if (entityClassFile != null)
-				return entityClassFile;
-
-			foreach (var file in Directory.GetFiles(folder))
-			{
-				var content = File.ReadAllText(file);
-
-				if (content.Contains("PgComposite"))
-				{
-					var lines = content.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-
-					foreach (var line in lines)
-					{
-						var match = Regex.Match(line, "class[ \t]+(?<classname>[a-zA-Z_][a-zA-Z0-9_]+)");
-
-						if (match.Success)
-						{
-							className = match.Groups["classname"].Value;
-
-							if (!string.IsNullOrWhiteSpace(entityName) &&
-								!string.IsNullOrWhiteSpace(schemaName) &&
-								string.Equals(entityName, datatype, StringComparison.OrdinalIgnoreCase))
-							{
-								entityClassFile = new EntityDetailClassFile()
-								{
-									ClassName = className,
-									FileName = file,
-									TableName = entityName,
-									SchemaName = schemaName,
-									ClassNameSpace = theNamespace
-								};
-
-								_cache.Add($"{schemaName}.{entityName}", entityClassFile, new CacheItemPolicy
-								{
-									AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(10)
-								});
-
-								return entityClassFile;
-							}
-						}
-
-						match = Regex.Match(line, "\\[PgComposite[ \t]*\\([ \t]*\"(?<enumName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\)[ \t]*\\]");
-
-						if (match.Success)
-						{
-							entityName = match.Groups["enumName"].Value;
-							schemaName = match.Groups["schemaName"].Value;
-						}
-
-						match = Regex.Match(line, "namespace[ \t]+(?<namespace>[a-zA-Z_][a-zA-Z0-9_\\.]+)");
-
-						if (match.Success)
-						{
-							theNamespace = match.Groups["namespace"].Value;
-						}
-					}
-				}
-			}
-
-			foreach (var subfolder in Directory.GetDirectories(folder))
-			{
-				var theFile = SearchForComposite(schema, datatype, subfolder);
-
-				if (theFile != null)
-					return theFile;
-			}
-
-			return null;
 		}
 		#endregion
 	}

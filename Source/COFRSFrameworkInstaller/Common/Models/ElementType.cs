@@ -5,6 +5,7 @@
         Undefined,
         Enum,
         Composite,
-        Table
+        Table,
+        Resource
     }
 }

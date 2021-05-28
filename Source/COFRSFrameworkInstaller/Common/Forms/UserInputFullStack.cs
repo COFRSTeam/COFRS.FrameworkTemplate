@@ -43,9 +43,10 @@ namespace COFRS.Template.Common.Forms
 		public JObject Examples { get; set; }
 		public Dictionary<string, string> ReplacementsDictionary { get; set; }
 		public List<string> Policies;
-		public List<EntityDetailClassFile> ClassList { get; set; }
-		public List<EntityDetailClassFile> UndefinedClassList = new List<EntityDetailClassFile>();
+		public List<ClassFile> ClassList { get; set; }
+		public List<ClassFile> UndefinedClassList = new List<ClassFile>();
 		public DBServerType ServerType { get; set; }
+		public Dictionary<string, MemberInfo> Members { get; set; }
 
 		public string Policy
 		{
@@ -610,122 +611,6 @@ select s.name, t.name
 			}
 		}
 
-		private bool CheckEnumType(string datatype, NpgsqlConnection connection)
-		{
-			string query = @"
-select typtype
-  from pg_type
- where ""typname"" = @typname";
-
-			using (var command = new NpgsqlCommand(query, connection))
-			{
-				command.Parameters.AddWithValue("@typname", datatype);
-
-				using (var reader = command.ExecuteReader())
-				{
-					if (reader.Read())
-					{
-						var theType = reader.GetChar(0);
-
-						if (theType == 'e' || theType == 'E')
-							return true;
-					}
-				}
-			}
-
-			return false;
-		}
-
-		private EntityDetailClassFile SearchForEnum(string datatype, string folder)
-		{
-			var className = string.Empty;
-			var entityName = string.Empty;
-			var schemaName = string.Empty;
-			var theNamespace = string.Empty;
-
-			foreach (var file in Directory.GetFiles(folder, "*.cs"))
-			{
-				using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-				{
-					using (var reader = new StreamReader(stream))
-					{
-						while (!reader.EndOfStream)
-						{
-							var line = reader.ReadLine();
-
-							var match = Regex.Match(line, "enum[ \t]+(?<classname>[a-zA-Z_][a-zA-Z0-9_]+)");
-
-							if (match.Success)
-							{
-								className = match.Groups["classname"].Value;
-
-								if (!string.IsNullOrWhiteSpace(entityName) &&
-									!string.IsNullOrWhiteSpace(schemaName) &&
-									string.Equals(entityName, datatype, StringComparison.OrdinalIgnoreCase))
-								{
-									var entityClassFile = new EntityDetailClassFile()
-									{
-										ClassName = className,
-										FileName = file,
-										TableName = entityName,
-										SchemaName = schemaName,
-										ClassNameSpace = theNamespace
-									};
-
-									return entityClassFile;
-								}
-							}
-							else
-							{
-								match = Regex.Match(line, "\\[PgEnum[ \t]*\\([ \t]*\"(?<enumName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\,[ \t]*Schema[ \t]*=[ \t]*\"(?<schemaName>[a-zA-Z_][a-zA-Z0-0_]+)\"[ \t]*\\)[ \t]*\\]");
-
-								if (match.Success)
-								{
-									entityName = match.Groups["enumName"].Value;
-									schemaName = match.Groups["schemaName"].Value;
-								}
-								else
-								{
-									match = Regex.Match(line, "namespace[ \t]+(?<namespace>[a-zA-Z_][a-zA-Z0-9_\\.]+)");
-
-									if (match.Success)
-									{
-										theNamespace = match.Groups["namespace"].Value;
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-
-			foreach (var subfolder in Directory.GetDirectories(folder))
-			{
-				var theFile = SearchForEnum(datatype, subfolder);
-
-				if (theFile != null)
-					return theFile;
-			}
-
-			return null;
-		}
-
-		private string FindEntityModelsFolder(string folder)
-		{
-			if (string.Equals(Path.GetFileName(folder), "EntityModels", StringComparison.OrdinalIgnoreCase))
-				return folder;
-
-			foreach (var childfolder in Directory.GetDirectories(folder))
-			{
-				var result = FindEntityModelsFolder(childfolder);
-
-				if (!string.IsNullOrWhiteSpace(result))
-					return result;
-			}
-
-			return string.Empty;
-		}
-
 		private void OnTableChanged(object sender, EventArgs e)
 		{
 			try
@@ -817,38 +702,42 @@ select a.attname as columnname,
 							{
 								while (reader.Read())
 								{
-									NpgsqlDbType dataType = NpgsqlDbType.Unknown;
+									var entityName = reader.GetString(0);
+									var columnName = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(reader.GetString(0)));
 
-									try
-									{
-										dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
-									}
-									catch (InvalidCastException)
-									{
-										EntityDetailClassFile unknownClass = ClassList.FirstOrDefault(c =>
-											string.Equals(c.SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
-											string.Equals(c.TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
+									NpgsqlDbType dataType = DBHelper.ConvertPostgresqlDataType(reader.GetString(1));
 
-										if (unknownClass == null)
+									if (dataType == NpgsqlDbType.Unknown)
+									{
+										var entity = ClassList.FirstOrDefault(ent =>
+											ent.GetType() == typeof(EntityClassFile) &&
+											string.Equals(((EntityClassFile)ent).SchemaName, table.Schema, StringComparison.OrdinalIgnoreCase) &&
+											string.Equals(((EntityClassFile)ent).TableName, reader.GetString(1), StringComparison.OrdinalIgnoreCase));
+
+										if (entity == null)
 										{
-											unknownClass = new EntityDetailClassFile()
+											entityName = reader.GetString(1);
+											var className = StandardUtils.CorrectForReservedNames(StandardUtils.NormalizeClassName(entityName));
+
+											entity = new EntityClassFile()
 											{
 												SchemaName = table.Schema,
-												TableName = reader.GetString(1),
-												ClassName = StandardUtils.NormalizeClassName(reader.GetString(1)),
-												ClassNameSpace = EntityModelsFolder.Namespace,
-												FileName = Path.Combine(EntityModelsFolder.Folder, $"{StandardUtils.NormalizeClassName(reader.GetString(1))}.cs")
+												ClassName = className,
+												TableName = entityName,
+												FileName = Path.Combine(EntityModelsFolder.Folder, $"{className}.cs"),
+												ClassNameSpace = EntityModelsFolder.Namespace
 											};
 
-											UndefinedClassList.Add(unknownClass);
+											UndefinedClassList.Add(entity);
 										}
 									}
 
 									var dbColumn = new DBColumn
 									{
-										ColumnName = reader.GetString(0),
-										dbDataType = reader.GetString(1),
+										ColumnName = columnName,
+										EntityName = entityName,
 										DataType = dataType,
+										dbDataType = reader.GetString(1),
 										Length = Convert.ToInt64(reader.GetValue(2)),
 										NumericPrecision = Convert.ToInt32(reader.GetValue(3)),
 										NumericScale = Convert.ToInt32(reader.GetValue(4)),
@@ -864,6 +753,11 @@ select a.attname as columnname,
 									DatabaseColumns.Add(dbColumn);
 								}
 							}
+						}
+
+						foreach (var unknownClass in UndefinedClassList)
+						{
+							unknownClass.ElementType = DBHelper.GetElementType(((EntityClassFile)unknownClass).SchemaName, ((EntityClassFile)unknownClass).TableName, ClassList, connectionString);
 						}
 					}
 				}
@@ -1050,19 +944,16 @@ select c.name as column_name,
 			Save();
 
 			var server = (DBServer)_serverList.SelectedItem;
-			var db = (string)_dbList.SelectedItem;
 			DatabaseTable = (DBTable)_tableList.SelectedItem;
 
 			if (server.DBType == DBServerType.POSTGRESQL)
 			{
-				UndefinedClassList = StandardUtils.GenerateDetailEntityClassList(UndefinedClassList, ClassList, ReplacementsDictionary["$solutionDirectory$"], ConnectionString);
+				UndefinedClassList = StandardUtils.GenerateEntityClassList(UndefinedClassList, 
+					                                                       ClassList, 
+																		   Members, 
+																		   EntityModelsFolder.Folder, 
+																		   ConnectionString);
 			}
-
-			List<EntityDetailClassFile> theClassList = new List<EntityDetailClassFile>();
-			theClassList.AddRange(ClassList);
-			theClassList.AddRange(UndefinedClassList);
-
-			Examples = ConstructExample(theClassList);
 
 			DialogResult = DialogResult.OK;
 			Close();
@@ -1215,6 +1106,7 @@ select c.name as column_name,
 		private void PopulateDatabases()
 		{
 			var server = (DBServer)_serverList.SelectedItem;
+			ServerType = server.DBType;
 
 			if (server.DBType == DBServerType.POSTGRESQL)
 			{
@@ -1546,6 +1438,7 @@ select name
 
 				var dbServer = _serverConfig.Servers.ToList()[LastServerUsed];
 				DBServerType selectedType = dbServer.DBType;
+				ServerType = dbServer.DBType;
 
 				switch (dbServer.DBType)
 				{
@@ -1571,6 +1464,7 @@ select name
 				if (_serverList.Items.Count > 0)
 				{
 					_serverList.SelectedIndex = selectedIndex;
+					ServerType = dbServer.DBType;
 
 					if (dbServer.DBType == DBServerType.SQLSERVER)
 					{
@@ -1703,1073 +1597,1074 @@ select name
 
 			return false;
 		}
-		private JObject ConstructExample(List<EntityDetailClassFile> classList)
-		{
-			var server = (DBServer)_serverList.SelectedItem;
-			var table = (DBTable)_tableList.SelectedItem;
-			var db = (string)_dbList.SelectedItem;
-			var values = new JObject();
-
-			//	-----------------------------------------------------------------
-			//	Read data from MySQL
-			//	-----------------------------------------------------------------
-			if (server.DBType == DBServerType.MYSQL)
-			{
-				string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};uid={server.Username};pwd={_password.Text};";
-
-				using (var connection = new MySqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = GenerateMySQLQuery(table);
-
-					using (var command = new MySqlCommand(query, connection))
-					{
-						using (var reader = command.ExecuteReader())
-						{
-							if (reader.Read())
-							{
-								foreach (var column in DatabaseColumns)
-								{
-									var columnName = column.ColumnName;
-
-									if (reader.IsDBNull(reader.GetOrdinal(column.ColumnName)))
-									{
-										values.Add(columnName, null);
-									}
-									else
-									{
-										var value = reader.GetValue(reader.GetOrdinal(columnName));
-										values.Add(columnName, JToken.FromObject(value));
-									}
-								}
-
-								return values;
-							}
-						}
-
-						return GetMySqlValues(values);
-					}
-				}
-			}
-
-			//	-----------------------------------------------------------------
-			//	Read data from Postgresql
-			//	-----------------------------------------------------------------
-			else if (server.DBType == DBServerType.POSTGRESQL)
-			{
-				ConnectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
-
-				using (var connection = new NpgsqlConnection(ConnectionString))
-				{
-					connection.Open();
-
-					var query = GeneratePostgresqlQuery(table, classList);
-
-					using (var command = new NpgsqlCommand(query, connection))
-					{
-						using (var reader = command.ExecuteReader())
-						{
-							if (reader.Read())
-							{
-								var ordinal = 0;
-
-								foreach (var column in DatabaseColumns)
-								{
-									var columnName = column.ColumnName;
-
-									if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
-									{
-										var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
-
-										if (cl.ElementType == ElementType.Enum)
-										{
-											if (reader.IsDBNull(ordinal))
-											{
-												values.Add(columnName, null);
-												ordinal++;
-											}
-											else
-											{
-												var value = reader.GetValue(ordinal);
-												values.Add(columnName, JToken.FromObject(value));
-												ordinal++;
-											}
-										}
-										else
-										{
-											var jObject = new JObject();
-											ordinal = ReadComposite(reader, column, ordinal, classList, jObject);
-											values.Add(columnName, jObject);
-										}
-									}
-									else if (reader.IsDBNull(ordinal))
-									{
-										values.Add(columnName, null);
-										ordinal++;
-									}
-									else
-									{
-										var value = reader.GetValue(ordinal);
-
-										if (value.GetType() == typeof(IPAddress))
-										{
-											var ipAddress = (IPAddress)value;
-											values.Add(columnName, ipAddress.ToString());
-										}
-										else if (value.GetType() == typeof(IPAddress[]))
-										{
-											var theValue = (IPAddress[])value;
-											var json = new JArray();
-
-											foreach (var val in theValue)
-											{
-												json.Add(val.ToString());
-											}
-											values.Add(columnName, json);
-										}
-										else if (value.GetType() == typeof(ValueTuple<IPAddress, int>))
-										{
-											var ipAddress = ((ValueTuple<IPAddress, int>)value).Item1;
-											int filter = ((ValueTuple<IPAddress, int>)value).Item2;
-
-											var theValue = new JObject
-											{
-												{ "IPAddress", ipAddress.ToString() },
-												{ "Filter", filter }
-											};
-
-											values.Add(columnName, theValue);
-										}
-										else if (value.GetType() == typeof(ValueTuple<IPAddress, int>[]))
-										{
-											var theValue = (ValueTuple<IPAddress, int>[])value;
-											var json = new JArray();
-
-											foreach (var val in theValue)
-											{
-												var ipAddress = val.Item1;
-												int filter = val.Item2;
-
-												var aValue = new JObject
-												{
-													{ "IPAddress", ipAddress.ToString() },
-													{ "Filter", filter }
-												};
-
-												json.Add(aValue);
-											}
-
-											values.Add(columnName, json);
-										}
-										else if (value.GetType() == typeof(PhysicalAddress))
-										{
-											var physicalAddress = (PhysicalAddress)value;
-											values.Add(columnName, physicalAddress.ToString());
-										}
-										else if (value.GetType() == typeof(PhysicalAddress[]))
-										{
-											var result = new JArray();
-											var theValue = (PhysicalAddress[])value;
-
-											foreach (var addr in theValue)
-											{
-												result.Add(addr.ToString());
-											}
-
-											values.Add(columnName, result);
-										}
-										else if (value.GetType() == typeof(BitArray))
-										{
-											var answer = new StringBuilder();
-
-											foreach (bool val in (BitArray)value)
-											{
-												var strVal = val ? "1" : "0";
-												answer.Append(strVal);
-											}
-											values.Add(columnName, JToken.FromObject(answer.ToString()));
-										}
-										else
-										{
-											values.Add(columnName, JToken.FromObject(value));
-										}
-										ordinal++;
-									}
-								}
-
-								return values;
-							}
-						}
-					}
-
-					return GetPostgresqlValues(values);
-				}
-			}
-
-			//	-----------------------------------------------------------------
-			//	Read data from SQL Server
-			//	-----------------------------------------------------------------
-			else
-			{
-				string connectionString;
-
-				if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
-					connectionString = $"Server={server.ServerName};Database={(string)_dbList.SelectedItem};Trusted_Connection=True;";
-				else
-					connectionString = $"Server={server.ServerName};Database={(string)_dbList.SelectedItem};uid={server.Username};pwd={_password.Text};";
-
-				using (var connection = new SqlConnection(connectionString))
-				{
-					connection.Open();
-
-					var query = GenerateSQLServerQuery(table);
-
-					using (var command = new SqlCommand(query, connection))
-					{
-						using (var reader = command.ExecuteReader())
-						{
-							if (reader.Read())
-							{
-								foreach (var column in DatabaseColumns)
-								{
-									var columnName = column.ColumnName;
-
-									if (reader.IsDBNull(reader.GetOrdinal(column.ColumnName)))
-									{
-										values.Add(columnName, null);
-									}
-									else
-									{
-										var value = reader.GetValue(reader.GetOrdinal(columnName));
-										values.Add(columnName, JToken.FromObject(value));
-									}
-								}
-								return values;
-							}
-						}
-					}
-
-					return GetSqlServerValues(values);
-				}
-			}
-		}
-		private JObject GetSqlServerValues(JObject values)
-		{
-			foreach (var column in DatabaseColumns)
-			{
-				var columnName = column.ColumnName;
-
-				switch ((SqlDbType)column.DataType)
-				{
-					#region tinyint, smallint, int, bigint
-					case SqlDbType.TinyInt:
-						values.Add(columnName, JToken.FromObject((byte)1));
-						break;
-
-					case SqlDbType.SmallInt:
-						values.Add(columnName, JToken.FromObject((short)1));
-						break;
-
-					case SqlDbType.Int:
-						values.Add(columnName, JToken.FromObject((int)1));
-						break;
-
-					case SqlDbType.BigInt:
-						values.Add(columnName, JToken.FromObject((long)1));
-						break;
-					#endregion
-
-					#region varchar, nvarchar, text, ntext
-					case SqlDbType.VarChar:
-					case SqlDbType.NVarChar:
-						{
-							var answer = "The dog barked at the moon.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							values.Add(columnName, JToken.FromObject(answer));
-						}
-						break;
-
-					case SqlDbType.Text:
-					case SqlDbType.NText:
-						values.Add(columnName, JToken.FromObject("The dog barked at the moon"));
-						break;
-					#endregion
-
-					#region binary, varbinary
-					case SqlDbType.Binary:
-						{
-							if (column.Length == 1)
-							{
-								values.Add(columnName, JToken.FromObject((byte)32));
-							}
-							else if (column.Length == -1)
-							{
-								values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
-							}
-							else
-							{
-								var answer = new byte[column.Length];
-								for (int i = 0; i < column.Length; i++)
-								{
-									var byteValue = (byte)(i & 0x00FF);
-									answer[i] = byteValue;
-								}
-
-								values.Add(columnName, JToken.FromObject(answer));
-							}
-						}
-						break;
-
-					case SqlDbType.VarBinary:
-						values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
-						break;
-					#endregion
-
-					#region bit
-					case SqlDbType.Bit:
-						values.Add(columnName, JToken.FromObject(true));
-						break;
-					#endregion
-
-					#region char, nchar
-					case SqlDbType.NChar:
-					case SqlDbType.Char:
-						{
-							if (column.Length == 1)
-							{
-								values.Add(columnName, JToken.FromObject('A'));
-							}
-							else if (column.Length == -1)
-							{
-								values.Add(columnName, JToken.FromObject("The brown cow jumped over the moon.The dog barked at the cow, and the bull chased the dog."));
-							}
-							else
-							{
-								const string alphabet = "The brown cow jumped over the moon. The dog barked at the cow, and the bull chased the dog.";
-								var chars = new char[column.Length];
-								for (int i = 0; i < chars.Length; i++)
-								{
-									int j = i % alphabet.Length;
-									chars[i] = alphabet[j];
-								}
-
-								values.Add(columnName, JToken.FromObject(new string(chars)));
-							}
-						}
-						break;
-					#endregion
-
-					#region image
-					case SqlDbType.Image:
-						{
-							var image = (Image)new Bitmap(100, 100);
-							var imageConverter = new ImageConverter();
-
-							var bytes = imageConverter.ConvertTo(image, typeof(byte[]));
-							values.Add(columnName, JToken.FromObject(bytes));
-						}
-						break;
-					#endregion
-
-					case SqlDbType.Date: values.Add(columnName, JToken.FromObject(DateTime.Now)); break;
-					case SqlDbType.DateTime: values.Add(columnName, JToken.FromObject(DateTime.Now)); break;
-					case SqlDbType.DateTime2: values.Add(columnName, JToken.FromObject(DateTime.Now)); break;
-					case SqlDbType.DateTimeOffset: values.Add(columnName, JToken.FromObject(DateTimeOffset.Now)); break;
-					case SqlDbType.Decimal: values.Add(columnName, JToken.FromObject(Decimal.Parse("123.45"))); break;
-					case SqlDbType.Float: values.Add(columnName, JToken.FromObject(Single.Parse("123.45"))); break;
-
-					case SqlDbType.Money: values.Add(columnName, JToken.FromObject(Decimal.Parse("123.45"))); break;
-					case SqlDbType.Real: values.Add(columnName, JToken.FromObject(Double.Parse("123.45"))); break;
-					case SqlDbType.SmallDateTime: values.Add(columnName, JToken.FromObject(DateTime.Now)); break;
-
-
-					case SqlDbType.SmallMoney: values.Add(columnName, JToken.FromObject(Decimal.Parse("123.45"))); break;
-
-					case SqlDbType.Time: values.Add(columnName, JToken.FromObject(TimeSpan.FromMinutes(3))); break;
-					case SqlDbType.Timestamp: values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 })); break;
-					case SqlDbType.UniqueIdentifier: values.Add(columnName, JToken.FromObject(Guid.NewGuid())); break;
-
-					default:
-						values.Add(columnName, JToken.FromObject("Unrecognized"));
-						break;
-				}
-			}
-
-			return values;
-		}
-
-		private JObject GetMySqlValues(JObject values)
-		{
-			foreach (var column in DatabaseColumns)
-			{
-				var columnName = column.ColumnName;
-
-				switch ((MySqlDbType)column.DataType)
-				{
-					#region tinyint, smallint, int, bigint
-					case MySqlDbType.Byte:
-						values.Add(columnName, JToken.FromObject((sbyte)1));
-						break;
-
-					case MySqlDbType.UByte:
-						values.Add(columnName, JToken.FromObject((byte)1));
-						break;
-
-					case MySqlDbType.Int16:
-						values.Add(columnName, JToken.FromObject((short)1));
-						break;
-
-					case MySqlDbType.UInt16:
-						values.Add(columnName, JToken.FromObject((ushort)1));
-						break;
-
-					case MySqlDbType.Int24:
-						values.Add(columnName, JToken.FromObject((int)1));
-						break;
-
-					case MySqlDbType.UInt24:
-						values.Add(columnName, JToken.FromObject((uint)1));
-						break;
-
-					case MySqlDbType.Int32:
-						values.Add(columnName, JToken.FromObject((int)1));
-						break;
-
-					case MySqlDbType.UInt32:
-						values.Add(columnName, JToken.FromObject((uint)1));
-						break;
-
-					case MySqlDbType.Int64:
-						values.Add(columnName, JToken.FromObject((long)1));
-						break;
-
-					case MySqlDbType.UInt64:
-						values.Add(columnName, JToken.FromObject((ulong)1));
-						break;
-					#endregion
-
-					#region decimal, double, float
-					case MySqlDbType.Decimal:
-						values.Add(columnName, JToken.FromObject((decimal)1.24m));
-						break;
-					case MySqlDbType.Double:
-						values.Add(columnName, JToken.FromObject((double)1.24));
-						break;
-					case MySqlDbType.Float:
-						values.Add(columnName, JToken.FromObject((float)1.24f));
-						break;
-					#endregion
-
-					#region varchar, nvarchar, text, ntext
-					case MySqlDbType.VarChar:
-					case MySqlDbType.VarString:
-						{
-							var answer = "The dog barked at the moon.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							values.Add(columnName, JToken.FromObject(answer));
-						}
-						break;
-
-					case MySqlDbType.Text:
-					case MySqlDbType.TinyText:
-					case MySqlDbType.MediumText:
-					case MySqlDbType.LongText:
-						values.Add(columnName, JToken.FromObject("The dog barked at the moon"));
-						break;
-
-					case MySqlDbType.String:
-						if (column.Length == 1)
-							values.Add(columnName, JToken.FromObject('A'));
-						else
-						{
-							const string alphabet = "The brown cow jumped over the moon. The dog barked at the cow, and the bull chased the dog.";
-							var chars = new char[column.Length];
-							for (int i = 0; i < chars.Length; i++)
-							{
-								int j = i % alphabet.Length;
-								chars[i] = alphabet[j];
-							}
-
-							values.Add(columnName, JToken.FromObject(new string(chars)));
-						}
-						break;
-
-					#endregion
-
-					#region binary, varbinary
-					case MySqlDbType.Binary:
-						{
-							if (column.Length == 1)
-							{
-								values.Add(columnName, JToken.FromObject((byte)32));
-							}
-							else if (column.Length == -1)
-							{
-								values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
-							}
-							else
-							{
-								var answer = new byte[column.Length];
-								for (int i = 0; i < column.Length; i++)
-								{
-									var byteValue = (byte)(i & 0x00FF);
-									answer[i] = byteValue;
-								}
-
-								values.Add(columnName, JToken.FromObject(answer));
-							}
-						}
-						break;
-
-					case MySqlDbType.VarBinary:
-					case MySqlDbType.TinyBlob:
-					case MySqlDbType.Blob:
-					case MySqlDbType.MediumBlob:
-					case MySqlDbType.LongBlob:
-						values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
-						break;
-					#endregion
-
-					#region bit
-					case MySqlDbType.Bit:
-						if (column.Length == 1)
-							values.Add(columnName, JToken.FromObject(true));
-						else
-							values.Add(columnName, JToken.FromObject((ulong)1));
-						break;
-					#endregion
-
-					#region enum, set
-					case MySqlDbType.Enum:
-						{
-							var theValues = column.dbDataType.Split(new char[] { '(', ')', ',', '\'' }, StringSplitOptions.RemoveEmptyEntries);
-							values.Add(columnName, JToken.FromObject(theValues[1]));
-						}
-						break;
-
-					case MySqlDbType.Set:
-						{
-							var theValues = column.dbDataType.Split(new char[] { '(', ')', ',', '\'' }, StringSplitOptions.RemoveEmptyEntries);
-							values.Add(columnName, JToken.FromObject(theValues[1]));
-						}
-						break;
-					#endregion
-
-					#region Datetime, timestamp, time, date, year
-					case MySqlDbType.DateTime:
-					case MySqlDbType.Date:
-					case MySqlDbType.Timestamp:
-						values.Add(columnName, JToken.FromObject(DateTime.Now));
-						break;
-
-					case MySqlDbType.Time:
-						values.Add(columnName, JToken.FromObject(TimeSpan.FromMinutes(2)));
-						break;
-
-					case MySqlDbType.Year:
-						values.Add(columnName, JToken.FromObject(2020));
-						break;
-					#endregion
-
-					default:
-						values.Add(columnName, JToken.FromObject("Unrecognized"));
-						break;
-				}
-			}
-
-			return values;
-		}
-
-		private JObject GetPostgresqlValues(JObject values)
-		{
-			foreach (var column in DatabaseColumns)
-			{
-				var columnName = column.ColumnName;
-
-				switch ((NpgsqlDbType)column.DataType)
-				{
-					#region smallint, int, bigint
-					case NpgsqlDbType.Smallint:
-						values.Add(columnName, JToken.FromObject((short)1));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Smallint:
-						values.Add(columnName, JToken.FromObject(new short[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
-						break;
-
-					case NpgsqlDbType.Integer:
-						values.Add(columnName, JToken.FromObject((int)1));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Integer:
-						values.Add(columnName, JToken.FromObject(new int[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
-						break;
-
-					case NpgsqlDbType.Bigint:
-						values.Add(columnName, JToken.FromObject((long)1));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Bigint:
-						values.Add(columnName, JToken.FromObject(new long[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
-						break;
-					#endregion
-
-					#region real, double, numeric
-					case NpgsqlDbType.Real:
-						values.Add(columnName, JToken.FromObject((float)1.3f));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Real:
-						values.Add(columnName, JToken.FromObject(new float[] { 1.23f, 2.45f, 3.67f, 4.89f, 5.01f, 6.23f, 7.45f, 8.67f, 9.89f }));
-						break;
-
-					case NpgsqlDbType.Double:
-						values.Add(columnName, JToken.FromObject((double)1.3f));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Double:
-						values.Add(columnName, JToken.FromObject(new double[] { 1.23f, 2.45f, 3.67f, 4.89f, 5.01f, 6.23f, 7.45f, 8.67f, 9.89f }));
-						break;
-
-					case NpgsqlDbType.Numeric:
-					case NpgsqlDbType.Money:
-						values.Add(columnName, JToken.FromObject((decimal)1.3f));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Numeric:
-					case NpgsqlDbType.Array | NpgsqlDbType.Money:
-						values.Add(columnName, JToken.FromObject(new decimal[] { 1.23m, 2.45m, 3.67m, 4.89m, 5.01m, 6.23m, 7.45m, 8.67m, 9.89m }));
-						break;
-					#endregion
-
-
-					#region Guid
-					case NpgsqlDbType.Uuid:
-						values.Add(columnName, JToken.FromObject(Guid.NewGuid()));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Uuid:
-						values.Add(columnName, JToken.FromObject(new Guid[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() }));
-						break;
-					#endregion
-
-					#region json
-					case NpgsqlDbType.Json:
-						{
-							var answer = "{ \"Name\": \"John\" }";
-							values.Add(columnName, JToken.FromObject(answer));
-						}
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Json:
-						{
-							var theList = new List<string>();
-
-							var answer1 = "{ \"Name\": \"John\" }";
-							theList.Add(answer1);
-
-							var answer2 = "{ \"Name\": \"Jane\" }";
-							theList.Add(answer2);
-
-							var answer3 = "{ \"Name\": \"Bill\" }";
-							theList.Add(answer3);
-
-							values.Add(columnName, JToken.FromObject(theList.ToArray()));
-						}
-						break;
-
-					#endregion
-
-					#region varchar, text
-					case NpgsqlDbType.Varchar:
-						{
-							var answer = "The dog barked at the moon.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							values.Add(columnName, JToken.FromObject(answer));
-						}
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Varchar:
-						{
-							var array = new JArray();
-							var answer = "The dog barked at the moon.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							array.Add(new JValue(answer));
-
-							answer = "The cow mooed at the moon.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							array.Add(new JValue(answer));
-
-							answer = "The cat watched the dog and the cow.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							array.Add(new JValue(answer));
-
-							values.Add(columnName, array);
-						}
-						break;
-
-					case NpgsqlDbType.Text:
-						values.Add(columnName, JToken.FromObject("The dog barked at the moon"));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Text:
-						{
-							var array = new JArray
-							{
-								new JValue("The dog barked at the moon"),
-								new JValue("The cow mooed at the moon"),
-								new JValue("The cat watched the dog and the cow.")
-							};
-							values.Add(columnName, array);
-						}
-						break;
-					#endregion
-
-					#region bytea
-					case NpgsqlDbType.Bytea:
-						values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Bytea:
-						{
-							var array = new JArray
-							{
-								JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }),
-								JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }),
-								JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 })
-							};
-							values.Add(columnName, array);
-						}
-						break;
-					#endregion
-
-					#region bit, varbit
-					case NpgsqlDbType.Bit:
-						{
-							if (column.Length == 1)
-								values.Add(columnName, JToken.FromObject(true));
-							else
-							{
-								var str = new StringBuilder();
-								for (int i = 0; i < column.Length; i++)
-									str.Append("1");
-
-								values.Add(columnName, JToken.FromObject(str.ToString()));
-							}
-						}
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Bit:
-						{
-							if (column.Length == 1)
-							{
-								var array = new JArray
-								{
-									JToken.FromObject(true),
-									JToken.FromObject(true),
-									JToken.FromObject(false),
-									JToken.FromObject(true)
-								};
-								values.Add(columnName, array);
-							}
-							else
-							{
-								var array = new JArray();
-
-								for (int i = 0; i < 3; i++)
-								{
-									var str = new StringBuilder();
-									for (int j = 0; j < column.Length; j++)
-										str.Append("1");
-									array.Add(JToken.FromObject(str.ToString()));
-								}
-
-								values.Add(columnName, array);
-							}
-						}
-						break;
-
-					case NpgsqlDbType.Varbit:
-						{
-							var str = new StringBuilder();
-							for (int i = 0; i < column.Length && i < 10; i++)
-								str.Append("1");
-
-							values.Add(columnName, JToken.FromObject(str.ToString()));
-						}
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Varbit:
-						{
-							if (column.Length == 1)
-							{
-								var array = new JArray
-								{
-									JToken.FromObject(true),
-									JToken.FromObject(true),
-									JToken.FromObject(false),
-									JToken.FromObject(true)
-								};
-								values.Add(columnName, array);
-							}
-							else
-							{
-								var array = new JArray();
-
-								for (int i = 0; i < 3; i++)
-								{
-									var str = new StringBuilder();
-									for (int j = 0; j < column.Length && j < 10; j++)
-										str.Append("1");
-									array.Add(JToken.FromObject(str.ToString()));
-								}
-
-								values.Add(columnName, array);
-							}
-						}
-						break;
-					#endregion
-
-					#region char
-					case NpgsqlDbType.Char:
-						{
-							if (string.Equals(column.dbDataType, "_char", StringComparison.OrdinalIgnoreCase))
-							{
-								values.Add(columnName, JToken.FromObject("The brown cow jumped over the moon.The dog barked at the cow, and the bull chased the dog."));
-							}
-							else if (string.Equals(column.dbDataType, "char", StringComparison.OrdinalIgnoreCase))
-							{
-								values.Add(columnName, JToken.FromObject('A'));
-							}
-							else
-							{
-								const string alphabet = "The brown cow jumped over the moon. The dog barked at the cow, and the bull chased the dog.";
-								var chars = new char[column.Length];
-								for (int i = 0; i < chars.Length; i++)
-								{
-									int j = i % alphabet.Length;
-									chars[i] = alphabet[j];
-								}
-
-								values.Add(columnName, JToken.FromObject(new string(chars)));
-							}
-						}
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Char:
-						{
-							var array = new JArray();
-							var answer = "The dog barked at the moon.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							array.Add(new JValue(answer));
-
-							answer = "The cow mooed at the moon.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							array.Add(new JValue(answer));
-
-							answer = "The cat watched the dog and the cow.";
-
-							if (column.Length > -1)
-								if (column.Length < answer.Length)
-									answer = answer.Substring(0, (int)column.Length);
-
-							array.Add(new JValue(answer));
-
-							values.Add(columnName, array);
-						}
-						break;
-					#endregion
-
-					#region Boolean
-					case NpgsqlDbType.Boolean:
-						values.Add(columnName, JToken.FromObject((bool)true));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Boolean:
-						values.Add(columnName, JToken.FromObject(new bool[] { true, true, false }));
-						break;
-					#endregion
-
-					#region DateTime
-					case NpgsqlDbType.Date:
-						values.Add(columnName, JToken.FromObject(DateTime.Now));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Date:
-						values.Add(columnName, JToken.FromObject(new DateTime[] { DateTime.Now, DateTime.Now.AddDays(1), DateTime.Now.AddDays(2) }));
-						break;
-
-					case NpgsqlDbType.Timestamp:
-						values.Add(columnName, JToken.FromObject(DateTime.Now));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Timestamp:
-						values.Add(columnName, JToken.FromObject(new DateTime[] { DateTime.Now, DateTime.Now.AddDays(1), DateTime.Now.AddDays(2) }));
-						break;
-
-					case NpgsqlDbType.Time:
-						values.Add(columnName, JToken.FromObject(TimeSpan.FromMinutes(10)));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Time:
-						values.Add(columnName, JToken.FromObject(new TimeSpan[] { TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(30), TimeSpan.FromHours(2) }));
-						break;
-
-					case NpgsqlDbType.Interval:
-						values.Add(columnName, JToken.FromObject(TimeSpan.FromMinutes(15)));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.Interval:
-						values.Add(columnName, JToken.FromObject(new TimeSpan[] { TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(30), TimeSpan.FromHours(2) }));
-						break;
-
-					case NpgsqlDbType.TimeTz:
-						values.Add(columnName, JToken.FromObject(DateTimeOffset.Now));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.TimeTz:
-						values.Add(columnName, JToken.FromObject(new DateTimeOffset[] { DateTimeOffset.Now, DateTimeOffset.Now.AddDays(1), DateTimeOffset.Now.AddDays(2) }));
-						break;
-
-					case NpgsqlDbType.TimestampTz:
-						values.Add(columnName, JToken.FromObject(DateTime.Now));
-						break;
-
-					case NpgsqlDbType.Array | NpgsqlDbType.TimestampTz:
-						values.Add(columnName, JToken.FromObject(new DateTime[] { DateTime.Now, DateTime.Now.AddDays(1), DateTime.Now.AddDays(2) }));
-						break;
-					#endregion
-
-					default:
-						values.Add(columnName, JToken.FromObject("Unrecognized"));
-						break;
-				}
-			}
-
-			return values;
-		}
-
-		private string GenerateSQLServerQuery(DBTable table)
-		{
-			var query = new StringBuilder("SELECT TOP 1");
-
-			bool firstColumn = true;
-
-			foreach (var column in DatabaseColumns)
-			{
-				if (firstColumn)
-					firstColumn = false;
-				else
-					query.Append(", ");
-
-				var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
-
-				if (string.Equals(column.dbDataType, "hierarchyid", StringComparison.OrdinalIgnoreCase))
-				{
-					query.Append($"REPLACE(CAST({columnName} AS nvarchar({column.Length})), '/', '-' ) as [{columnName}]");
-				}
-				else
-				{
-					query.Append($"[{columnName}]");
-				}
-			}
-
-			query.Append($" FROM [{table.Schema}].[{table.Table}] WITH(NOLOCK)");
-			return query.ToString();
-		}
-
-		private string GenerateMySQLQuery(DBTable table)
-		{
-			var query = new StringBuilder("SELECT ");
-
-			bool firstColumn = true;
-
-			foreach (var column in DatabaseColumns)
-			{
-				if (firstColumn)
-					firstColumn = false;
-				else
-					query.Append(", "); 
+
+		//private JObject ConstructExample(List<ClassFile> classList)
+		//{
+		//	var server = (DBServer)_serverList.SelectedItem;
+		//	var table = (DBTable)_tableList.SelectedItem;
+		//	var db = (string)_dbList.SelectedItem;
+		//	var values = new JObject();
+
+		//	//	-----------------------------------------------------------------
+		//	//	Read data from MySQL
+		//	//	-----------------------------------------------------------------
+		//	if (server.DBType == DBServerType.MYSQL)
+		//	{
+		//		string connectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};uid={server.Username};pwd={_password.Text};";
+
+		//		using (var connection = new MySqlConnection(connectionString))
+		//		{
+		//			connection.Open();
+
+		//			var query = GenerateMySQLQuery(table);
+
+		//			using (var command = new MySqlCommand(query, connection))
+		//			{
+		//				using (var reader = command.ExecuteReader())
+		//				{
+		//					if (reader.Read())
+		//					{
+		//						foreach (var column in DatabaseColumns)
+		//						{
+		//							var columnName = column.ColumnName;
+
+		//							if (reader.IsDBNull(reader.GetOrdinal(column.ColumnName)))
+		//							{
+		//								values.Add(columnName, null);
+		//							}
+		//							else
+		//							{
+		//								var value = reader.GetValue(reader.GetOrdinal(columnName));
+		//								values.Add(columnName, JToken.FromObject(value));
+		//							}
+		//						}
+
+		//						return values;
+		//					}
+		//				}
+
+		//				return GetMySqlValues(values);
+		//			}
+		//		}
+		//	}
+
+		//	//	-----------------------------------------------------------------
+		//	//	Read data from Postgresql
+		//	//	-----------------------------------------------------------------
+		//	else if (server.DBType == DBServerType.POSTGRESQL)
+		//	{
+		//		ConnectionString = $"Server={server.ServerName};Port={server.PortNumber};Database={db};User ID={server.Username};Password={_password.Text};";
+
+		//		using (var connection = new NpgsqlConnection(ConnectionString))
+		//		{
+		//			connection.Open();
+
+		//			var query = GeneratePostgresqlQuery(table, classList);
+
+		//			using (var command = new NpgsqlCommand(query, connection))
+		//			{
+		//				using (var reader = command.ExecuteReader())
+		//				{
+		//					if (reader.Read())
+		//					{
+		//						var ordinal = 0;
+
+		//						foreach (var column in DatabaseColumns)
+		//						{
+		//							var columnName = column.ColumnName;
+
+		//							if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
+		//							{
+		//								var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
+
+		//								if (cl.ElementType == ElementType.Enum)
+		//								{
+		//									if (reader.IsDBNull(ordinal))
+		//									{
+		//										values.Add(columnName, null);
+		//										ordinal++;
+		//									}
+		//									else
+		//									{
+		//										var value = reader.GetValue(ordinal);
+		//										values.Add(columnName, JToken.FromObject(value));
+		//										ordinal++;
+		//									}
+		//								}
+		//								else
+		//								{
+		//									var jObject = new JObject();
+		//									ordinal = ReadComposite(reader, column, ordinal, classList, jObject);
+		//									values.Add(columnName, jObject);
+		//								}
+		//							}
+		//							else if (reader.IsDBNull(ordinal))
+		//							{
+		//								values.Add(columnName, null);
+		//								ordinal++;
+		//							}
+		//							else
+		//							{
+		//								var value = reader.GetValue(ordinal);
+
+		//								if (value.GetType() == typeof(IPAddress))
+		//								{
+		//									var ipAddress = (IPAddress)value;
+		//									values.Add(columnName, ipAddress.ToString());
+		//								}
+		//								else if (value.GetType() == typeof(IPAddress[]))
+		//								{
+		//									var theValue = (IPAddress[])value;
+		//									var json = new JArray();
+
+		//									foreach (var val in theValue)
+		//									{
+		//										json.Add(val.ToString());
+		//									}
+		//									values.Add(columnName, json);
+		//								}
+		//								else if (value.GetType() == typeof(ValueTuple<IPAddress, int>))
+		//								{
+		//									var ipAddress = ((ValueTuple<IPAddress, int>)value).Item1;
+		//									int filter = ((ValueTuple<IPAddress, int>)value).Item2;
+
+		//									var theValue = new JObject
+		//									{
+		//										{ "IPAddress", ipAddress.ToString() },
+		//										{ "Filter", filter }
+		//									};
+
+		//									values.Add(columnName, theValue);
+		//								}
+		//								else if (value.GetType() == typeof(ValueTuple<IPAddress, int>[]))
+		//								{
+		//									var theValue = (ValueTuple<IPAddress, int>[])value;
+		//									var json = new JArray();
+
+		//									foreach (var val in theValue)
+		//									{
+		//										var ipAddress = val.Item1;
+		//										int filter = val.Item2;
+
+		//										var aValue = new JObject
+		//										{
+		//											{ "IPAddress", ipAddress.ToString() },
+		//											{ "Filter", filter }
+		//										};
+
+		//										json.Add(aValue);
+		//									}
+
+		//									values.Add(columnName, json);
+		//								}
+		//								else if (value.GetType() == typeof(PhysicalAddress))
+		//								{
+		//									var physicalAddress = (PhysicalAddress)value;
+		//									values.Add(columnName, physicalAddress.ToString());
+		//								}
+		//								else if (value.GetType() == typeof(PhysicalAddress[]))
+		//								{
+		//									var result = new JArray();
+		//									var theValue = (PhysicalAddress[])value;
+
+		//									foreach (var addr in theValue)
+		//									{
+		//										result.Add(addr.ToString());
+		//									}
+
+		//									values.Add(columnName, result);
+		//								}
+		//								else if (value.GetType() == typeof(BitArray))
+		//								{
+		//									var answer = new StringBuilder();
+
+		//									foreach (bool val in (BitArray)value)
+		//									{
+		//										var strVal = val ? "1" : "0";
+		//										answer.Append(strVal);
+		//									}
+		//									values.Add(columnName, JToken.FromObject(answer.ToString()));
+		//								}
+		//								else
+		//								{
+		//									values.Add(columnName, JToken.FromObject(value));
+		//								}
+		//								ordinal++;
+		//							}
+		//						}
+
+		//						return values;
+		//					}
+		//				}
+		//			}
+
+		//			return GetPostgresqlValues(values);
+		//		}
+		//	}
+
+		//	//	-----------------------------------------------------------------
+		//	//	Read data from SQL Server
+		//	//	-----------------------------------------------------------------
+		//	else
+		//	{
+		//		string connectionString;
+
+		//		if (server.DBAuth == DBAuthentication.WINDOWSAUTH)
+		//			connectionString = $"Server={server.ServerName};Database={(string)_dbList.SelectedItem};Trusted_Connection=True;";
+		//		else
+		//			connectionString = $"Server={server.ServerName};Database={(string)_dbList.SelectedItem};uid={server.Username};pwd={_password.Text};";
+
+		//		using (var connection = new SqlConnection(connectionString))
+		//		{
+		//			connection.Open();
+
+		//			var query = GenerateSQLServerQuery(table);
+
+		//			using (var command = new SqlCommand(query, connection))
+		//			{
+		//				using (var reader = command.ExecuteReader())
+		//				{
+		//					if (reader.Read())
+		//					{
+		//						foreach (var column in DatabaseColumns)
+		//						{
+		//							var columnName = column.ColumnName;
+
+		//							if (reader.IsDBNull(reader.GetOrdinal(column.ColumnName)))
+		//							{
+		//								values.Add(columnName, null);
+		//							}
+		//							else
+		//							{
+		//								var value = reader.GetValue(reader.GetOrdinal(columnName));
+		//								values.Add(columnName, JToken.FromObject(value));
+		//							}
+		//						}
+		//						return values;
+		//					}
+		//				}
+		//			}
+
+		//			return GetSqlServerValues(values);
+		//		}
+		//	}
+		//}
+		//private JObject GetSqlServerValues(JObject values)
+		//{
+		//	foreach (var column in DatabaseColumns)
+		//	{
+		//		var columnName = column.ColumnName;
+
+		//		switch ((SqlDbType)column.DataType)
+		//		{
+		//			#region tinyint, smallint, int, bigint
+		//			case SqlDbType.TinyInt:
+		//				values.Add(columnName, JToken.FromObject((byte)1));
+		//				break;
+
+		//			case SqlDbType.SmallInt:
+		//				values.Add(columnName, JToken.FromObject((short)1));
+		//				break;
+
+		//			case SqlDbType.Int:
+		//				values.Add(columnName, JToken.FromObject((int)1));
+		//				break;
+
+		//			case SqlDbType.BigInt:
+		//				values.Add(columnName, JToken.FromObject((long)1));
+		//				break;
+		//			#endregion
+
+		//			#region varchar, nvarchar, text, ntext
+		//			case SqlDbType.VarChar:
+		//			case SqlDbType.NVarChar:
+		//				{
+		//					var answer = "The dog barked at the moon.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					values.Add(columnName, JToken.FromObject(answer));
+		//				}
+		//				break;
+
+		//			case SqlDbType.Text:
+		//			case SqlDbType.NText:
+		//				values.Add(columnName, JToken.FromObject("The dog barked at the moon"));
+		//				break;
+		//			#endregion
+
+		//			#region binary, varbinary
+		//			case SqlDbType.Binary:
+		//				{
+		//					if (column.Length == 1)
+		//					{
+		//						values.Add(columnName, JToken.FromObject((byte)32));
+		//					}
+		//					else if (column.Length == -1)
+		//					{
+		//						values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
+		//					}
+		//					else
+		//					{
+		//						var answer = new byte[column.Length];
+		//						for (int i = 0; i < column.Length; i++)
+		//						{
+		//							var byteValue = (byte)(i & 0x00FF);
+		//							answer[i] = byteValue;
+		//						}
+
+		//						values.Add(columnName, JToken.FromObject(answer));
+		//					}
+		//				}
+		//				break;
+
+		//			case SqlDbType.VarBinary:
+		//				values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
+		//				break;
+		//			#endregion
+
+		//			#region bit
+		//			case SqlDbType.Bit:
+		//				values.Add(columnName, JToken.FromObject(true));
+		//				break;
+		//			#endregion
+
+		//			#region char, nchar
+		//			case SqlDbType.NChar:
+		//			case SqlDbType.Char:
+		//				{
+		//					if (column.Length == 1)
+		//					{
+		//						values.Add(columnName, JToken.FromObject('A'));
+		//					}
+		//					else if (column.Length == -1)
+		//					{
+		//						values.Add(columnName, JToken.FromObject("The brown cow jumped over the moon.The dog barked at the cow, and the bull chased the dog."));
+		//					}
+		//					else
+		//					{
+		//						const string alphabet = "The brown cow jumped over the moon. The dog barked at the cow, and the bull chased the dog.";
+		//						var chars = new char[column.Length];
+		//						for (int i = 0; i < chars.Length; i++)
+		//						{
+		//							int j = i % alphabet.Length;
+		//							chars[i] = alphabet[j];
+		//						}
+
+		//						values.Add(columnName, JToken.FromObject(new string(chars)));
+		//					}
+		//				}
+		//				break;
+		//			#endregion
+
+		//			#region image
+		//			case SqlDbType.Image:
+		//				{
+		//					var image = (Image)new Bitmap(100, 100);
+		//					var imageConverter = new ImageConverter();
+
+		//					var bytes = imageConverter.ConvertTo(image, typeof(byte[]));
+		//					values.Add(columnName, JToken.FromObject(bytes));
+		//				}
+		//				break;
+		//			#endregion
+
+		//			case SqlDbType.Date: values.Add(columnName, JToken.FromObject(DateTime.Now)); break;
+		//			case SqlDbType.DateTime: values.Add(columnName, JToken.FromObject(DateTime.Now)); break;
+		//			case SqlDbType.DateTime2: values.Add(columnName, JToken.FromObject(DateTime.Now)); break;
+		//			case SqlDbType.DateTimeOffset: values.Add(columnName, JToken.FromObject(DateTimeOffset.Now)); break;
+		//			case SqlDbType.Decimal: values.Add(columnName, JToken.FromObject(Decimal.Parse("123.45"))); break;
+		//			case SqlDbType.Float: values.Add(columnName, JToken.FromObject(Single.Parse("123.45"))); break;
+
+		//			case SqlDbType.Money: values.Add(columnName, JToken.FromObject(Decimal.Parse("123.45"))); break;
+		//			case SqlDbType.Real: values.Add(columnName, JToken.FromObject(Double.Parse("123.45"))); break;
+		//			case SqlDbType.SmallDateTime: values.Add(columnName, JToken.FromObject(DateTime.Now)); break;
+
+
+		//			case SqlDbType.SmallMoney: values.Add(columnName, JToken.FromObject(Decimal.Parse("123.45"))); break;
+
+		//			case SqlDbType.Time: values.Add(columnName, JToken.FromObject(TimeSpan.FromMinutes(3))); break;
+		//			case SqlDbType.Timestamp: values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 })); break;
+		//			case SqlDbType.UniqueIdentifier: values.Add(columnName, JToken.FromObject(Guid.NewGuid())); break;
+
+		//			default:
+		//				values.Add(columnName, JToken.FromObject("Unrecognized"));
+		//				break;
+		//		}
+		//	}
+
+		//	return values;
+		//}
+
+		//private JObject GetMySqlValues(JObject values)
+		//{
+		//	foreach (var column in DatabaseColumns)
+		//	{
+		//		var columnName = column.ColumnName;
+
+		//		switch ((MySqlDbType)column.DataType)
+		//		{
+		//			#region tinyint, smallint, int, bigint
+		//			case MySqlDbType.Byte:
+		//				values.Add(columnName, JToken.FromObject((sbyte)1));
+		//				break;
+
+		//			case MySqlDbType.UByte:
+		//				values.Add(columnName, JToken.FromObject((byte)1));
+		//				break;
+
+		//			case MySqlDbType.Int16:
+		//				values.Add(columnName, JToken.FromObject((short)1));
+		//				break;
+
+		//			case MySqlDbType.UInt16:
+		//				values.Add(columnName, JToken.FromObject((ushort)1));
+		//				break;
+
+		//			case MySqlDbType.Int24:
+		//				values.Add(columnName, JToken.FromObject((int)1));
+		//				break;
+
+		//			case MySqlDbType.UInt24:
+		//				values.Add(columnName, JToken.FromObject((uint)1));
+		//				break;
+
+		//			case MySqlDbType.Int32:
+		//				values.Add(columnName, JToken.FromObject((int)1));
+		//				break;
+
+		//			case MySqlDbType.UInt32:
+		//				values.Add(columnName, JToken.FromObject((uint)1));
+		//				break;
+
+		//			case MySqlDbType.Int64:
+		//				values.Add(columnName, JToken.FromObject((long)1));
+		//				break;
+
+		//			case MySqlDbType.UInt64:
+		//				values.Add(columnName, JToken.FromObject((ulong)1));
+		//				break;
+		//			#endregion
+
+		//			#region decimal, double, float
+		//			case MySqlDbType.Decimal:
+		//				values.Add(columnName, JToken.FromObject((decimal)1.24m));
+		//				break;
+		//			case MySqlDbType.Double:
+		//				values.Add(columnName, JToken.FromObject((double)1.24));
+		//				break;
+		//			case MySqlDbType.Float:
+		//				values.Add(columnName, JToken.FromObject((float)1.24f));
+		//				break;
+		//			#endregion
+
+		//			#region varchar, nvarchar, text, ntext
+		//			case MySqlDbType.VarChar:
+		//			case MySqlDbType.VarString:
+		//				{
+		//					var answer = "The dog barked at the moon.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					values.Add(columnName, JToken.FromObject(answer));
+		//				}
+		//				break;
+
+		//			case MySqlDbType.Text:
+		//			case MySqlDbType.TinyText:
+		//			case MySqlDbType.MediumText:
+		//			case MySqlDbType.LongText:
+		//				values.Add(columnName, JToken.FromObject("The dog barked at the moon"));
+		//				break;
+
+		//			case MySqlDbType.String:
+		//				if (column.Length == 1)
+		//					values.Add(columnName, JToken.FromObject('A'));
+		//				else
+		//				{
+		//					const string alphabet = "The brown cow jumped over the moon. The dog barked at the cow, and the bull chased the dog.";
+		//					var chars = new char[column.Length];
+		//					for (int i = 0; i < chars.Length; i++)
+		//					{
+		//						int j = i % alphabet.Length;
+		//						chars[i] = alphabet[j];
+		//					}
+
+		//					values.Add(columnName, JToken.FromObject(new string(chars)));
+		//				}
+		//				break;
+
+		//			#endregion
+
+		//			#region binary, varbinary
+		//			case MySqlDbType.Binary:
+		//				{
+		//					if (column.Length == 1)
+		//					{
+		//						values.Add(columnName, JToken.FromObject((byte)32));
+		//					}
+		//					else if (column.Length == -1)
+		//					{
+		//						values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
+		//					}
+		//					else
+		//					{
+		//						var answer = new byte[column.Length];
+		//						for (int i = 0; i < column.Length; i++)
+		//						{
+		//							var byteValue = (byte)(i & 0x00FF);
+		//							answer[i] = byteValue;
+		//						}
+
+		//						values.Add(columnName, JToken.FromObject(answer));
+		//					}
+		//				}
+		//				break;
+
+		//			case MySqlDbType.VarBinary:
+		//			case MySqlDbType.TinyBlob:
+		//			case MySqlDbType.Blob:
+		//			case MySqlDbType.MediumBlob:
+		//			case MySqlDbType.LongBlob:
+		//				values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
+		//				break;
+		//			#endregion
+
+		//			#region bit
+		//			case MySqlDbType.Bit:
+		//				if (column.Length == 1)
+		//					values.Add(columnName, JToken.FromObject(true));
+		//				else
+		//					values.Add(columnName, JToken.FromObject((ulong)1));
+		//				break;
+		//			#endregion
+
+		//			#region enum, set
+		//			case MySqlDbType.Enum:
+		//				{
+		//					var theValues = column.dbDataType.Split(new char[] { '(', ')', ',', '\'' }, StringSplitOptions.RemoveEmptyEntries);
+		//					values.Add(columnName, JToken.FromObject(theValues[1]));
+		//				}
+		//				break;
+
+		//			case MySqlDbType.Set:
+		//				{
+		//					var theValues = column.dbDataType.Split(new char[] { '(', ')', ',', '\'' }, StringSplitOptions.RemoveEmptyEntries);
+		//					values.Add(columnName, JToken.FromObject(theValues[1]));
+		//				}
+		//				break;
+		//			#endregion
+
+		//			#region Datetime, timestamp, time, date, year
+		//			case MySqlDbType.DateTime:
+		//			case MySqlDbType.Date:
+		//			case MySqlDbType.Timestamp:
+		//				values.Add(columnName, JToken.FromObject(DateTime.Now));
+		//				break;
+
+		//			case MySqlDbType.Time:
+		//				values.Add(columnName, JToken.FromObject(TimeSpan.FromMinutes(2)));
+		//				break;
+
+		//			case MySqlDbType.Year:
+		//				values.Add(columnName, JToken.FromObject(2020));
+		//				break;
+		//			#endregion
+
+		//			default:
+		//				values.Add(columnName, JToken.FromObject("Unrecognized"));
+		//				break;
+		//		}
+		//	}
+
+		//	return values;
+		//}
+
+		//private JObject GetPostgresqlValues(JObject values)
+		//{
+		//	foreach (var column in DatabaseColumns)
+		//	{
+		//		var columnName = column.ColumnName;
+
+		//		switch ((NpgsqlDbType)column.DataType)
+		//		{
+		//			#region smallint, int, bigint
+		//			case NpgsqlDbType.Smallint:
+		//				values.Add(columnName, JToken.FromObject((short)1));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Smallint:
+		//				values.Add(columnName, JToken.FromObject(new short[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
+		//				break;
+
+		//			case NpgsqlDbType.Integer:
+		//				values.Add(columnName, JToken.FromObject((int)1));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Integer:
+		//				values.Add(columnName, JToken.FromObject(new int[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
+		//				break;
+
+		//			case NpgsqlDbType.Bigint:
+		//				values.Add(columnName, JToken.FromObject((long)1));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Bigint:
+		//				values.Add(columnName, JToken.FromObject(new long[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
+		//				break;
+		//			#endregion
+
+		//			#region real, double, numeric
+		//			case NpgsqlDbType.Real:
+		//				values.Add(columnName, JToken.FromObject((float)1.3f));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Real:
+		//				values.Add(columnName, JToken.FromObject(new float[] { 1.23f, 2.45f, 3.67f, 4.89f, 5.01f, 6.23f, 7.45f, 8.67f, 9.89f }));
+		//				break;
+
+		//			case NpgsqlDbType.Double:
+		//				values.Add(columnName, JToken.FromObject((double)1.3f));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Double:
+		//				values.Add(columnName, JToken.FromObject(new double[] { 1.23f, 2.45f, 3.67f, 4.89f, 5.01f, 6.23f, 7.45f, 8.67f, 9.89f }));
+		//				break;
+
+		//			case NpgsqlDbType.Numeric:
+		//			case NpgsqlDbType.Money:
+		//				values.Add(columnName, JToken.FromObject((decimal)1.3f));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Numeric:
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Money:
+		//				values.Add(columnName, JToken.FromObject(new decimal[] { 1.23m, 2.45m, 3.67m, 4.89m, 5.01m, 6.23m, 7.45m, 8.67m, 9.89m }));
+		//				break;
+		//			#endregion
+
+
+		//			#region Guid
+		//			case NpgsqlDbType.Uuid:
+		//				values.Add(columnName, JToken.FromObject(Guid.NewGuid()));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Uuid:
+		//				values.Add(columnName, JToken.FromObject(new Guid[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() }));
+		//				break;
+		//			#endregion
+
+		//			#region json
+		//			case NpgsqlDbType.Json:
+		//				{
+		//					var answer = "{ \"Name\": \"John\" }";
+		//					values.Add(columnName, JToken.FromObject(answer));
+		//				}
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Json:
+		//				{
+		//					var theList = new List<string>();
+
+		//					var answer1 = "{ \"Name\": \"John\" }";
+		//					theList.Add(answer1);
+
+		//					var answer2 = "{ \"Name\": \"Jane\" }";
+		//					theList.Add(answer2);
+
+		//					var answer3 = "{ \"Name\": \"Bill\" }";
+		//					theList.Add(answer3);
+
+		//					values.Add(columnName, JToken.FromObject(theList.ToArray()));
+		//				}
+		//				break;
+
+		//			#endregion
+
+		//			#region varchar, text
+		//			case NpgsqlDbType.Varchar:
+		//				{
+		//					var answer = "The dog barked at the moon.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					values.Add(columnName, JToken.FromObject(answer));
+		//				}
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Varchar:
+		//				{
+		//					var array = new JArray();
+		//					var answer = "The dog barked at the moon.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					array.Add(new JValue(answer));
+
+		//					answer = "The cow mooed at the moon.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					array.Add(new JValue(answer));
+
+		//					answer = "The cat watched the dog and the cow.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					array.Add(new JValue(answer));
+
+		//					values.Add(columnName, array);
+		//				}
+		//				break;
+
+		//			case NpgsqlDbType.Text:
+		//				values.Add(columnName, JToken.FromObject("The dog barked at the moon"));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Text:
+		//				{
+		//					var array = new JArray
+		//					{
+		//						new JValue("The dog barked at the moon"),
+		//						new JValue("The cow mooed at the moon"),
+		//						new JValue("The cat watched the dog and the cow.")
+		//					};
+		//					values.Add(columnName, array);
+		//				}
+		//				break;
+		//			#endregion
+
+		//			#region bytea
+		//			case NpgsqlDbType.Bytea:
+		//				values.Add(columnName, JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Bytea:
+		//				{
+		//					var array = new JArray
+		//					{
+		//						JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }),
+		//						JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }),
+		//						JToken.FromObject(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 })
+		//					};
+		//					values.Add(columnName, array);
+		//				}
+		//				break;
+		//			#endregion
+
+		//			#region bit, varbit
+		//			case NpgsqlDbType.Bit:
+		//				{
+		//					if (column.Length == 1)
+		//						values.Add(columnName, JToken.FromObject(true));
+		//					else
+		//					{
+		//						var str = new StringBuilder();
+		//						for (int i = 0; i < column.Length; i++)
+		//							str.Append("1");
+
+		//						values.Add(columnName, JToken.FromObject(str.ToString()));
+		//					}
+		//				}
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Bit:
+		//				{
+		//					if (column.Length == 1)
+		//					{
+		//						var array = new JArray
+		//						{
+		//							JToken.FromObject(true),
+		//							JToken.FromObject(true),
+		//							JToken.FromObject(false),
+		//							JToken.FromObject(true)
+		//						};
+		//						values.Add(columnName, array);
+		//					}
+		//					else
+		//					{
+		//						var array = new JArray();
+
+		//						for (int i = 0; i < 3; i++)
+		//						{
+		//							var str = new StringBuilder();
+		//							for (int j = 0; j < column.Length; j++)
+		//								str.Append("1");
+		//							array.Add(JToken.FromObject(str.ToString()));
+		//						}
+
+		//						values.Add(columnName, array);
+		//					}
+		//				}
+		//				break;
+
+		//			case NpgsqlDbType.Varbit:
+		//				{
+		//					var str = new StringBuilder();
+		//					for (int i = 0; i < column.Length && i < 10; i++)
+		//						str.Append("1");
+
+		//					values.Add(columnName, JToken.FromObject(str.ToString()));
+		//				}
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Varbit:
+		//				{
+		//					if (column.Length == 1)
+		//					{
+		//						var array = new JArray
+		//						{
+		//							JToken.FromObject(true),
+		//							JToken.FromObject(true),
+		//							JToken.FromObject(false),
+		//							JToken.FromObject(true)
+		//						};
+		//						values.Add(columnName, array);
+		//					}
+		//					else
+		//					{
+		//						var array = new JArray();
+
+		//						for (int i = 0; i < 3; i++)
+		//						{
+		//							var str = new StringBuilder();
+		//							for (int j = 0; j < column.Length && j < 10; j++)
+		//								str.Append("1");
+		//							array.Add(JToken.FromObject(str.ToString()));
+		//						}
+
+		//						values.Add(columnName, array);
+		//					}
+		//				}
+		//				break;
+		//			#endregion
+
+		//			#region char
+		//			case NpgsqlDbType.Char:
+		//				{
+		//					if (string.Equals(column.dbDataType, "_char", StringComparison.OrdinalIgnoreCase))
+		//					{
+		//						values.Add(columnName, JToken.FromObject("The brown cow jumped over the moon.The dog barked at the cow, and the bull chased the dog."));
+		//					}
+		//					else if (string.Equals(column.dbDataType, "char", StringComparison.OrdinalIgnoreCase))
+		//					{
+		//						values.Add(columnName, JToken.FromObject('A'));
+		//					}
+		//					else
+		//					{
+		//						const string alphabet = "The brown cow jumped over the moon. The dog barked at the cow, and the bull chased the dog.";
+		//						var chars = new char[column.Length];
+		//						for (int i = 0; i < chars.Length; i++)
+		//						{
+		//							int j = i % alphabet.Length;
+		//							chars[i] = alphabet[j];
+		//						}
+
+		//						values.Add(columnName, JToken.FromObject(new string(chars)));
+		//					}
+		//				}
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Char:
+		//				{
+		//					var array = new JArray();
+		//					var answer = "The dog barked at the moon.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					array.Add(new JValue(answer));
+
+		//					answer = "The cow mooed at the moon.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					array.Add(new JValue(answer));
+
+		//					answer = "The cat watched the dog and the cow.";
+
+		//					if (column.Length > -1)
+		//						if (column.Length < answer.Length)
+		//							answer = answer.Substring(0, (int)column.Length);
+
+		//					array.Add(new JValue(answer));
+
+		//					values.Add(columnName, array);
+		//				}
+		//				break;
+		//			#endregion
+
+		//			#region Boolean
+		//			case NpgsqlDbType.Boolean:
+		//				values.Add(columnName, JToken.FromObject((bool)true));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Boolean:
+		//				values.Add(columnName, JToken.FromObject(new bool[] { true, true, false }));
+		//				break;
+		//			#endregion
+
+		//			#region DateTime
+		//			case NpgsqlDbType.Date:
+		//				values.Add(columnName, JToken.FromObject(DateTime.Now));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Date:
+		//				values.Add(columnName, JToken.FromObject(new DateTime[] { DateTime.Now, DateTime.Now.AddDays(1), DateTime.Now.AddDays(2) }));
+		//				break;
+
+		//			case NpgsqlDbType.Timestamp:
+		//				values.Add(columnName, JToken.FromObject(DateTime.Now));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Timestamp:
+		//				values.Add(columnName, JToken.FromObject(new DateTime[] { DateTime.Now, DateTime.Now.AddDays(1), DateTime.Now.AddDays(2) }));
+		//				break;
+
+		//			case NpgsqlDbType.Time:
+		//				values.Add(columnName, JToken.FromObject(TimeSpan.FromMinutes(10)));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Time:
+		//				values.Add(columnName, JToken.FromObject(new TimeSpan[] { TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(30), TimeSpan.FromHours(2) }));
+		//				break;
+
+		//			case NpgsqlDbType.Interval:
+		//				values.Add(columnName, JToken.FromObject(TimeSpan.FromMinutes(15)));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.Interval:
+		//				values.Add(columnName, JToken.FromObject(new TimeSpan[] { TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(30), TimeSpan.FromHours(2) }));
+		//				break;
+
+		//			case NpgsqlDbType.TimeTz:
+		//				values.Add(columnName, JToken.FromObject(DateTimeOffset.Now));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.TimeTz:
+		//				values.Add(columnName, JToken.FromObject(new DateTimeOffset[] { DateTimeOffset.Now, DateTimeOffset.Now.AddDays(1), DateTimeOffset.Now.AddDays(2) }));
+		//				break;
+
+		//			case NpgsqlDbType.TimestampTz:
+		//				values.Add(columnName, JToken.FromObject(DateTime.Now));
+		//				break;
+
+		//			case NpgsqlDbType.Array | NpgsqlDbType.TimestampTz:
+		//				values.Add(columnName, JToken.FromObject(new DateTime[] { DateTime.Now, DateTime.Now.AddDays(1), DateTime.Now.AddDays(2) }));
+		//				break;
+		//			#endregion
+
+		//			default:
+		//				values.Add(columnName, JToken.FromObject("Unrecognized"));
+		//				break;
+		//		}
+		//	}
+
+		//	return values;
+		//}
+
+		//private string GenerateSQLServerQuery(DBTable table)
+		//{
+		//	var query = new StringBuilder("SELECT TOP 1");
+
+		//	bool firstColumn = true;
+
+		//	foreach (var column in DatabaseColumns)
+		//	{
+		//		if (firstColumn)
+		//			firstColumn = false;
+		//		else
+		//			query.Append(", ");
+
+		//		var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
+
+		//		if (string.Equals(column.dbDataType, "hierarchyid", StringComparison.OrdinalIgnoreCase))
+		//		{
+		//			query.Append($"REPLACE(CAST({columnName} AS nvarchar({column.Length})), '/', '-' ) as [{columnName}]");
+		//		}
+		//		else
+		//		{
+		//			query.Append($"[{columnName}]");
+		//		}
+		//	}
+
+		//	query.Append($" FROM [{table.Schema}].[{table.Table}] WITH(NOLOCK)");
+		//	return query.ToString();
+		//}
+
+		//private string GenerateMySQLQuery(DBTable table)
+		//{
+		//	var query = new StringBuilder("SELECT ");
+
+		//	bool firstColumn = true;
+
+		//	foreach (var column in DatabaseColumns)
+		//	{
+		//		if (firstColumn)
+		//			firstColumn = false;
+		//		else
+		//			query.Append(", "); 
 				
-				var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
+		//		var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
 
-				query.Append($"`{columnName}`");
-			}
+		//		query.Append($"`{columnName}`");
+		//	}
 
-			query.Append($" FROM `{table.Table}` LIMIT 1;");
-			return query.ToString();
-		}
+		//	query.Append($" FROM `{table.Table}` LIMIT 1;");
+		//	return query.ToString();
+		//}
 
-		private string GeneratePostgresqlQuery(DBTable table, List<EntityDetailClassFile> classList)
-		{
-			var query = new StringBuilder("SELECT ");
+		//private string GeneratePostgresqlQuery(DBTable table, List<EntityClassFile> classList)
+		//{
+		//	var query = new StringBuilder("SELECT ");
 
-			bool firstColumn = true;
+		//	bool firstColumn = true;
 
-			foreach (var column in DatabaseColumns)
-			{
-				var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
+		//	foreach (var column in DatabaseColumns)
+		//	{
+		//		var columnName = string.IsNullOrWhiteSpace(column.EntityName) ? column.ColumnName : column.EntityName;
 
-				if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
-				{
-					var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
+		//		if ((NpgsqlDbType)column.DataType == NpgsqlDbType.Unknown)
+		//		{
+		//			var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
 
-					if (cl == null || cl.ElementType == ElementType.Enum)
-					{
-						firstColumn = AppendComma(query, firstColumn);
-						query.Append($"\"{columnName}\"");
-					}
-					else
-					{
-						var parent = $"\"{columnName}\"";
-						firstColumn = DeconstructComposite(parent, column, classList, query, firstColumn);
-					}
-				}
-				else
-				{
-					firstColumn = AppendComma(query, firstColumn);
-					query.Append($"\"{columnName}\"");
-				}
-			}
+		//			if (cl == null || cl.ElementType == ElementType.Enum)
+		//			{
+		//				firstColumn = AppendComma(query, firstColumn);
+		//				query.Append($"\"{columnName}\"");
+		//			}
+		//			else
+		//			{
+		//				var parent = $"\"{columnName}\"";
+		//				firstColumn = DeconstructComposite(parent, column, classList, query, firstColumn);
+		//			}
+		//		}
+		//		else
+		//		{
+		//			firstColumn = AppendComma(query, firstColumn);
+		//			query.Append($"\"{columnName}\"");
+		//		}
+		//	}
 
-			query.Append($" FROM \"{table.Schema}\".\"{table.Table}\" LIMIT 1");
-			return query.ToString();
-		}
+		//	query.Append($" FROM \"{table.Schema}\".\"{table.Table}\" LIMIT 1");
+		//	return query.ToString();
+		//}
 
-		private bool DeconstructComposite(string parent, DBColumn column, List<EntityDetailClassFile> classList, StringBuilder query, bool firstColumn)
+		private bool DeconstructComposite(string parent, DBColumn column, List<EntityClassFile> classList, StringBuilder query, bool firstColumn)
 		{
 			var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
 
@@ -2813,7 +2708,7 @@ select name
 			return firstColumn;
 		}
 
-		private int ReadComposite(NpgsqlDataReader reader, DBColumn column, int ordinal, List<EntityDetailClassFile> classList, JObject values)
+		private int ReadComposite(NpgsqlDataReader reader, DBColumn column, int ordinal, List<EntityClassFile> classList, JObject values)
 		{
 			var cl = classList.FirstOrDefault(c => string.Equals(c.ClassName, column.dbDataType, StringComparison.OrdinalIgnoreCase));
 

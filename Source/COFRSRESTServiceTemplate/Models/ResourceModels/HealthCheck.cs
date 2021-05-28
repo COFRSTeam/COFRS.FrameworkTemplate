@@ -3,7 +3,7 @@
 	///	<summary>
 	///	A message used to verify that the service is running.
 	///	</summary>
-	public class Heartbeat
+	public class HealthCheck
 	{
 		///	<summary>
 		///	The "I am alive" message.

@@ -85,7 +85,6 @@
   <ItemGroup>
     <None Include="Resource.cs" />
     <Content Include="COFRS.ico" />
-    <Content Include="Models\SwaggerExamples\HeartbeatExample.cs" />
     <Content Include="ReadMe.txt" />
     <Content Include="Repository\ServiceRepository.cs" />
     <Content Include="Repository\IServiceRepository.cs" />
@@ -97,14 +96,11 @@
     <Content Include="App_Start\FilterConfig.cs" />
     <Content Include="App_Start\RouteConfig.cs" />
     <Content Include="App_Start\SwaggerConfig.cs" />
-    <Content Include="Controllers\HeartbeatController.cs" />
-    <Content Include="Models\ResourceModels\Heartbeat.cs" />
+    <Content Include="Controllers\HealthCheckController.cs" />
+    <Content Include="Models\ResourceModels\HealthCheck.cs" />
     <Content Include="App_Start\ServicesConfig.cs" />
     <Content Include="Orchestration\IServiceOrchestrator.cs" />
     <Content Include="Orchestration\ServiceOrchestrator.cs" />
-    <Content Include="Models\SwaggerExamples\PatchExample.cs">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -126,8 +122,8 @@
     <VSTemplate Include="COFRSNetTemplate.vstemplate" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="Mapping\" />
     <Folder Include="Models\EntityModels\" />
-    <Folder Include="Models\Mapping\" />
   </ItemGroup>
   <ItemGroup>
     <Analyzer Include="..\packages\Microsoft.VisualStudio.SDK.Analyzers.15.8.33\analyzers\cs\Microsoft.VisualStudio.SDK.Analyzers.dll" />

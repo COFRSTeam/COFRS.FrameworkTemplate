@@ -50,18 +50,29 @@ namespace COFRS.Template.Common.Wizards
 				//	Show the user that we are busy doing things...
 				progressDialog = new ProgressDialog("Loading classes and preparing project...");
 				progressDialog.Show(new WindowClass((IntPtr)_appObject.ActiveWindow.HWnd));
-				progressDialog.Activate();
 				_appObject.StatusBar.Animate(true, vsStatusAnimation.vsStatusAnimationBuild);
+				HandleMessages();
 
+				var entityModelsFolder = StandardUtils.FindEntityModelsFolder(_appObject.Solution);
+				HandleMessages();
+
+				var connectionString = StandardUtils.GetConnectionString(_appObject.Solution);
+				HandleMessages();
+
+				var programfiles = StandardUtils.LoadProgramDetail(_appObject.Solution);
+				HandleMessages();
+
+				var classList = StandardUtils.LoadClassList(programfiles);
 				HandleMessages();
 
 				//	Construct the form, and fill in all the prerequisite data
 				var form = new UserInputEntity
 				{
 					ReplacementsDictionary = replacementsDictionary,
-					EntityModelsFolder = StandardUtils.FindEntityModelsFolder(_appObject.Solution),
-					DefaultConnectionString = StandardUtils.GetConnectionString(_appObject.Solution),
-					ClassList = StandardUtils.LoadEntityDetailClassList(_appObject.Solution)
+					EntityModelsFolder = entityModelsFolder,
+					DefaultConnectionString = connectionString,
+					ClassList = classList,
+					Members = programfiles
 				};
 
 				HandleMessages();
@@ -74,7 +85,6 @@ namespace COFRS.Template.Common.Wizards
 					//	Show the user that we are busy...
 					progressDialog = new ProgressDialog("Building classes...");
 					progressDialog.Show(new WindowClass((IntPtr)_appObject.ActiveWindow.HWnd));
-					progressDialog.Activate();
 					_appObject.StatusBar.Animate(true, vsStatusAnimation.vsStatusAnimationBuild);
 
 					HandleMessages();
@@ -90,20 +100,25 @@ namespace COFRS.Template.Common.Wizards
 
 					//	Get the list of any undefined items that we encountered. (This list will only contain
 					//	items if we are using the Postgrsql database)
-					List<EntityDetailClassFile> composits = form.UndefinedClassList;
-
-					//	Get the list of all known items
-					var classList = form.ClassList;
+					List<ClassFile> composits = form.UndefinedClassList;
 
 					var emitter = new Emitter();
 					var standardEmitter = new StandardEmitter();
-					ElementType etype = ElementType.Table;
 
 					if (form.ServerType == DBServerType.POSTGRESQL)
 					{
 						//	Generate any undefined composits before we construct our entity model (because, 
 						//	the entity model depends upon them)
-						standardEmitter.GenerateComposites(composits, form.ConnectionString, replacementsDictionary, form.ClassList);
+
+						var definedList = new List<ClassFile>();
+						definedList.AddRange(classList);
+						definedList.AddRange(composits);
+
+						standardEmitter.GenerateComposites(composits, 
+							                               form.ConnectionString, 
+														   replacementsDictionary, 
+														   definedList,
+														   entityModelsFolder.Folder);
 						HandleMessages();
 
 						foreach (var composite in composits)
@@ -112,45 +127,49 @@ namespace COFRS.Template.Common.Wizards
 							var pj = (VSProject)_appObject.Solution.Projects.Item(1).Object;
 							pj.Project.ProjectItems.AddFromFile(composite.FileName);
 
-							StandardUtils.RegisterComposite(_appObject.Solution, composite);
+							StandardUtils.RegisterComposite(_appObject.Solution, (EntityClassFile) composite);
 						}
 
 						classList.AddRange(composits);
-
-						//	Shouldn't this already have been done?
-						etype = DBHelper.GetElementType(form.DatabaseTable.Schema, form.DatabaseTable.Table, classList, form.ConnectionString);
 					}
 
 					string entityModel = string.Empty;
 
-					if (etype == ElementType.Enum)
+					if (form.eType == ElementType.Enum)
 					{
 						entityModel = standardEmitter.EmitEnum(form.DatabaseTable.Schema, form.DatabaseTable.Table, replacementsDictionary["$safeitemname$"], form.ConnectionString);
 						replacementsDictionary["$npgsqltypes$"] = "true";
 
-						var entityclassFile = new EntityDetailClassFile()
+						var entityclassFile = new EntityClassFile()
 						{
 							ClassName = replacementsDictionary["$safeitemname$"],
 							SchemaName = form.DatabaseTable.Schema,
 							TableName = form.DatabaseTable.Table,
-							ClassNameSpace = replacementsDictionary["$rootNamespace$"],
+							ClassNameSpace = replacementsDictionary["$rootnamespace$"],
 							ElementType = ElementType.Enum,
 						};
 
 						StandardUtils.RegisterComposite(_appObject.Solution, entityclassFile);
 					}
-					else if (etype == ElementType.Composite)
+					else if (form.eType == ElementType.Composite)
 					{
-						var undefinedElements = new List<EntityDetailClassFile>();
-						entityModel = standardEmitter.EmitComposite(form.DatabaseTable.Schema, form.DatabaseTable.Table, replacementsDictionary["$safeitemname$"], form.ConnectionString, replacementsDictionary, form.ClassList, undefinedElements);
+						var undefinedElements = new List<ClassFile>();
+						entityModel = standardEmitter.EmitComposite(form.DatabaseTable.Schema, 
+							                                        form.DatabaseTable.Table, 
+																	replacementsDictionary["$safeitemname$"], 
+																	form.ConnectionString, 
+																	replacementsDictionary, 
+																	classList, 
+																	undefinedElements,
+																	entityModelsFolder.Folder);
 						replacementsDictionary["$npgsqltypes$"] = "true";
 
-						var classFile = new EntityDetailClassFile()
+						var classFile = new EntityClassFile()
 						{
 							ClassName = replacementsDictionary["$safeitemname$"],
 							SchemaName = form.DatabaseTable.Schema,
 							TableName = form.DatabaseTable.Table,
-							ClassNameSpace = replacementsDictionary["$rootNamespace$"],
+							ClassNameSpace = replacementsDictionary["$rootnamespace$"],
 							ElementType = ElementType.Composite
 						};
 
@@ -161,9 +180,10 @@ namespace COFRS.Template.Common.Wizards
 						entityModel = standardEmitter.EmitEntityModel(form.ServerType, 
 							                                          form.DatabaseTable, 
 																	  replacementsDictionary["$safeitemname$"], 
+																	  classList,
 																	  form.DatabaseColumns, 
 																	  replacementsDictionary, 
-																	  form.ConnectionString);
+																	  out EntityClassFile entityClass);
 					}
 
 					replacementsDictionary.Add("$entityModel$", entityModel);
