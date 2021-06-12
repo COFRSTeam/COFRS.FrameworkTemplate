@@ -126,9 +126,11 @@ namespace COFRS.Template.Common.Wizards
 					_appObject.StatusBar.Animate(true, vsStatusAnimation.vsStatusAnimationBuild);
 
 					HandleMessages();
+					var projectName = StandardUtils.GetProjectName(_appObject.Solution);
+					connectionString = $"{form.ConnectionString}Application Name={projectName}";
 
 					//	Replace the ConnectionString
-					StandardUtils.ReplaceConnectionString(_appObject.Solution, form.ConnectionString);
+					StandardUtils.ReplaceConnectionString(_appObject.Solution, connectionString);
 					HandleMessages();
 
 					var entityClassName = $"E{form.SingularResourceName}";
@@ -150,6 +152,12 @@ namespace COFRS.Template.Common.Wizards
 					replacementsDictionary.Add("$companymoniker$", string.IsNullOrWhiteSpace(moniker) ? "acme" : moniker);
 					replacementsDictionary.Add("$securitymodel$", string.IsNullOrWhiteSpace(policy) ? "none" : "OAuth");
 					replacementsDictionary.Add("$policy$", string.IsNullOrWhiteSpace(policy) ? "none" : "using");
+
+					StandardUtils.EnsureFolder(_appObject.Solution, "Mapping");
+					StandardUtils.EnsureFolder(_appObject.Solution, "Validation");
+					StandardUtils.EnsureFolder(_appObject.Solution, "Controllers");
+					StandardUtils.EnsureFolder(_appObject.Solution, "Models\\EntityModels");
+					StandardUtils.EnsureFolder(_appObject.Solution, "Models\\ResourceModels");
 
 					List<ClassFile> composits = form.UndefinedClassList;
 
@@ -235,7 +243,7 @@ namespace COFRS.Template.Common.Wizards
 					var controllerModel = emitter.EmitController(entityClassFile,
 													   resourceClassFile,
 	                                                   moniker,
-	                                                   replacementsDictionary["$safeitemname$"],
+													   controllerClassName,
 	                                                   validatorInterface,
 	                                                   policy);
 

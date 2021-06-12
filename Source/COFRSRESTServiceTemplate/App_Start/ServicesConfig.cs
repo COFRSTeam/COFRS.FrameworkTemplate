@@ -72,7 +72,7 @@ namespace $safeprojectname$.App_Start
 			AutoMapperFactory.CreateMapper();
 
 			services.AddTransient<IServiceRepository>(sp => new ServiceRepository(sp.GetService<ILogger<ServiceRepository>>(), sp, RepositoryOptions));
-			services.AddTransientWithParameters<IServiceOrchestrator, ServiceOrchestrator<IServiceRepository>>();
+			services.AddScoped<IServiceOrchestrator, ServiceOrchestrator<IServiceRepository>>();
 	
 			services.InitializeFactories();
 			return ApiOptions;

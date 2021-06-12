@@ -26,9 +26,6 @@
       <Folder Name="ResourceModels">
         <ProjectItem ReplaceParameters="true" TargetFileName="$resourceClass$.cs">Model.cs</ProjectItem>
       </Folder>
-      <Folder Name="SwaggerExamples">
-        <ProjectItem ReplaceParameters="true" TargetFileName="$swaggerClass$.cs">Example.cs</ProjectItem>
-      </Folder>
     </Folder>
     <Folder Name="Validation">
       <ProjectItem ReplaceParameters="true" TargetFileName="$validatorClass$.cs">Validator.cs</ProjectItem>
