@@ -23,6 +23,68 @@ namespace COFRS.Template.Common.ServiceUtilities
 {
     public static class StandardUtils
     {
+		public static void EnsureFolder(Solution solution, string folderName)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            var folderParts = folderName.Split(new char[] { '\\', '/' }, StringSplitOptions.RemoveEmptyEntries);
+			var project = solution.Projects.Item(1);
+			string rootFolder = string.Empty;
+
+			foreach ( Property property in project.Properties )
+            {
+				if (string.Equals(property.Name, "FullPath", StringComparison.OrdinalIgnoreCase))
+					rootFolder = property.Value.ToString();
+            }
+
+			var parentFolder = FindFolder(project, folderParts[0]);
+
+			if (parentFolder == null)
+			{
+				try
+				{
+					parentFolder = project.ProjectItems.AddFolder(folderParts[0]);
+				}
+				catch ( Exception )
+                {
+					rootFolder = Path.Combine(rootFolder, folderParts[0]);
+					parentFolder = project.ProjectItems.AddFromDirectory(rootFolder);
+                }
+			}
+
+			for ( int i = 1; i < folderParts.Length; i++)
+			{
+				var childFolder = FindFolder(parentFolder, folderParts[i]);
+
+				if (childFolder == null)
+				{
+					try
+					{
+						childFolder = parentFolder.ProjectItems.AddFolder(folderParts[i]);
+					}
+					catch ( Exception )
+                    {
+						rootFolder = Path.Combine(rootFolder, folderParts[i]);
+						childFolder = project.ProjectItems.AddFromDirectory(rootFolder);
+					}
+				}
+
+				parentFolder = childFolder;
+            }
+        }
+
+		public static string GetProjectName(Solution solution)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach ( Project project in solution.Projects )
+            {
+				return project.Name;
+            }
+
+			return string.Empty;
+        }
+
 		public static string FindValidatorNamespace(Solution solution, ResourceClassFile resourceClass, EntityClassFile entityClass, out string validatorInterface)
 		{
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -1455,6 +1517,43 @@ select a.attname as columnname,
 			return null;
 		}
 
+		private static ProjectItem FindFolder(Project parentFolder, string folderName)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach (ProjectItem child in parentFolder.ProjectItems)
+			{
+				if (child.Kind == EnvDTE.Constants.vsProjectItemKindPhysicalFolder ||
+					child.Kind == EnvDTE.Constants.vsProjectItemKindVirtualFolder)
+				{
+					if (string.Equals(child.Name, folderName, StringComparison.OrdinalIgnoreCase))
+					{
+						return child;
+					}
+				}
+			}
+
+			return null;
+		}
+		private static ProjectItem FindFolder(ProjectItem parentFolder, string folderName)
+		{
+			ThreadHelper.ThrowIfNotOnUIThread();
+
+			foreach (ProjectItem child in parentFolder.ProjectItems)
+			{
+				if (child.Kind == EnvDTE.Constants.vsProjectItemKindPhysicalFolder ||
+					child.Kind == EnvDTE.Constants.vsProjectItemKindVirtualFolder)
+				{
+					if (string.Equals(child.Name, folderName, StringComparison.OrdinalIgnoreCase))
+					{
+						return child;
+					}
+				}
+			}
+
+			return null;
+		}
+
 		private static ProjectFolder FindProjectFolder(string projectNamespace, ProjectItem projectItem, string folderName)
 		{
 			ThreadHelper.ThrowIfNotOnUIThread();
@@ -1584,10 +1683,10 @@ select a.attname as columnname,
 
 			sel.StartOfDocument();
 
-			if (sel.FindText("Server=developmentdb;Database=master;Trusted_Connection=True;"))
+			if (sel.FindText("Server=localdb;Database=master;Trusted_Connection=True;"))
 			{
 				sel.SelectLine();
-				sel.Text = $"\t\t\"DefaultConnection\": \"{connectionString}\"";
+				sel.Text = $"\t\t\"DefaultConnection\": \"{connectionString}\"\r\n";
 				doc.Save();
 			}
 
@@ -1625,7 +1724,7 @@ select a.attname as columnname,
 				sel.Insert($"using {validationNamespace};");
 			}
 
-			if (!sel.FindText($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>();", (int)vsFindOptions.vsFindOptionsFromStart))
+			if (!sel.FindText($"services.AddScoped<I{validationClass}, {validationClass}>();", (int)vsFindOptions.vsFindOptionsFromStart))
 			{
 				sel.StartOfDocument();
 				sel.FindText("services.AddSingleton<IApiOptions>(ApiOptions)");
@@ -1639,13 +1738,13 @@ select a.attname as columnname,
 					sel.EndOfLine();
 					sel.Insert($"\r\n\t\t\t//\tRegister Validators");
 					sel.NewLine();
-					sel.Insert($"services.AddTransientWithParameters<I{validationClass}, {validationClass}>();");
+					sel.Insert($"services.AddScoped<I{validationClass}, {validationClass}>();");
 					sel.NewLine();
 				}
 				else
 				{
 					sel.EndOfLine();
-					sel.Insert($"\r\n\t\t\tservices.AddTransientWithParameters<I{validationClass}, {validationClass}>();");
+					sel.Insert($"\r\n\t\t\tservices.AddScoped<I{validationClass}, {validationClass}>();");
 				}
 			}
 
@@ -1810,7 +1909,7 @@ select a.attname as columnname,
 					var entityColumn = new DBColumn()
 					{
 						EntityName = column.EntityName,
-						EntityType = column.dbDataType,
+						EntityType = column.EntityType,
 						ColumnName = column.ColumnName,
 						DataType = column.DataType,
 						dbDataType = column.dbDataType,
@@ -1919,7 +2018,7 @@ select a.attname as columnname,
 					var entityColumn = new DBColumn()
 					{
 						EntityName = column.EntityName,
-						EntityType = column.dbDataType,
+						EntityType = column.EntityType,
 						ColumnName = column.ColumnName,
 						DataType = column.DataType,
 						dbDataType = column.dbDataType,

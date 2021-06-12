@@ -58,15 +58,15 @@
         </member>
         <member name="T:InventoryService.Controllers.HeartbeatController">
             <summary>
-            Heartbeat controller
+            Health Check controller
             </summary>
         </member>
-        <member name="M:InventoryService.Controllers.HeartbeatController.#ctor(Microsoft.Extensions.Logging.ILogger{InventoryService.Controllers.HeartbeatController})">
+        <member name="M:InventoryService.Controllers.HealthCheckController.#ctor(Microsoft.Extensions.Logging.ILogger{InventoryService.Controllers.HeartbeatController})">
             <summary>
             Constructor
             </summary>
         </member>
-        <member name="M:InventoryService.Controllers.HeartbeatController.Get">
+        <member name="M:InventoryService.Controllers.HealthCheckController.Get">
             <summary>
             Returns a heartbeat message
             </summary>

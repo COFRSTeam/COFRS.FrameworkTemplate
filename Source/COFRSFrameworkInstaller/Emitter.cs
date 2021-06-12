@@ -31,7 +31,21 @@ namespace COFRS.Template
 			results.AppendLine("\t[ApiVersion(\"1.0\")]");
 			results.AppendLine($"\tpublic class {controllerClassName} : COFRSController");
 			results.AppendLine("\t{");
+			results.AppendLine("\t\t///\t<value>");
+			results.AppendLine("\t\t///\tA generic interface for logging where the category name is derrived from");
+			results.AppendLine($"\t\t///\tthe specified <see cref=\"{controllerClassName}\"/> type name.");
+			results.AppendLine("\t\t///\t</value>");
 			results.AppendLine($"\t\tprivate readonly ILogger<{controllerClassName}> Logger;");
+			results.AppendLine();
+			results.AppendLine("\t\t///\t<value>");
+			results.AppendLine("\t\t///\tThe validator used to validate any requested actions");
+			results.AppendLine("\t\t///\t</value>");
+			results.AppendLine($"\t\tprotected {ValidatorInterface} Validator {{ get; set; }}");
+			results.AppendLine();
+			results.AppendLine("\t\t///\t<value>");
+			results.AppendLine("\t\t///\tThe orchestration layer");
+			results.AppendLine("\t\t///\t</value>");
+			results.AppendLine("\t\tprotected IServiceOrchestrator Orchestrator { get; set; }");
 			results.AppendLine();
 
 			// --------------------------------------------------------------------------------
@@ -39,11 +53,17 @@ namespace COFRS.Template
 			// --------------------------------------------------------------------------------
 
 			results.AppendLine("\t\t///\t<summary>");
-			results.AppendLine($"\t\t///\tInitializes a {controllerClassName}");
+			results.AppendLine($"\t\t///\tInstantiates a {controllerClassName}");
 			results.AppendLine("\t\t///\t</summary>");
-			results.AppendLine($"\t\tpublic {controllerClassName}(ILogger<{controllerClassName}> logger)");
+			results.AppendLine("\t\t///\t<param name=\"logger\">A generic interface for logging where the category name is derrived from");
+			results.AppendLine($"\t\t///\tthe specified <see cref=\"{controllerClassName}\"/> type name. The logger is activated from dependency injection.</param>");
+			results.AppendLine("\t\t///\t<param name=\"orchestrator\">The <see cref=\"IServiceOrchestrator\"/> interface for the Orchestration layer. </param>");
+			results.AppendLine($"\t\t///\t<param name=\"validator\">The <see cref=\"{ValidatorInterface}\"/> used to validate requested actions.</param>");
+			results.AppendLine($"\t\tpublic {controllerClassName}(ILogger<{controllerClassName}> logger, IServiceOrchestrator orchestrator, {ValidatorInterface} validator)");
 			results.AppendLine("\t\t{");
 			results.AppendLine("\t\t\tLogger = logger;");
+			results.AppendLine("\t\t\tValidator = validator;");
+			results.AppendLine("\t\t\tOrchestrator = orchestrator;");
 			results.AppendLine("\t\t}");
 			results.AppendLine();
 
@@ -59,11 +79,9 @@ namespace COFRS.Template
 			results.AppendLine("\t\t[HttpGet]");
 			results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
 			results.AppendLine($"\t\t[Route(\"{nn.PluralCamelCase}\")]");
-
+			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof(RqlCollection<{nn.SingleForm}>))]");
 			if (!string.IsNullOrWhiteSpace(policy))
 				results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
-
-			results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof(RqlCollection<{resourceClass.ClassName}>))]");
 
 			results.AppendLine($"\t\t[Produces(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
 			results.AppendLine("\t\t[SupportRQL]");
@@ -73,18 +91,9 @@ namespace COFRS.Template
 			results.AppendLine("\t\t\tvar node = RqlNode.Parse(Request.RequestUri.Query);");
 			results.AppendLine();
 
-			if (!string.Equals(ValidatorInterface, "none", StringComparison.OrdinalIgnoreCase))
-			{
-				results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<{ValidatorInterface}>(User);");
-				results.AppendLine("\t\t\tawait validator.ValidateForGetAsync(node).ConfigureAwait(false);");
-				results.AppendLine();
-			}
-
-			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
-			results.AppendLine($"\t\t\t{{");
-			results.AppendLine($"\t\t\t\tvar collection = await service.GetCollectionAsync<{resourceClass.ClassName}>(Request.RequestUri.Query, node).ConfigureAwait(false);");
-			results.AppendLine($"\t\t\t\treturn Ok(collection);");
-			results.AppendLine($"\t\t\t}}");
+			results.AppendLine("\t\t\tawait Validator.ValidateForGetAsync(node);");
+			results.AppendLine($"\t\t\tvar collection = await Orchestrator.GetCollectionAsync<{resourceClass.ClassName}>(Request.RequestUri.Query, node);");
+			results.AppendLine($"\t\t\treturn Ok(collection);");
 			results.AppendLine("\t\t}");
 
 			results.AppendLine();
@@ -107,7 +116,7 @@ namespace COFRS.Template
 				EmitRoute(results, nn.PluralCamelCase, pkcolumns);
 
 				if (!string.IsNullOrWhiteSpace(policy))
-					results.AppendLine($"\t\t[Authorize(\"{policy}\")]"); EmitEndpointExamples(entityClass.ServerType, resourceClass.ClassName, results, pkcolumns);
+					results.AppendLine($"\t\t[Authorize(\"{policy}\")]"); 
 
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.OK, Type = typeof({resourceClass.ClassName}))]");
 
@@ -123,22 +132,13 @@ namespace COFRS.Template
 				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"Href=uri:/{BuildRoute(nn.PluralCamelCase, pkcolumns)}\")");
 				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 
-				if (!string.Equals(ValidatorInterface, "none", StringComparison.OrdinalIgnoreCase))
-				{
-					results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<{ValidatorInterface}>(User);");
-					results.AppendLine("\t\t\tawait validator.ValidateForGetAsync(node).ConfigureAwait(false);");
-					results.AppendLine();
-				}
-
-				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
-				results.AppendLine("\t\t\t{");
-				results.AppendLine($"\t\t\t\tvar item = await service.GetSingleAsync<{resourceClass.ClassName}>(node).ConfigureAwait(false);");
+				results.AppendLine("\t\t\tawait Validator.ValidateForGetAsync(node);");
+				results.AppendLine($"\t\t\tvar item = await Orchestrator.GetSingleAsync<{resourceClass.ClassName}>(node);");
 				results.AppendLine();
-				results.AppendLine("\t\t\t\tif (item == null)");
-				results.AppendLine("\t\t\t\t\treturn NotFound();");
+				results.AppendLine("\t\t\tif (item == null)");
+				results.AppendLine("\t\t\t\treturn NotFound();");
 				results.AppendLine();
-				results.AppendLine("\t\t\t\treturn Ok(item);");
-				results.AppendLine("\t\t\t}");
+				results.AppendLine("\t\t\treturn Ok(item);");
 
 				results.AppendLine("\t\t}");
 				results.AppendLine();
@@ -168,19 +168,10 @@ namespace COFRS.Template
 			results.AppendLine("\t\t\tLogger.LogTrace($\"{Request.Method}	{Request.RequestUri.AbsolutePath}\");");
 			results.AppendLine();
 
-			if (!string.Equals(ValidatorInterface, "none", StringComparison.OrdinalIgnoreCase))
-			{
-				results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<{ValidatorInterface}>(User);");
-				results.AppendLine("\t\t\tawait validator.ValidateForAddAsync(item).ConfigureAwait(false);");
-				results.AppendLine();
-			}
-
-			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
-			results.AppendLine("\t\t\t{");
-			results.AppendLine($"\t\t\t\titem = await service.AddAsync(item).ConfigureAwait(false);");
+			results.AppendLine("\t\t\tawait Validator.ValidateForAddAsync(item);");
+			results.AppendLine($"\t\t\t\titem = await Orchestrator.AddAsync(item);");
 			results.AppendLine($"\t\t\t\treturn Created(item.Href.AbsoluteUri, item);");
 
-			results.AppendLine("\t\t\t}");
 			results.AppendLine("\t\t}");
 			results.AppendLine();
 
@@ -209,20 +200,11 @@ namespace COFRS.Template
 			results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 			results.AppendLine();
 
-			if (!string.Equals(ValidatorInterface, "none", StringComparison.OrdinalIgnoreCase))
-			{
-				results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<{ValidatorInterface}>(User);");
-				results.AppendLine("\t\t\tawait validator.ValidateForUpdateAsync(item, node).ConfigureAwait(false);");
-				results.AppendLine();
-			}
-
-			results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
-			results.AppendLine("\t\t\t{");
-			results.AppendLine($"\t\t\t\tawait service.UpdateAsync(item, node).ConfigureAwait(false);");
-			results.AppendLine($"\t\t\t\treturn NoContent();");
-			results.AppendLine("\t\t\t}");
-
+			results.AppendLine("\t\t\tawait Validator.ValidateForUpdateAsync(item, node);");
+			results.AppendLine($"\t\t\tawait Orchestrator.UpdateAsync(item, node);");
+			results.AppendLine($"\t\t\treturn NoContent();");
 			results.AppendLine("\t\t}");
+
 			results.AppendLine();
 
 			if (pkcolumns.Count() > 0)
@@ -235,6 +217,7 @@ namespace COFRS.Template
 				results.AppendLine($"\t\t///\tUpdate a {nn.SingleForm} using patch commands");
 				results.AppendLine("\t\t///\t</summary>");
 				EmitEndpointExamples(entityClass.ServerType, resourceClass.ClassName, results, pkcolumns);
+				results.AppendLine("\t\t///\t<param name=\"commands\">The list of patch commands</param>");
 				results.AppendLine($"\t\t///\t<remarks>Update a {nn.SingleForm} in the datastore.</remarks>");
 				results.AppendLine("\t\t[HttpPatch]");
 				results.AppendLine("\t\t[MapToApiVersion(\"1.0\")]");
@@ -243,7 +226,6 @@ namespace COFRS.Template
 				if (!string.IsNullOrWhiteSpace(policy))
 					results.AppendLine($"\t\t[Authorize(\"{policy}\")]");
 
-				results.AppendLine($"\t\t[SwaggerRequestExample(typeof(IEnumerable<PatchCommand>), typeof(PatchExample))]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NoContent)]");
 				results.AppendLine($"\t\t[SwaggerResponse(HttpStatusCode.NotFound)]");
 				results.AppendLine($"\t\t[Consumes(\"application/vnd.{moniker}.v1+json\", \"application/json\", \"text/json\")]");
@@ -256,18 +238,9 @@ namespace COFRS.Template
 				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"Href=uri:/{BuildRoute(nn.PluralCamelCase, pkcolumns)}\")");
 				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 
-				if (!string.Equals(ValidatorInterface, "none", StringComparison.OrdinalIgnoreCase))
-				{
-					results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<{ValidatorInterface}>(User);");
-					results.AppendLine("\t\t\tawait validator.ValidateForPatchAsync(commands, node).ConfigureAwait(false);");
-					results.AppendLine();
-				}
-
-				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
-				results.AppendLine("\t\t\t{");
-				results.AppendLine($"\t\t\t\tawait service.PatchAsync<{resourceClass.ClassName}>(commands, node).ConfigureAwait(false);");
-				results.AppendLine($"\t\t\t\treturn NoContent();");
-				results.AppendLine("\t\t\t}");
+				results.AppendLine("\t\t\tawait Validator.ValidateForPatchAsync(commands, node);");
+				results.AppendLine($"\t\t\tawait Orchestrator.PatchAsync<{resourceClass.ClassName}>(commands, node);");
+				results.AppendLine($"\t\t\treturn NoContent();");
 				results.AppendLine("\t\t}");
 				results.AppendLine();
 
@@ -298,18 +271,9 @@ namespace COFRS.Template
 				results.AppendLine($"\t\t\tvar node = RqlNode.Parse($\"Href=uri:/{BuildRoute(nn.PluralCamelCase, pkcolumns)}\")");
 				results.AppendLine($"\t\t\t\t\t\t\t  .Merge(RqlNode.Parse(Request.RequestUri.Query));");
 
-				if (!string.Equals(ValidatorInterface, "none", StringComparison.OrdinalIgnoreCase))
-				{
-					results.AppendLine($"\t\t\tvar validator = HttpContext.RequestServices.Get<{ValidatorInterface}>(User);");
-					results.AppendLine("\t\t\tawait validator.ValidateForDeleteAsync(node).ConfigureAwait(false);");
-					results.AppendLine();
-				}
-
-				results.AppendLine($"\t\t\tusing (var service = ServiceContainer.RequestServices.Get<IServiceOrchestrator>(User))");
-				results.AppendLine("\t\t\t{");
-				results.AppendLine($"\t\t\t\tawait service.DeleteAsync<{resourceClass.ClassName}>(node).ConfigureAwait(false);");
-				results.AppendLine($"\t\t\t\treturn NoContent();");
-				results.AppendLine("\t\t\t}");
+				results.AppendLine("\t\t\tawait Validator.ValidateForDeleteAsync(node);");
+				results.AppendLine($"\t\t\tawait Orchestrator.DeleteAsync<{resourceClass.ClassName}>(node);");
+				results.AppendLine($"\t\t\treturn NoContent();");
 
 				results.AppendLine("\t\t}");
 				results.AppendLine("\t}");

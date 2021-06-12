@@ -61,7 +61,6 @@
     <Content Include="Models\EntityModels\Emodel.cs" />
     <Content Include="Models\ResourceModels\Model.cs" />
     <Content Include="Mapping\Map.cs" />
-    <Content Include="Models\SwaggerExamples\Example.cs" />
     <Content Include="Controllers\Controller.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
