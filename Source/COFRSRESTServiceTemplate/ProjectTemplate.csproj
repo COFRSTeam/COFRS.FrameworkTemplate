@@ -40,20 +40,20 @@
     <Reference Include="AutoMapper, Version=10.0.0.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\AutoMapper.10.1.1\lib\net461\AutoMapper.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS, Version=0.0.71.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.0.0.71-alpha\lib\$compactversion$\COFRS.dll</HintPath>
+    <Reference Include="COFRS, Version=0.0.72.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.0.0.72-alpha\lib\$compactversion$\COFRS.dll</HintPath>
     </Reference>
-    <Reference Include="COFRS.Common, Version=0.0.25.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.Common.0.0.25-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
+    <Reference Include="COFRS.Common, Version=0.0.26.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.Common.0.0.26-alpha\lib\$compactversion$\COFRS.Common.dll</HintPath>
     </Reference>
-    $if$ ($databasetech$ == mysql)<Reference Include="COFRS.MySql, Version=0.0.22.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.MySql.0.0.22-alpha\lib\$compactversion$\COFRS.MySql.dll</HintPath>
+    $if$ ($databasetech$ == mysql)<Reference Include="COFRS.MySql, Version=0.0.24.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.MySql.0.0.24-alpha\lib\$compactversion$\COFRS.MySql.dll</HintPath>
     </Reference>
-    <Reference Include="MySql.Data, Version=8.0.23.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\MySql.Data.8.0.23\lib\$compactversion$\MySql.Data</HintPath>
+    <Reference Include="MySql.Data, Version=8.0.25.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\MySql.Data.8.0.25\lib\$compactversion$\MySql.Data</HintPath>
     </Reference>
-    $endif$$if$ ($databasetech$ == postgresql)<Reference Include="COFRS.Postgresql, Version=0.0.25.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.Postgresql.0.0.25-alpha\lib\$compactversion$\COFRS.Postgresql.dll</HintPath>
+    $endif$$if$ ($databasetech$ == postgresql)<Reference Include="COFRS.Postgresql, Version=0.0.26.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.Postgresql.0.0.26-alpha\lib\$compactversion$\COFRS.Postgresql.dll</HintPath>
     </Reference>
     <Reference Include="Npgsql, Version=5.0.7.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\Npgsql.5.0.7\lib\netstandard2.0\Npgsql.dll</HintPath>
@@ -61,10 +61,10 @@
     <Reference Include="System.Threading.Channels, Version=5.0.0.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>$packagesfolder$\System.Threading.Channels.5.0.0\lib\net461\System.Threading.Channels.dll</HintPath>
     </Reference>
-    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.58.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.58-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
+    $endif$$if$ ($databasetech$ == sqlserver)<Reference Include="COFRS.SqlServer, Version=0.0.59.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>$packagesfolder$\COFRS.SqlServer.0.0.59-alpha\lib\$compactversion$\COFRS.SqlServer.dll</HintPath>
     </Reference>
-	  <Reference Include="System.Data.SqlClient, Version=4.6.1.2, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+	  <Reference Include="System.Data.SqlClient, Version=4.8.2.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
 		  <HintPath>$packagesfolder$\System.Data.SqlClient.4.8.2\lib\net461\System.Data.SqlClient.dll</HintPath>
 	  </Reference>
 	  $endif$$if$ ($securitymodel$ == OAuth)<Reference Include="COFRS.OAuth, Version=0.0.32.0, Culture=neutral, processorArchitecture=MSIL">
